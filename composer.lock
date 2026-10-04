@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "69677b5543661575f9eab7adc5d67627",
+    "content-hash": "9fbfcdb6a1bcbaa7f287504c1873e5ea",
     "packages": [
         {
             "name": "brick/math",
@@ -6071,17 +6071,11 @@
         },
         {
             "name": "vlucas/phpdotenv",
-            "version": "v5.7.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/vlucas/phpdotenv.git",
-                "reference": "301c07936b16d88628b126b01d082ba153cf4c40"
-            },
+            "version": "5.7.0",
             "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/vlucas/phpdotenv/zipball/301c07936b16d88628b126b01d082ba153cf4c40",
-                "reference": "301c07936b16d88628b126b01d082ba153cf4c40",
-                "shasum": ""
+                "type": "path",
+                "url": "local_packages/phpdotenv",
+                "reference": "615eb46e7b0253b2603ff7ff65dbdf8021d38a4b"
             },
             "require": {
                 "ext-pcre": "*",
@@ -6115,7 +6109,11 @@
                     "Dotenv\\": "src/"
                 }
             },
-            "notification-url": "https://packagist.org/downloads/",
+            "autoload-dev": {
+                "psr-4": {
+                    "Dotenv\\Tests\\": "tests/Dotenv/"
+                }
+            },
             "license": [
                 "BSD-3-Clause"
             ],
@@ -6137,21 +6135,10 @@
                 "env",
                 "environment"
             ],
-            "support": {
-                "issues": "https://github.com/vlucas/phpdotenv/issues",
-                "source": "https://github.com/vlucas/phpdotenv/tree/v5.7.0"
-            },
-            "funding": [
-                {
-                    "url": "https://github.com/GrahamCampbell",
-                    "type": "github"
-                },
-                {
-                    "url": "https://tidelift.com/funding/github/packagist/vlucas/phpdotenv",
-                    "type": "tidelift"
-                }
-            ],
-            "time": "2026-08-24T18:07:49+00:00"
+            "transport-options": {
+                "symlink": false,
+                "relative": true
+            }
         },
         {
             "name": "voku/portable-ascii",
