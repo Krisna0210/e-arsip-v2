@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+
+@source '../views/**/*.blade.php';
+@source '../../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../../storage/framework/views/*.php';
+
+@theme {
+    /* Colors */
+    --color-primary: #0B2E28;
+    --color-primary-hover: #134E44;
+    --color-primary-light: #F0FDF4;
+    --color-accent: #10B981;
+    --color-background: #F4F6F5;
+    --color-surface: #FFFFFF;
+    --color-surface-sidebar: #0B2E28;
+    --color-surface-sidebar-hover: rgba(255, 255, 255, 0.08);
+    --color-text-primary: #0F172A;
+    --color-text-secondary: #64748B;
+    --color-text-inverse: #FFFFFF;
+    --color-text-sidebar-muted: #94A3B8;
+    --color-border: #E2E8F0;
+    --color-border-subtle: #F1F5F9;
+    --color-border-sidebar: rgba(255, 255, 255, 0.1);
+
+    /* Fonts */
+    --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Rounded */
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-full: 9999px;
+
+    /* Spacing */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-base: 16px;
+    --spacing-lg: 20px;
+    --spacing-xl: 24px;
+    --spacing-2xl: 32px;
+    --spacing-3xl: 48px;
+}
+
+body {
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+}
