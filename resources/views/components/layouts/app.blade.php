@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ $title ?? 'E-Arsip Enterprise' }}</title>
+    <title>{{ $title ?? 'E-Arsip' }}</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -23,10 +23,11 @@
             <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'" class="fixed inset-y-0 left-0 z-50 w-[260px] bg-[var(--color-surface-sidebar)] text-[var(--color-text-sidebar-muted)] border-r border-[#134E44] flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:flex-shrink-0">
                 <div class="p-5">
                     <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded bg-emerald-500 flex items-center justify-center text-white font-bold text-lg">
+
+                        {{-- <div class="w-8 h-8 rounded bg-emerald-500 flex items-center justify-center text-white font-bold text-lg">
                             EA
-                        </div>
-                        <h1 class="text-white text-lg font-bold tracking-tight">E-Arsip Enterprise</h1>
+                        </div> --}}
+                        <h1 class="text-white text-lg font-bold tracking-tight">E-Arsip</h1>
                     </div>
                 </div>
 

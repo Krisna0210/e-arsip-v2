@@ -2,14 +2,14 @@
     <div class="w-full max-w-[420px] flex flex-col items-center">
         <!-- Logo & Header -->
         <div class="w-full text-center mb-8 flex flex-col items-center">
-            <div class="w-16 h-16 rounded-[var(--radius-xl)] bg-[var(--color-accent)] flex items-center justify-center text-white font-bold text-2xl shadow-sm mb-5">
-                EA
+            <div class="w-40 h-25 flex items-center justify-center">
+                <img src="{{ asset('storage/assets/logo_cms_hd_png.svg') }}" alt="Logo Instansi" class="w-40 h-20 object-contain shrink-0">
             </div>
             <h1 class="text-[var(--color-text-primary)] text-[1.5rem] font-bold leading-[1.25] tracking-tight mb-2">
-                E-Arsip Enterprise
+                E-ARSIP
             </h1>
             <p class="text-[var(--color-text-secondary)] text-[0.875rem] font-medium leading-relaxed">
-                Sistem Manajemen Dokumen<br>Formal Perusahaan
+                Sistem Manajemen Arsip<br>Dokumen Perusahaan
             </p>
         </div>
 
@@ -26,11 +26,11 @@
 
                 <!-- Email / Username Field -->
                 <div class="w-full flex flex-col gap-2">
-                    <label for="email" class="text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider">Email</label>
+                    <label for="email" class="text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider">Username</label>
                     <div class="relative w-full">
                         <input wire:model="email" id="email" type="text"
                             class="w-full h-11 px-4 py-2 border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[0.875rem] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-colors placeholder:text-slate-400"
-                            placeholder="Masukkan email">
+                            placeholder="Masukkan username">
                     </div>
                     @error('email')
                         <span class="text-[0.8125rem] text-[var(--color-status-rejected-text)] font-medium mt-1">{{ $message }}</span>
@@ -72,7 +72,7 @@
 
                 <!-- Submit Button -->
                 <div class="w-full mt-2">
-                    <button type="submit" 
+                    <button type="submit"
                         class="w-full flex items-center justify-center h-11 px-4 bg-[var(--color-primary)] text-[var(--color-text-inverse)] font-semibold text-[0.875rem] rounded-[var(--radius-md)] hover:bg-[var(--color-primary-hover)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-primary)] transition-colors disabled:opacity-70 disabled:cursor-not-allowed relative"
                         wire:loading.attr="disabled"
                         wire:target="authenticate">

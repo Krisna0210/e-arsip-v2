@@ -27,6 +27,8 @@ class ArchiveClassificationIndex extends Component
     public $typeName;
     public $typeSifat = 'biasa';
     public $typeNumbering;
+    public $typeStartingSequence = 0;
+    public $typeStartingYear;
 
     public function setTab($tab)
     {
@@ -101,6 +103,8 @@ class ArchiveClassificationIndex extends Component
     public function createDocType()
     {
         $this->resetDocTypeForm();
+        $this->typeStartingSequence = 0;
+        $this->typeStartingYear = (int) date('Y');
         $this->dispatch('open-modal', id: 'slide-doctype');
     }
 
@@ -112,6 +116,8 @@ class ArchiveClassificationIndex extends Component
         $this->typeName = $docType->name;
         $this->typeSifat = $docType->default_sifat;
         $this->typeNumbering = $docType->numbering_format;
+        $this->typeStartingSequence = $docType->starting_sequence ?? 0;
+        $this->typeStartingYear = $docType->starting_sequence_year ?? (int) date('Y');
         $this->dispatch('open-modal', id: 'slide-doctype');
     }
 
@@ -121,6 +127,8 @@ class ArchiveClassificationIndex extends Component
             'typeName' => 'required|string|max:255',
             'typeSifat' => 'required|in:biasa,penting,rahasia',
             'typeNumbering' => 'nullable|string|max:255',
+            'typeStartingSequence' => 'nullable|integer|min:0',
+            'typeStartingYear' => 'nullable|integer|min:2000|max:2100',
         ]);
 
         DocumentType::updateOrCreate(
@@ -129,6 +137,8 @@ class ArchiveClassificationIndex extends Component
                 'name' => $this->typeName,
                 'default_sifat' => $this->typeSifat,
                 'numbering_format' => $this->typeNumbering,
+                'starting_sequence' => $this->typeStartingSequence !== null && $this->typeStartingSequence !== '' ? (int) $this->typeStartingSequence : 0,
+                'starting_sequence_year' => $this->typeStartingYear ?: (int) date('Y'),
             ]
         );
 
@@ -143,8 +153,10 @@ class ArchiveClassificationIndex extends Component
 
     private function resetDocTypeForm()
     {
-        $this->reset(['typeId', 'typeName', 'typeSifat', 'typeNumbering']);
+        $this->reset(['typeId', 'typeName', 'typeSifat', 'typeNumbering', 'typeStartingSequence', 'typeStartingYear']);
         $this->typeSifat = 'biasa';
+        $this->typeStartingSequence = 0;
+        $this->typeStartingYear = (int) date('Y');
     }
 
     public function render()

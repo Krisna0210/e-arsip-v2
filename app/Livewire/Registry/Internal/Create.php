@@ -65,23 +65,33 @@ class Create extends Component
         return Auth::user()->hasDocumentPermission('archive', $this->sifat ?? 'biasa');
     }
 
-    protected function generateNumber(): string
+    protected function generateNumber(?int &$assignedSequence = null): string
     {
-        $year = date('Y');
+        $year = $this->document_date ? date('Y', strtotime($this->document_date)) : date('Y');
         
         $docTypeRecord = \App\Models\DocumentType::find($this->document_type_id);
         $format = $docTypeRecord && $docTypeRecord->numbering_format ? $docTypeRecord->numbering_format : '{NO}/{CLASS}/{UNIT}/{YYYY}';
         
-        $countThisYear = \App\Models\Document::where('document_type_id', $this->document_type_id)
+        // 1. Ambil nomor urut tertinggi yang sudah ada di database tahun ini
+        $maxInDb = \App\Models\Document::where('document_type_id', $this->document_type_id)
             ->whereYear('document_date', $year)
-            ->count() + 1;
-        
-        $sequenceNo = str_pad($countThisYear, 3, '0', STR_PAD_LEFT);
+            ->max('sequence_number') ?? 0;
+
+        // 2. Ambil sequence awal manual dari master data (jika tahun berlaku cocok)
+        $startingSequence = ($docTypeRecord && $docTypeRecord->starting_sequence_year == $year)
+            ? (int) $docTypeRecord->starting_sequence
+            : 0;
+
+        // 3. Ambil angka terbesar di antara keduanya + 1
+        $nextSequence = max($maxInDb, $startingSequence) + 1;
+        $assignedSequence = $nextSequence;
+
+        $sequenceNo = str_pad($nextSequence, 3, '0', STR_PAD_LEFT);
         $classification = \App\Models\Classification::find($this->classification_id);
         $classCode = $classification ? $classification->code : 'UM';
         $unit = \App\Models\Unit::find($this->unit_id);
         $unitCode = $unit ? $unit->code : 'ORG';
-        $month = date('m');
+        $month = $this->document_date ? date('m', strtotime($this->document_date)) : date('m');
         
         return str_replace(
             ['{NO}', '{CLASS}', '{kodeklasi}', '{UNIT}', '{YYYY}', '{MM}'],
@@ -94,10 +104,11 @@ class Create extends Component
     {
         $this->validate($this->baseRules(false));
 
-        $this->number = $this->generateNumber();
+        $assignedSequence = null;
+        $this->number = $this->generateNumber($assignedSequence);
         $this->file = null; // Do not attach file for booking
 
-        $document = $this->createDocument('waiting_for_file');
+        $document = $this->createDocument('waiting_for_file', $assignedSequence);
 
         $this->showSuccessModal = true;
     }
@@ -113,9 +124,22 @@ class Create extends Component
         $rules['file'] = 'required|file|mimes:pdf|max:10240';
         $this->validate($rules);
 
-        $this->number = $this->generateNumber();
+        $assignedSequence = null;
 
-        $document = $this->createDocument('archived');
+        // Jika Tapersip mengisi nomor manual (digitalisasi dokumen lama)
+        if (!empty(trim((string)$this->number))) {
+            $this->number = trim((string)$this->number);
+
+            // Ekstrak angka urut dari teks nomor fisik jika diawali atau mengandung angka
+            if (preg_match('/^\D*(\d+)/', $this->number, $matches)) {
+                $assignedSequence = (int) $matches[1];
+            }
+        } else {
+            // Jika dikosongkan, terbitkan nomor resmi otomatis
+            $this->number = $this->generateNumber($assignedSequence);
+        }
+
+        $document = $this->createDocument('archived', $assignedSequence);
         $this->handleFileAndVersion($document);
 
         session()->flash('success', "Dokumen Memo Internal berhasil disimpan dan diarsipkan dengan nomor: {$this->number}");
@@ -132,19 +156,20 @@ class Create extends Component
         return redirect()->route('dashboard');
     }
 
-    protected function createDocument($status)
+    protected function createDocument($status, ?int $sequenceNumber = null)
     {
         $document = Document::create([
             'document_type_id' => $this->document_type_id,
             'type' => 'internal',
             'number' => $this->number,
+            'sequence_number' => $sequenceNumber,
             'document_date' => $this->document_date,
             'unit_id' => $this->unit_id,
             'subject' => $this->subject,
             'classification_id' => $this->classification_id,
             'folder_id' => $this->folder_id,
             'sifat' => $this->sifat,
-'status' => $status,
+            'status' => $status,
             'created_by' => Auth::id(),
         ]);
 

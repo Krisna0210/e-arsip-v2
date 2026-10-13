@@ -627,9 +627,9 @@
                                     @if(in_array($loan->status, ['requested', 'borrowed']))
                                         <div class="relative inline-block text-left" x-data="{ open: false }">
                                             <!-- Tombol Pemicu Dropdown -->
-                                            <button 
-                                                type="button" 
-                                                @click="open = !open" 
+                                            <button
+                                                type="button"
+                                                @click="open = !open"
                                                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-2xs focus:outline-none"
                                             >
                                                 <span>Pilihan Aksi</span>
@@ -639,24 +639,24 @@
                                             </button>
 
                                             <!-- Menu Dropdown (Tanpa Ikon pada Teks Opsi) -->
-                                            <div 
-                                                x-show="open" 
-                                                @click.outside="open = false" 
-                                                x-transition:enter="transition ease-out duration-100" 
-                                                x-transition:enter-start="transform opacity-0 scale-95" 
-                                                x-transition:enter-end="transform opacity-100 scale-100" 
-                                                x-transition:leave="transition ease-in duration-75" 
-                                                x-transition:leave-start="transform opacity-100 scale-100" 
-                                                x-transition:leave-end="transform opacity-0 scale-95" 
+                                            <div
+                                                x-show="open"
+                                                @click.outside="open = false"
+                                                x-transition:enter="transition ease-out duration-100"
+                                                x-transition:enter-start="transform opacity-0 scale-95"
+                                                x-transition:enter-end="transform opacity-100 scale-100"
+                                                x-transition:leave="transition ease-in duration-75"
+                                                x-transition:leave-start="transform opacity-100 scale-100"
+                                                x-transition:leave-end="transform opacity-0 scale-95"
                                                 class="absolute right-0 top-full mt-1.5 w-48 rounded-xl bg-white shadow-xl border border-slate-200 py-1 z-30 divide-y divide-slate-100 focus:outline-none text-left"
                                                 style="display: none;"
                                             >
                                                 <div class="py-1">
                                                     <!-- Opsi 1: Lihat & Cetak Tiket -->
-                                                    <button 
-                                                        type="button" 
-                                                        wire:click="openTicketModal({{ $loan->id }})" 
-                                                        @click="open = false" 
+                                                    <button
+                                                        type="button"
+                                                        wire:click="openTicketModal({{ $loan->id }})"
+                                                        @click="open = false"
                                                         class="w-full text-left px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
                                                     >
                                                         Cetak Tiket
@@ -666,22 +666,22 @@
                                                 @if($loan->status === 'requested')
                                                     <div class="py-1">
                                                         <!-- Opsi 2: Serahkan Berkas -->
-                                                        <button 
-                                                            type="button" 
-                                                            wire:click="approveLoan({{ $loan->id }})" 
-                                                            wire:confirm="Konfirmasi penyerahan berkas fisik kepada pemohon?" 
-                                                            @click="open = false" 
+                                                        <button
+                                                            type="button"
+                                                            wire:click="approveLoan({{ $loan->id }})"
+                                                            wire:confirm="Konfirmasi penyerahan berkas fisik kepada pemohon?"
+                                                            @click="open = false"
                                                             class="w-full text-left px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
                                                         >
                                                             Pinjamkan
                                                         </button>
 
                                                         <!-- Opsi 3: Tolak Permohonan -->
-                                                        <button 
-                                                            type="button" 
-                                                            wire:click="rejectLoan({{ $loan->id }})" 
-                                                            wire:confirm="Tolak permohonan pinjam berkas ini?" 
-                                                            @click="open = false" 
+                                                        <button
+                                                            type="button"
+                                                            wire:click="rejectLoan({{ $loan->id }})"
+                                                            wire:confirm="Tolak permohonan pinjam berkas ini?"
+                                                            @click="open = false"
                                                             class="w-full text-left px-4 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
                                                         >
                                                             Tolak
@@ -690,10 +690,10 @@
                                                 @elseif($loan->status === 'borrowed')
                                                     <div class="py-1">
                                                         <!-- Opsi 2: Terima & Masukkan Loker -->
-                                                        <button 
-                                                            type="button" 
-                                                            wire:click="openReturnModal({{ $loan->id }})" 
-                                                            @click="open = false" 
+                                                        <button
+                                                            type="button"
+                                                            wire:click="openReturnModal({{ $loan->id }})"
+                                                            @click="open = false"
                                                             class="w-full text-left px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition-colors"
                                                         >
                                                             Terima & Masukkan Loker
@@ -862,98 +862,160 @@
     <!-- ============================================================== -->
     <!-- MODAL 3: TIKET CETAK HARDCOPY PRINT-FRIENDLY (modal-loan-ticket)-->
     <!-- ============================================================== -->
-    <x-ui.modal title="Tiket Bukti Peminjaman Arsip Fisik" id="modal-loan-ticket" width="max-w-2xl">
+    <x-ui.modal title="Tiket Bukti Peminjaman Arsip Fisik" id="modal-loan-ticket" width="max-w-3xl">
         @if($activeTicketLoan)
-            <div class="space-y-6">
-                <!-- PRINTABLE TICKET CONTAINER -->
-                <div id="printable-ticket" class="bg-white border-2 border-slate-800 p-6 rounded-lg font-sans text-slate-900 shadow-xs">
+            <div class="space-y-4">
+                <!-- PRINTABLE TICKET CONTAINER (PERSIS SESUAI STANDAR RESMI & GAMBAR REFERENSI) -->
+                <div id="printable-ticket" class="bg-white border-2 border-slate-900 p-7 rounded-xl font-sans text-slate-900 shadow-xs">
 
                     <!-- Header Tiket Resmi -->
-                    <div class="border-b-2 border-slate-800 pb-4 mb-4 flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded bg-slate-900 text-white flex items-center justify-center font-bold text-lg font-mono">
-                                EA
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <!-- Logo Resmi dari Storage -->
+                            <div class="w-20 h-20 flex items-center justify-center shrink-0">
+                                <img src="{{ asset('storage/assets/logo_cms_hd_png.svg') }}" alt="Logo Instansi" class="w-20 h-20 object-contain shrink-0">
                             </div>
+                            <!-- Garis Pemisah Vertikal -->
+                            <div class="h-10 w-px bg-slate-300 mx-3.5 self-center"></div>
+                            <!-- Judul & Subteks -->
                             <div>
-                                <h2 class="text-base font-extrabold tracking-tight uppercase">TIKET BUKTI PEMINJAMAN ARSIP FISIK</h2>
-                                <p class="text-[11px] text-slate-600 font-medium tracking-wide">TATA PERSURATAN & KEARSIPAN RESMI (TAPERSIP)</p>
+                                <h2 class="text-lg font-black tracking-tight text-slate-900 uppercase leading-none">BUKTI PEMINJAMAN</h2>
+                                <h2 class="text-lg font-black tracking-tight text-slate-900 uppercase leading-none mt-1">ARSIP FISIK</h2>
+                                <p class="text-[10px] font-semibold tracking-wider text-slate-500 uppercase mt-1">TATA PERSURATAN & KEARSIPAN RESMI (TAPERSIP)</p>
                             </div>
                         </div>
 
-                        <div class="text-right">
-                            <span class="inline-block px-3 py-1 font-mono font-black text-sm bg-slate-100 text-slate-900 border border-slate-800 rounded">
+                        <!-- Badge Kode Tiket & Tanggal Jam -->
+                        <div class="text-right shrink-0">
+                            <div class="inline-block px-4 py-1.5 font-mono font-bold text-sm text-slate-900 border-2 border-slate-900 rounded-lg bg-white">
                                 {{ $activeTicketLoan->loan_code }}
-                            </span>
-                            <div class="text-[10px] text-slate-500 mt-1">
-                                Tgl: {{ $activeTicketLoan->created_at->format('d/m/Y H:i') }}
+                            </div>
+                            <div class="text-[11px] text-slate-500 mt-1 font-medium">
+                                Tgl. {{ $activeTicketLoan->created_at->format('d/m/Y H:i') }}
                             </div>
                         </div>
                     </div>
 
-                    <!-- LOKASI FISIK LOKER (HIGHLIGHT TEBAL) -->
-                    <div class="mb-5 bg-slate-100 border-2 border-dashed border-slate-700 p-3.5 rounded text-center">
-                        <div class="text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-0.5">
-                            LOKASI LEMARI / MAP ARSIP FISIK
+                    <!-- Garis Batas Bawah Header -->
+                    <div class="border-b-2 border-slate-800 my-4"></div>
+
+                    <!-- LOKASI LEMARI / MAP ARSIP FISIK (KOTAK PUTUS-PUTUS BIRU ELEGAN) -->
+                    <div class="my-4  border-2 border border-black-400 rounded-xl py-3 px-4 text-center">
+                        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                            LOKASI DOKUMEN ARSIP
                         </div>
-                        <div class="text-base font-black text-slate-900 tracking-tight flex items-center justify-center gap-2">
-                            <span>📁</span>
-                            <span>{{ $activeTicketLoan->document->folder->name ?? 'BELUM DITENTUKAN' }}</span>
+                        <div class="text-base font-bold text-slate-900 flex items-center justify-center gap-2">
+                            <svg class="w-6 h-6 text-yellow-600 inline-block" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                            </svg>
+                            <span>{{ $activeTicketLoan->document->folder ? $activeTicketLoan->document->folder->getDirectoryPath() : ($activeTicketLoan->document->folder->name ?? 'BELUM DITENTUKAN') }}</span>
                         </div>
                     </div>
 
-                    <!-- Detail Peminjam & Dokumen (Grid 2 Kolom) -->
-                    <div class="grid grid-cols-2 gap-4 text-xs border-b border-slate-200 pb-4 mb-4">
-                        <!-- Kolom Kiri: Peminjam -->
-                        <div class="space-y-1.5">
-                            <div class="font-bold text-slate-500 uppercase tracking-wider text-[10px]">Identitas Pemohon:</div>
-                            <div>Nama: <strong class="text-slate-900">{{ $activeTicketLoan->user->name ?? '-' }}</strong></div>
-                            <div>Jabatan: <span class="text-slate-800">{{ $activeTicketLoan->user->position->name ?? 'Staf' }}</span></div>
-                            <div>Unit Kerja: <span class="text-slate-800">{{ $activeTicketLoan->user->unit->name ?? '-' }}</span></div>
-                        </div>
-
-                        <!-- Kolom Kanan: Dokumen -->
-                        <div class="space-y-1.5">
-                            <div class="font-bold text-slate-500 uppercase tracking-wider text-[10px]">Identitas Naskah:</div>
-                            <div>No Surat: <strong class="font-mono text-slate-900">{{ $activeTicketLoan->document->number ?? '-' }}</strong></div>
-                            <div>Tanggal: <span class="text-slate-800">{{ $activeTicketLoan->document->document_date ? $activeTicketLoan->document->document_date->translatedFormat('d M Y') : '-' }}</span></div>
-                            <div>Sifat: <span class="uppercase font-semibold text-slate-800">{{ $activeTicketLoan->document->sifat ?? 'Biasa' }}</span></div>
-                        </div>
-                    </div>
-
-                    <!-- Perihal & Keperluan -->
-                    <div class="text-xs space-y-2.5 border-b border-slate-200 pb-4 mb-5">
+                    <!-- Detail Peminjam & Dokumen (Grid 2 Kolom Sejajar Titik Dua) -->
+                    <div class="grid grid-cols-2 gap-8 text-xs py-2">
+                        <!-- Kolom Kiri: IDENTITAS PEMOHON -->
                         <div>
-                            <span class="font-bold text-slate-600 block text-[10px] uppercase tracking-wider">Perihal Dokumen:</span>
-                            <span class="text-slate-900 font-medium leading-relaxed">{{ $activeTicketLoan->document->subject ?? '-' }}</span>
+                            <div class="font-bold text-slate-900 uppercase tracking-wide text-xs mb-2">IDENTITAS PEMOHON:</div>
+                            <table class="w-full text-xs border-collapse">
+                                <tbody>
+                                    <tr class="leading-normal">
+                                        <td class="w-20 text-slate-700 py-0.5">Nama</td>
+                                        <td class="w-4 text-slate-700 py-0.5 text-center">:</td>
+                                        <td class="font-bold text-slate-900 py-0.5">{{ $activeTicketLoan->user->name ?? '-' }}</td>
+                                    </tr>
+                                    <tr class="leading-normal">
+                                        <td class="text-slate-700 py-0.5">Jabatan</td>
+                                        <td class="text-slate-700 py-0.5 text-center">:</td>
+                                        <td class="text-slate-800 py-0.5">{{ $activeTicketLoan->user->position->name ?? 'Staf' }}</td>
+                                    </tr>
+                                    <tr class="leading-normal">
+                                        <td class="text-slate-700 py-0.5">Unit Kerja</td>
+                                        <td class="text-slate-700 py-0.5 text-center">:</td>
+                                        <td class="text-slate-800 py-0.5">{{ $activeTicketLoan->user->unit->name ?? '-' }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
+
+                        <!-- Kolom Kanan: IDENTITAS NASKAH -->
                         <div>
-                            <span class="font-bold text-slate-600 block text-[10px] uppercase tracking-wider">Keperluan Peminjaman:</span>
-                            <span class="text-slate-900 font-medium">{{ $activeTicketLoan->purpose }}</span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4 pt-1 text-slate-800">
-                            <div>Mulai Pinjam: <strong>{{ $activeTicketLoan->borrow_date ? $activeTicketLoan->borrow_date->translatedFormat('d F Y') : '-' }}</strong></div>
-                            <div>Batas Kembali: <strong class="text-red-700">{{ $activeTicketLoan->expected_return_date ? $activeTicketLoan->expected_return_date->translatedFormat('d F Y') : '-' }}</strong></div>
+                            <div class="font-bold text-slate-900 uppercase tracking-wide text-xs mb-2">IDENTITAS NASKAH:</div>
+                            <table class="w-full text-xs border-collapse">
+                                <tbody>
+                                    <tr class="leading-normal">
+                                        <td class="w-20 text-slate-700 py-0.5">No Surat</td>
+                                        <td class="w-4 text-slate-700 py-0.5 text-center">:</td>
+                                        <td class="font-bold font-mono text-slate-900 py-0.5">{{ $activeTicketLoan->document->number ?? '-' }}</td>
+                                    </tr>
+                                    <tr class="leading-normal">
+                                        <td class="text-slate-700 py-0.5">Tanggal</td>
+                                        <td class="text-slate-700 py-0.5 text-center">:</td>
+                                        <td class="text-slate-800 py-0.5">{{ $activeTicketLoan->document->document_date ? $activeTicketLoan->document->document_date->translatedFormat('d M Y') : '-' }}</td>
+                                    </tr>
+                                    <tr class="leading-normal">
+                                        <td class="text-slate-700 py-0.5">Sifat</td>
+                                        <td class="text-slate-700 py-0.5 text-center">:</td>
+                                        <td class="font-semibold text-slate-800 uppercase py-0.5">{{ $activeTicketLoan->document->sifat ?? 'BIASA' }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
-                    <!-- Kolom Tanda Tangan Basah -->
+                    <!-- Garis Pembatas Halus -->
+                    <div class="border-b border-slate-200 my-4"></div>
+
+                    <!-- Perihal Dokumen -->
+                    <div class="text-xs mb-4">
+                        <div class="font-bold text-slate-900 uppercase tracking-wide text-xs mb-1.5">PERIHAL DOKUMEN:</div>
+                        <p class="text-slate-800 font-medium leading-relaxed whitespace-normal break-words">
+                            {{ $activeTicketLoan->document->subject ?? '-' }}
+                        </p>
+                    </div>
+
+                    <!-- Keperluan Peminjaman -->
+                    <div class="text-xs mb-5">
+                        <div class="font-bold text-slate-900 uppercase tracking-wide text-xs mb-1.5">KEPERLUAN PEMINJAMAN:</div>
+                        <p class="text-slate-800 font-medium leading-relaxed whitespace-normal break-words">
+                            {{ $activeTicketLoan->purpose }}
+                        </p>
+                    </div>
+
+                    <!-- Rentang Tanggal Pinjam & Batas Kembali -->
+                    <div class="grid grid-cols-2 gap-8 text-xs py-1">
+                        <div>
+                            Mulai Pinjam: <strong class="font-bold text-slate-900 ml-1">{{ $activeTicketLoan->borrow_date ? $activeTicketLoan->borrow_date->translatedFormat('d F Y') : '-' }}</strong>
+                        </div>
+                        <div>
+                            Batas Kembali: <strong class="font-bold text-red-600 ml-1">{{ $activeTicketLoan->expected_return_date ? $activeTicketLoan->expected_return_date->translatedFormat('d F Y') : '-' }}</strong>
+                        </div>
+                    </div>
+
+                    <!-- Garis Pembatas Sebelum Tanda Tangan -->
+                    <div class="border-b border-slate-200 my-5"></div>
+
+                    <!-- Kolom Tanda Tangan Basah Simetris -->
                     <div class="grid grid-cols-2 gap-8 text-center text-xs pt-2">
                         <div>
-                            <p class="font-medium text-slate-600">Peminjam Berkas,</p>
-                            <div class="h-16 border-b border-slate-800 mb-1"></div>
-                            <p class="font-bold text-slate-900">{{ $activeTicketLoan->user->name ?? '...........................' }}</p>
-                            <p class="text-[10px] text-slate-500">{{ $activeTicketLoan->user->unit->name ?? 'Pemohon' }}</p>
+                            <p class="font-medium text-slate-700 mb-16">Peminjam Berkas,</p>
+                            <div class="border-b border-slate-800 w-4/5 mx-auto mb-1.5"></div>
+                            <p class="font-bold text-slate-900 text-xs">{{ $activeTicketLoan->user->name ?? '...........................' }}</p>
+                            <p class="text-[11px] text-slate-500">{{ $activeTicketLoan->user->unit->name ?? 'Pemohon' }}</p>
                         </div>
                         <div>
-                            <p class="font-medium text-slate-600">Petugas Layanan Tapersip,</p>
-                            <div class="h-16 border-b border-slate-800 mb-1"></div>
-                            <p class="font-bold text-slate-900">{{ $activeTicketLoan->officer->name ?? '( Petugas Tapersip )' }}</p>
-                            <p class="text-[10px] text-slate-500">Unit Kearsipan</p>
+                            <p class="font-medium text-slate-700 mb-16">Petugas Layanan Tapersip,</p>
+                            <div class="border-b border-slate-800 w-4/5 mx-auto mb-1.5"></div>
+                            <p class="font-bold text-slate-900 text-xs">{{ $activeTicketLoan->officer ? $activeTicketLoan->officer->name : '( Petugas Tapersip )' }}</p>
+                            <p class="text-[11px] text-slate-500">Unit Kearsipan</p>
                         </div>
                     </div>
 
-                    <!-- Footer Tiket Kecil -->
-                    <div class="mt-6 pt-3 border-t border-slate-200 text-center text-[10px] text-slate-500 italic">
+                    <!-- Garis Penutup Bawah -->
+                    <div class="border-b border-slate-200 my-5"></div>
+
+                    <!-- Catatan Footer Tiket -->
+                    <div class="text-[10px] text-slate-500 italic">
                         * Harap simpan tiket ini dan serahkan kembali bersama berkas fisik saat pengembalian ke Tapersip.
                     </div>
                 </div>
@@ -979,9 +1041,13 @@
         </x-slot:footer>
     </x-ui.modal>
 
-    <!-- Style Print Khusus Isolasi Tiket -->
+    <!-- Style Print Khusus Isolasi Tiket A4 Portrait -->
     <style>
         @media print {
+            @page {
+                size: A4 portrait;
+                margin: 10mm 15mm;
+            }
             body * {
                 visibility: hidden !important;
             }
@@ -993,14 +1059,18 @@
                 left: 0 !important;
                 top: 0 !important;
                 width: 100% !important;
-                max-width: 100% !important;
-                margin: 0 !important;
-                padding: 24px !important;
-                border: 2px solid #000 !important;
+                max-width: 180mm !important;
+                margin: 0 auto !important;
+                padding: 24px 28px !important;
+                border: 1.5px solid #0f172a !important;
+                border-radius: 8px !important;
                 background: #ffffff !important;
-                color: #000000 !important;
+                color: #0f172a !important;
                 box-shadow: none !important;
                 z-index: 999999 !important;
+                page-break-inside: avoid !important;
+                page-break-after: avoid !important;
+                box-sizing: border-box !important;
             }
         }
     </style>

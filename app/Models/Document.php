@@ -16,6 +16,7 @@ class Document extends Model
         'folder_id',
         'document_type_id',
         'number',
+        'sequence_number',
         'document_date',
         'received_date',
         'sender',

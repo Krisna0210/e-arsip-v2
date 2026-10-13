@@ -145,7 +145,14 @@
                                 <span class="bg-red-50 text-red-700 px-2 py-0.5 rounded text-xs font-bold border border-red-200">Rahasia</span>
                             @endif
                         </td>
-                        <td class="px-5 py-4 font-mono text-xs text-slate-500">{{ $docType->numbering_format ?: '-' }}</td>
+                        <td class="px-5 py-4">
+                            <div class="font-mono text-xs text-slate-700 font-semibold">{{ $docType->numbering_format ?: '-' }}</div>
+                            @if($docType->starting_sequence > 0)
+                                <div class="text-[11px] text-emerald-700 mt-0.5 font-medium">
+                                    Urutan Manual: <strong>{{ $docType->starting_sequence }}</strong> (Thn {{ $docType->starting_sequence_year ?: date('Y') }})
+                                </div>
+                            @endif
+                        </td>
                         <td class="px-5 py-4 text-right space-x-1">
                             <x-ui.button wire:click="editDocType({{ $docType->id }})" variant="subtle" class="!px-2 !py-1 text-xs">Edit</x-ui.button>
                             <x-ui.button wire:click="deleteDocType({{ $docType->id }})" variant="danger" class="!px-2 !py-1 text-xs" wire:confirm="Hapus jenis dokumen ini?">Hapus</x-ui.button>
@@ -246,6 +253,25 @@
                 <input wire:model="typeNumbering" type="text" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: [Urutan]/SE/[KodeUnit]/[Tahun]">
                 <p class="text-[11px] text-slate-500 mt-1.5">Variabel tersedia: <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">[Urutan]</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">[KodeUnit]</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">[BulanRomawi]</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">[Tahun]</code>.</p>
                 @error('typeNumbering') <span class="text-xs text-red-500">{{ $message }}</span> @enderror
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-100">
+                <div>
+                    <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">
+                        Nomor Terakhir Buku Manual
+                    </label>
+                    <input wire:model="typeStartingSequence" type="number" min="0" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: 85">
+                    <p class="text-[11px] text-slate-500 mt-1 leading-snug">Isi jika kantor sudah punya nomor terakhir sebelum sistem diluncurkan (misal: 85, maka nomor baru terbit 086). Kosongkan jika mulai dari 1.</p>
+                    @error('typeStartingSequence') <span class="text-xs text-red-500">{{ $message }}</span> @enderror
+                </div>
+                <div>
+                    <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">
+                        Tahun Berlaku Urutan
+                    </label>
+                    <input wire:model="typeStartingYear" type="number" min="2000" max="2100" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="{{ date('Y') }}">
+                    <p class="text-[11px] text-slate-500 mt-1 leading-snug">Tahun berlakunya sequence awal di atas (default: {{ date('Y') }}). Reset otomatis saat berganti tahun.</p>
+                    @error('typeStartingYear') <span class="text-xs text-red-500">{{ $message }}</span> @enderror
+                </div>
             </div>
             
             @if($typeNumbering)

@@ -13,5 +13,7 @@ class DocumentType extends Model
         'name',
         'default_sifat',
         'numbering_format',
+        'starting_sequence',
+        'starting_sequence_year',
     ];
 }

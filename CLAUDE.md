@@ -565,3 +565,119 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - Suite pengujian fitur `Tests\Feature\NasStorageTest::test_hierarchical_folder_path_generation_and_storage_structure` memvalidasi sanitasi nama loker, pembuatan jalur bertingkat, dan penyimpanan fisik di NAS disk.
   - Seluruh test suite (10 *test cases*, 40 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
 
+### 34. Panduan Deployment Server & Mounting Penyimpanan NAS (SMB/CIFS)
+- **Lingkungan Produksi Server Lokal**:
+  - IP Server Aplikasi: `192.168.30.155` (Ubuntu Server / Apache 2.4).
+  - Web Server & Subfolder Alias: `/var/www/html/earsip` dengan alias URL `http://192.168.30.155/earsip`.
+  - IP Perangkat NAS: `192.168.30.100` (Protokol SMB/CIFS).
+  - Share Folder NAS: `//192.168.30.100/Tapersip`.
+  - Mount Point Lokal Server: `/mnt/tapersip_nas`.
+- **Langkah-Langkah Mounting NAS SMB/CIFS ke Server Ubuntu**:
+  1. **Install Paket Pendukung CIFS**:
+     ```bash
+     sudo apt update && sudo apt install cifs-utils -y
+     ```
+  2. **Buat Direktori Titik Mount**:
+     ```bash
+     sudo mkdir -p /mnt/tapersip_nas
+     ```
+  3. **Buat File Kredensial NAS (Aman & Terenkapsulasi)**:
+     - Buat file kredensial di `/etc/nas-credentials`:
+       ```ini
+       username=NAMA_USER_NAS
+       password=PASSWORD_NAS
+       ```
+     - Kunci hak akses file agar hanya `root` yang dapat membaca:
+       ```bash
+       sudo chmod 600 /etc/nas-credentials
+       ```
+  4. **Mounting Manual & Pemetaan Hak Akses Web Server (`www-data`)**:
+     - Hubungkan share folder NAS dengan kepemilikan user Apache agar dapat membaca dan menulis file:
+       ```bash
+       sudo mount -t cifs //192.168.30.100/Tapersip /mnt/tapersip_nas -o credentials=/etc/nas-credentials,uid=www-data,gid=www-data,file_mode=0775,dir_mode=0775
+       ```
+     - Uji coba izin tulis:
+       ```bash
+       sudo -u www-data touch /mnt/tapersip_nas/test_koneksi.txt && sudo -u www-data rm /mnt/tapersip_nas/test_koneksi.txt
+       ```
+  5. **Konfigurasi Auto-Mount saat Booting Server (`/etc/fstab`)**:
+     - Tambahkan baris konfigurasi di baris terbawah file `/etc/fstab`:
+       ```text
+       //192.168.30.100/Tapersip /mnt/tapersip_nas cifs credentials=/etc/nas-credentials,uid=www-data,gid=www-data,file_mode=0775,dir_mode=0775,nofail,_netdev 0 0
+       ```
+  6. **Integrasi Konfigurasi Laravel (`.env`)**:
+     - Masuk ke direktori aplikasi `/var/www/html/earsip` dan tambahkan variabel lingkungan pada `.env`:
+       ```ini
+       NAS_STORAGE_PATH=/mnt/tapersip_nas
+       ```
+     - Bersihkan cache konfigurasi Laravel:
+       ```bash
+       php artisan config:clear
+       ```
+- **Catatan Penting Deploy Subfolder Apache (`/earsip`)**:
+  - Konfigurasi VirtualHost `/etc/apache2/sites-available/000-default.conf` wajib menggunakan direktif `Alias /earsip /var/www/html/earsip/public`.
+  - File `.htaccess` pada `public/.htaccess` wajib memuat `RewriteBase /earsip/` tepat di bawah `RewriteEngine On` untuk mencegah *internal rewrite loop 500*.
+  - Variabel `APP_URL` dan `ASSET_URL` pada `.env` harus bernilai `http://192.168.30.155/earsip`.
+
+### 35. Penyetelan Nomor Terakhir / Sequence Awal Manual & Fleksibilitas Input Nomor Fisik (Smart Transition Sequence Engine)
+- **Skema Database & Model**:
+  - Migrasi `2026_10_13_071503_add_sequence_fields_to_document_types_and_documents_tables.php`:
+    - Tabel `document_types`: Menambahkan `starting_sequence` (unsignedInteger, default 0) dan `starting_sequence_year` (smallInteger, nullable).
+    - Tabel `documents`: Menambahkan `sequence_number` (unsignedInteger, nullable, indexed).
+  - Model `DocumentType`: Properti `$fillable` ditambahkan `'starting_sequence'` dan `'starting_sequence_year'`.
+  - Model `Document`: Properti `$fillable` ditambahkan `'sequence_number'`.
+- **Pengaturan Master Data Sequence Awal (`ArchiveClassificationIndex`)**:
+  - Pada modal Tambah/Edit Jenis Dokumen (`slide-doctype`), ditambahkan field input:
+    - **Nomor Terakhir Buku Manual** (`typeStartingSequence`): Untuk menampung nomor buku fisik terakhir sebelum aplikasi diluncurkan (misal: 85).
+    - **Tahun Berlaku Urutan** (`typeStartingYear`): Untuk membatasi berlakunya sequence awal hanya pada tahun berjalan (default: tahun berjalan). Reset otomatis ke 001 saat berganti tahun.
+  - Tabel master data menampilkan informasi urutan manual aktif di bawah format penomoran.
+- **Rumus Penomoran Cerdas Inkremental (`max(DB, StartingSequence) + 1`)**:
+  - Pada `app/Livewire/Registry/Outgoing/Create.php` dan `app/Livewire/Registry/Internal/Create.php`:
+    - Mengambil nilai tertinggi dari `sequence_number` dokumen tahun berjalan (`$maxInDb`).
+    - Mengambil nilai `starting_sequence` dari master data jika tahunnya cocok (`$startingSequence`).
+    - Menghitung urutan naskah berikutnya: `max($maxInDb, $startingSequence) + 1`.
+    - Menjamin nomor urut tidak pernah mundur, melompati urutan, atau bertabrakan saat masa transisi go-live.
+- **Fleksibilitas Input Nomor Fisik Khusus Tapersip (Dual-Mode Input)**:
+  - Pada formulir input Surat Keluar dan Memo Internal:
+    - **Staf Biasa (Tanpa Izin `archive`)**: Field input nomor surat disembunyikan sepenuhnya. Staf hanya dapat menerbitkan nomor resmi urut otomatis melalui tombol *"Ambil Nomor Surat"*.
+    - **Petugas Tapersip (Memiliki Izin `archive` "Arsip & Upload Langsung")**: Field input nomor fisik (`Nomor Surat Fisik`) dimunculkan di Section 1 (Informasi Surat).
+      - Jika diisi nomor manual (dokumen arsip lama sebelum sistem ada), sistem menyimpan nomor asli tersebut apa adanya dan mengekstrak nilai angka urutnya ke `sequence_number`.
+      - Jika dikosongkan, sistem secara otomatis menerbitkan nomor berikutnya yang urut.
+- **Verifikasi Pengujian Otomatis**:
+  - Dibuat suite pengujian fitur `Tests\Feature\SequenceNumberingTest`:
+    - Menguji penyetelan sequence awal di master data jenis dokumen.
+    - Menguji booking nomor otomatis berangkat dari angka awal (misal: 85 ➔ 086 ➔ 087).
+    - Menguji penyimpanan naskah arsip fisik lama dengan nomor manual oleh Tapersip.
+  - Seluruh pengujian otomatis proyek (13 *test cases*, 51 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 36. Perombakan Template Cetak Tiket Peminjaman Fisik Sesuai Standar Resmi & Format Kertas A4 (Printable A4 Physical Archive Loan Ticket)
+- **Desain Kop Tiket Resmi & Penggantian Logo SVG (`document-loan-index.blade.php`)**:
+  - Logo kotak teks `"EA"` digantikan dengan logo resmi instansi berformat SVG: `{{ asset('storage/assets/logo_cms_hd_png.svg') }}` dalam container seimbang `w-12 h-12 object-contain`.
+  - Garis pemisah vertikal memisahkan logo dengan judul kop dinas.
+  - Judul kop tersusun dalam 2 baris tegas huruf kapital:
+    - **`TIKET BUKTI PEMINJAMAN`**
+    - **`ARSIP FISIK`**
+    - Subjudul: `TATA PERSURATAN & KEARSIPAN RESMI (TAPERSIP)`.
+  - Sisi kanan memuat badge nomor tiket (`TIKET-YYYYMM-XXXX`) dengan bingkai tegas dan waktu pengajuan (`d/m/Y H:i`).
+- **Highlight Lokasi Loker Fisik (`📁 LOKASI LEMARI / MAP ARSIP FISIK`)**:
+  - Kotak sorot dengan border putus-putus biru (`border-dashed border-blue-400 bg-blue-50/30 rounded-xl`).
+  - Menampilkan ikon folder biru dan teks hierarki loker lengkap (`$document->folder->getDirectoryPath()`) agar petugas Tapersip dapat langsung mengambil berkas fisik tanpa mencari manual.
+- **Tabel Dua Kolom Sejajar Titik Dua (Identitas Pemohon & Identitas Naskah)**:
+  - Kolom Kiri (**`IDENTITAS PEMOHON:`**): Nama pemohon (bold), Jabatan, dan Unit Kerja.
+  - Kolom Kanan (**`IDENTITAS NASKAH:`**): Nomor Surat Resmi (bold monospace), Tanggal Surat, dan Sifat Dokumen (BIASA / PENTING / RAHASIA).
+- **Bagian Konten Naskah & Transaksi Sirkulasi**:
+  - **`PERIHAL DOKUMEN:`**: Memuat judul perihal berkas secara lengkap tanpa terpotong (*no truncation*).
+  - **`KEPERLUAN PEMINJAMAN:`**: Menampilkan rincian tujuan peminjaman fisik.
+  - **Rentang Waktu**: Tanggal mulai pinjam dan batas kembali dengan penekanan tanggal jatuh tempo berwarna merah tegas.
+- **Dua Kolom Tanda Tangan Basah Simetris**:
+  - Sisi Kiri: *Peminjam Berkas* (Ruang tanda tangan, garis penandatangan, nama pemohon, dan unit kerja).
+  - Sisi Kanan: *Petugas Layanan Tapersip* (Ruang tanda tangan, garis penandatangan, nama petugas/placeholder, dan Unit Kearsipan).
+  - Catatan Footer Miring: `* Harap simpan tiket ini dan serahkan kembali bersama berkas fisik saat pengembalian ke Tapersip.`
+- **Kalibrasi Cetak Standar Kertas A4 Portrait (`@media print`)**:
+  - Dikonfigurasi `@page { size: A4 portrait; margin: 10mm 15mm; }`.
+  - Kontainer `#printable-ticket` dikunci pada lebar `max-width: 180mm` dengan `page-break-inside: avoid` dan `page-break-after: avoid`.
+  - Memastikan tiket saat dicetak melalui browser (*Print to PDF* atau printer fisik) **pas tepat 1 lembar A4 portrait penuh**, tidak terpotong, dan tidak menyisakan halaman kedua kosong.
+- **Verifikasi Pengujian**:
+  - Seluruh pengujian otomatis proyek (`DocumentLoanTest`, `NasStorageTest`, `SequenceNumberingTest`, `ExampleTest`) terkonfirmasi lulus 100% (*13 tests, 51 assertions*).
+
+
