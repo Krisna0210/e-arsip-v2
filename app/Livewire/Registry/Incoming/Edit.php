@@ -103,7 +103,7 @@ class Edit extends Component
             $newVersionNumber = $latestVersion ? $latestVersion + 1 : 2;
 
             $fileName = $this->document->generateArchiveFileName('pdf', (string) $newVersionNumber);
-            $path = $this->file->storeAs('documents', $fileName, 'public');
+            $path = $this->file->storeAs('documents', $fileName, 'nas');
 
             $version = DocumentVersion::create([
                 'document_id' => $this->document->id,

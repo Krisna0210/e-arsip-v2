@@ -515,3 +515,28 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - Cache view aplikasi telah dibersihkan (`view:clear`).
   - Suite pengujian otomatis `DocumentLoanTest` (5 *test cases*, 24 *assertions*) terkonfirmasi tetap lulus 100% (*PASS*).
 
+### 32. Integrasi Penyimpanan NAS Enterprise (Konsep A: OS-Level Mount via SMB dengan Automatic Dynamic Fallback)
+- **Arsitektur Penyimpanan Mandiri Disk `'nas'` (`config/filesystems.php`)**:
+  - Didaftarkan disk penyimpanan baru `'nas'` berbasis driver `'local'`.
+  - **Automatic Dynamic Fallback Engine**:
+    - Nilai root disk dikonfigurasi cerdas: `env('NAS_STORAGE_PATH') ?: storage_path('app/public')`.
+    - **Di PC Pengembang Lokal**: Saat variabel `NAS_STORAGE_PATH` kosong (tidak diset), sistem secara otomatis menyimpan berkas ke `storage/app/public` lokal. Pengembangan, pengujian form, dan pratinjau PDF di PC lokal 100% aman dan tidak terganggu sama sekali tanpa perlu server NAS fisik.
+    - **Di Server Linux Produksi**: Sysadmin cukup mengaitkan share SMB dari Synology/QNAP NAS ke mount point OS (misal: `/mnt/nas_arsip`) lalu mengatur baris `.env`: `NAS_STORAGE_PATH=/mnt/nas_arsip/documents`. Seluruh berkas otomatis disimpan langsung ke harddisk server NAS tanpa mengubah satu baris kode pun.
+- **Penyelarasan Seluruh Titik Simpan Berkas (*Storage Handlers*)**:
+  - Seluruh controller dan komponen Livewire telah dialihkan menyimpan berkas ke disk `'nas'`:
+    - `ScanQueue::saveFinalFile()`: `$this->finalFile->storeAs('documents', $fileName, 'nas');`
+    - `Incoming\Create::handleFileAndVersion()`: `$this->file->storeAs('documents', $fileName, 'nas');`
+    - `Outgoing\Create::handleFileAndVersion()`: `$this->file->storeAs('documents', $fileName, 'nas');`
+    - `Internal\Create::handleFileAndVersion()`: `$this->file->storeAs('documents', $fileName, 'nas');`
+    - `Incoming\Edit::submit()`: `$this->file->storeAs('documents', $fileName, 'nas');`
+- **Rute Streaming PDF dengan Dual-Layer Resolution (`routes/web.php`)**:
+  - Pada rute `/document/preview/{version}`, diterapkan pengecekan resolusi berkas 2 lapis:
+    1. Memeriksa keberadaan fisik berkas pada disk `'nas'` (`Storage::disk('nas')->path($version->file_path)`).
+    2. Jika tidak ditemukan pada mount NAS, sistem otomatis melakukan fallback memeriksa direktori publik lokal (`storage_path('app/public/' . $version->file_path)`).
+    3. Jika kedua jalur tidak memuat file, baru sistem melempar status `404 Not Found`.
+  - Menjamin dokumen warisan (*legacy files*) yang pernah diunggah sebelum migrasi tetap dapat dibuka dan dipratinjau dengan normal.
+  - Memverifikasi otorisasi hak baca `view` berdasarkan sifat dokumen (`biasa`, `penting`, `rahasia`) sebelum merender berkas.
+- **Verifikasi Pengujian Otomatis**:
+  - Dibuat suite pengujian fitur baru `Tests\Feature\NasStorageTest` yang menguji pendaftaran disk `nas`, mekanisme fallback lokal, dan streaming preview PDF dengan header resmi.
+  - Seluruh pengujian otomatis aplikasi (`DocumentLoanTest`, `NasStorageTest`, `ExampleTest`) terkonfirmasi **lulus 100% (*PASS*, 9 tests, 35 assertions)**.
+

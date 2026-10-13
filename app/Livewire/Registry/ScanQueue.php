@@ -78,7 +78,7 @@ class ScanQueue extends Component
         }
         
         $fileName = $document->generateArchiveFileName('pdf', '1.0');
-        $path = $this->finalFile->storeAs('documents', $fileName, 'public');
+        $path = $this->finalFile->storeAs('documents', $fileName, 'nas');
 
         $version = DocumentVersion::create([
             'document_id' => $document->id,

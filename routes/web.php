@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 Route::get('/', function () {
     return redirect()->route('dashboard');
@@ -91,8 +92,17 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::get('/document/preview/{version}', function (App\Models\DocumentVersion $version) {
-        $path = storage_path('app/public/' . $version->file_path);
-        if (!file_exists($path)) { abort(404); }
+        // Dual-Layer Storage Resolution: Cek NAS storage terlebih dahulu, lalu fallback ke local storage
+        $path = Storage::disk('nas')->path($version->file_path);
+
+        if (!file_exists($path)) {
+            $fallbackPath = storage_path('app/public/' . $version->file_path);
+            if (file_exists($fallbackPath)) {
+                $path = $fallbackPath;
+            } else {
+                abort(404);
+            }
+        }
 
         $document = $version->document;
         if ($document && !Auth::user()->hasDocumentPermission('view', $document->sifat ?? 'biasa')) {

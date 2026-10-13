@@ -47,6 +47,13 @@ return [
             'report' => false,
         ],
 
+        'nas' => [
+            'driver' => 'local',
+            'root' => env('NAS_STORAGE_PATH') ?: storage_path('app/public'),
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
