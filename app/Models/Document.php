@@ -134,6 +134,27 @@ class Document extends Model
 
         return "{$baseName}.{$extension}";
     }
+
+    /**
+     * Get storage directory path based on document type and storage locker hierarchy.
+     * e.g. "documents/Surat Keluar/Tahun 2026/Divisi Keuangan" or "documents/Surat Masuk/Tanpa Loker"
+     */
+    public function getStorageDirectoryPath(): string
+    {
+        $typeFolder = match($this->type) {
+            'incoming' => 'Surat Masuk',
+            'outgoing' => 'Surat Keluar',
+            'internal' => 'Memo Internal',
+            default => 'Umum',
+        };
+
+        // Ensure folder relation is evaluated accurately
+        $folderPath = $this->folder
+            ? $this->folder->getDirectoryPath()
+            : 'Tanpa Loker';
+
+        return "documents/{$typeFolder}/{$folderPath}";
+    }
 }
 
 

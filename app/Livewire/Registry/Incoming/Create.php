@@ -81,8 +81,10 @@ class Create extends Component
     protected function handleFileAndVersion(Document $document)
     {
         if ($this->file) {
+            $document->load('folder.parent');
+            $directory = $document->getStorageDirectoryPath();
             $fileName = $document->generateArchiveFileName('pdf', '1.0');
-            $path = $this->file->storeAs('documents', $fileName, 'nas');
+            $path = $this->file->storeAs($directory, $fileName, 'nas');
 
             $version = DocumentVersion::create([
                 'document_id' => $document->id,

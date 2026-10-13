@@ -540,3 +540,28 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - Dibuat suite pengujian fitur baru `Tests\Feature\NasStorageTest` yang menguji pendaftaran disk `nas`, mekanisme fallback lokal, dan streaming preview PDF dengan header resmi.
   - Seluruh pengujian otomatis aplikasi (`DocumentLoanTest`, `NasStorageTest`, `ExampleTest`) terkonfirmasi **lulus 100% (*PASS*, 9 tests, 35 assertions)**.
 
+### 33. Penyimpanan Hierarki Loker Fisik di Server NAS (Dynamic Hierarchical Locker Directory Engine)
+- **Struktur Direktori Bertingkat Menyerupai Loker Aplikasi**:
+  - Berkas fisik yang tersimpan di server NAS tidak lagi menumpuk di satu folder datar (*flat*), melainkan secara otomatis dikelompokkan mengikuti kategori naskah dan pohon Loker Penyimpanan yang ditentukan:
+    - Pola Jalur: `documents/{Kategori Naskah}/{Induk Loker}/{Sub Loker}/{Nomor Surat}_{YYYY-MM-DD}.pdf`
+    - Contoh 1: `documents/Surat Keluar/Tahun 2026/Divisi Keuangan/001 M-IT 10 2026_2026-10-12.pdf`
+    - Contoh 2: `documents/Surat Masuk/Tanpa Loker/002 SM X 2026_2026-10-12.pdf`
+- **Helper Hierarki pada Model `App\Models\Folder` (`getDirectoryPath()`)**:
+  - Mengambil rantai hierarki folder secara rekursif dari anak ke induk (`$current->parent`).
+  - Menyaring dan membersihkan karakter terlarang sistem operasi (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`) agar pembuatan direktori di Linux/Windows NAS aman tanpa error I/O.
+- **Helper Jalur Penyimpanan pada Model `App\Models\Document` (`getStorageDirectoryPath()`)**:
+  - Memetakan tipe naskah ke nama kategori berbahasa Indonesia resmi:
+    - `'incoming'` ➔ `'Surat Masuk'`
+    - `'outgoing'` ➔ `'Surat Keluar'`
+    - `'internal'` ➔ `'Memo Internal'`
+  - Menggabungkan kategori dengan hasil `getDirectoryPath()`. Jika dokumen belum memiliki loker, otomatis diarahkan ke folder subkategori `'Tanpa Loker'`.
+- **Integrasi di Seluruh Titik Simpan Berkas (*Storage Handlers*)**:
+  - `ScanQueue::saveFinalFile()`: Menetapkan loker pilihan Tapersip (`$document->folder_id = $this->uploadFolderId`) dan me-load relasi `folder.parent` **sebelum** mengeksekusi `storeAs()`, sehingga berkas langsung masuk ke subfolder loker bersangkutan di NAS.
+  - `Incoming\Create::handleFileAndVersion()`: Menggunakan jalur direktori hierarki dokumen.
+  - `Outgoing\Create::handleFileAndVersion()`: Menggunakan jalur direktori hierarki dokumen.
+  - `Internal\Create::handleFileAndVersion()`: Menggunakan jalur direktori hierarki dokumen.
+  - `Incoming\Edit::submit()`: Menggunakan jalur direktori hierarki dokumen saat submit revisi.
+- **Verifikasi Pengujian Otomatis**:
+  - Suite pengujian fitur `Tests\Feature\NasStorageTest::test_hierarchical_folder_path_generation_and_storage_structure` memvalidasi sanitasi nama loker, pembuatan jalur bertingkat, dan penyimpanan fisik di NAS disk.
+  - Seluruh test suite (10 *test cases*, 40 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+

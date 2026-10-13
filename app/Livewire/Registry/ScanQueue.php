@@ -77,8 +77,13 @@ class ScanQueue extends Component
             abort(403, 'Unauthorized action.');
         }
         
+        // Tetapkan loker terlebih dahulu agar struktur direktori di NAS sesuai
+        $document->folder_id = $this->uploadFolderId;
+        $document->load('folder.parent');
+
+        $directory = $document->getStorageDirectoryPath();
         $fileName = $document->generateArchiveFileName('pdf', '1.0');
-        $path = $this->finalFile->storeAs('documents', $fileName, 'nas');
+        $path = $this->finalFile->storeAs($directory, $fileName, 'nas');
 
         $version = DocumentVersion::create([
             'document_id' => $document->id,

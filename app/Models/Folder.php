@@ -37,4 +37,28 @@ class Folder extends Model
     {
         return $this->hasMany(Document::class);
     }
+
+    /**
+     * Get clean hierarchical directory path for physical storage (e.g. "Tahun 2026/Divisi Keuangan")
+     */
+    public function getDirectoryPath(): string
+    {
+        $segments = [];
+        $current = $this;
+
+        while ($current) {
+            // Sanitize folder name for Linux/Windows filesystem
+            $cleanName = str_replace(['/', '\\'], '-', trim($current->name));
+            $cleanName = preg_replace('/[:*?"<>|]/', '', $cleanName);
+            $cleanName = trim(preg_replace('/\s+/', ' ', $cleanName));
+
+            if (!empty($cleanName)) {
+                array_unshift($segments, $cleanName);
+            }
+
+            $current = $current->parent;
+        }
+
+        return !empty($segments) ? implode('/', $segments) : 'Tanpa Loker';
+    }
 }

@@ -102,8 +102,10 @@ class Edit extends Component
                 ->max('version_number');
             $newVersionNumber = $latestVersion ? $latestVersion + 1 : 2;
 
+            $this->document->load('folder.parent');
+            $directory = $this->document->getStorageDirectoryPath();
             $fileName = $this->document->generateArchiveFileName('pdf', (string) $newVersionNumber);
-            $path = $this->file->storeAs('documents', $fileName, 'nas');
+            $path = $this->file->storeAs($directory, $fileName, 'nas');
 
             $version = DocumentVersion::create([
                 'document_id' => $this->document->id,
