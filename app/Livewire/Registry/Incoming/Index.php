@@ -1,0 +1,151 @@
+<?php
+
+namespace App\Livewire\Registry\Incoming;
+
+use App\Models\Document;
+use App\Models\Folder;
+use Livewire\Component;
+use Livewire\WithPagination;
+
+class Index extends Component
+{
+    use WithPagination;
+
+    public $activeFolderId = null;
+    public $statusTab = 'all';
+    public $search = '';
+    
+    // Filters
+    public $filterSifat = '';
+    public $filterDateStart = '';
+    public $filterDateEnd = '';
+    public $filterUnit = '';
+
+    // Modal Folder
+    public $folderName = '';
+    public $folderParentId = null;
+    public $folderDescription = '';
+
+    protected $queryString = [
+        'activeFolderId' => ['except' => null],
+        'search' => ['except' => ''],
+    ];
+
+    public function updatedSearch()
+    {
+        $this->resetPage();
+    }
+
+public function updatedActiveFolderId()
+    {
+        $this->resetPage();
+    }
+
+    public function setActiveFolder($id)
+    {
+        $this->activeFolderId = $id;
+        $this->resetPage();
+    }
+
+    public function createFolder()
+    {
+        $this->reset(['folderName', 'folderParentId', 'folderDescription']);
+        $this->dispatch('open-folder-modal');
+    }
+
+    public function saveFolder()
+    {
+        $this->validate([
+            'folderName' => 'required|string|max:255',
+            'folderParentId' => 'nullable|exists:folders,id',
+            'folderDescription' => 'nullable|string',
+        ]);
+
+        Folder::create([
+            'name' => $this->folderName,
+            'type' => 'incoming',
+            'parent_id' => $this->folderParentId,
+            'description' => $this->folderDescription,
+        ]);
+
+        $this->reset(['folderName', 'folderParentId', 'folderDescription']);
+        $this->dispatch('close-folder-modal');
+        $this->dispatch('notify', ['message' => 'Loker berhasil dibuat', 'type' => 'success']);
+    }
+
+    public function deleteFolder($id)
+    {
+        $folder = Folder::forType('incoming')->withCount('documents', 'children')->findOrFail($id);
+        
+        if ($folder->documents_count > 0 || $folder->children_count > 0) {
+            $this->dispatch('notify', ['message' => 'Loker tidak kosong', 'type' => 'error']);
+            return;
+        }
+
+        $folder->delete();
+        
+        if ($this->activeFolderId == $id) {
+            $this->activeFolderId = null;
+        }
+
+        $this->dispatch('notify', ['message' => 'Loker berhasil dihapus', 'type' => 'success']);
+    }
+
+    public function render()
+    {
+        // Recursive loading of children for incoming
+        $folders = Folder::forType('incoming')
+            ->whereNull('parent_id')
+            ->with(['children' => function($q) {
+                $q->forType('incoming')->with(['children' => function($q2) {
+                    $q2->forType('incoming');
+                }]);
+            }])
+            ->get();
+            
+        $allFolders = Folder::forType('incoming')->orderBy('name')->get();
+
+        $query = Document::with(['folder', 'documentType', 'classification', 'unit', 'currentVersion'])
+            ->where('type', 'incoming');
+
+        if ($this->activeFolderId) {
+            $query->where('folder_id', $this->activeFolderId);
+        }
+
+        if ($this->search) {
+            $query->where(function ($q) {
+                $q->where('number', 'like', '%' . $this->search . '%')
+                  ->orWhere('subject', 'like', '%' . $this->search . '%')
+                  ->orWhere('sender', 'like', '%' . $this->search . '%')
+                  ->orWhereHas('unit', function ($qu) {
+                      $qu->where('name', 'like', '%' . $this->search . '%');
+                  });
+            });
+        }
+
+        if ($this->filterSifat) {
+            $query->where('sifat', $this->filterSifat);
+        }
+
+        if ($this->filterDateStart) {
+            $query->whereDate('document_date', '>=', $this->filterDateStart);
+        }
+
+        if ($this->filterDateEnd) {
+            $query->whereDate('document_date', '<=', $this->filterDateEnd);
+        }
+
+        if ($this->filterUnit) {
+            $query->where('unit_id', $this->filterUnit);
+        }
+
+        $documents = $query->orderBy('created_at', 'desc')->paginate(10);
+
+        return view('livewire.registry.incoming.index', [
+            'folders' => $folders,
+            'allFolders' => $allFolders,
+            'documents' => $documents,
+        ]);
+    }
+}
+
