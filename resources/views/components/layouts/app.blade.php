@@ -37,7 +37,7 @@
                     <div>
                         {{-- <h3 class="px-3 text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2">Alur Kerja Utama</h3> --}}
                         <nav class="space-y-1">
-                            <a href="/dashboard" class="flex items-center gap-3 px-3 py-2 rounded-lg relative {{ request()->routeIs('dashboard') ? 'bg-white/10 text-white font-medium before:absolute before:right-0 before:top-2 before:bottom-2 before:w-1 before:bg-emerald-400 before:rounded-l' : 'hover:bg-[var(--color-surface-sidebar-hover)] hover:text-white transition-colors' }}">
+                            <a href="{{ route('dashboard') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg relative {{ request()->routeIs('dashboard') ? 'bg-white/10 text-white font-medium before:absolute before:right-0 before:top-2 before:bottom-2 before:w-1 before:bg-emerald-400 before:rounded-l' : 'hover:bg-[var(--color-surface-sidebar-hover)] hover:text-white transition-colors' }}">
                                 <svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                                 <span class="text-sm">Dashboard</span>
                             </a></nav>
