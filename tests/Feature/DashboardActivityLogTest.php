@@ -12,8 +12,13 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Livewire\Dashboard;
 use App\Livewire\Registry\Outgoing\Create as OutgoingCreate;
+use App\Livewire\Registry\Internal\Create as InternalCreate;
+use App\Livewire\Registry\ScanQueue;
 use App\Livewire\Registry\DocumentLoanIndex;
+use App\Livewire\Settings\AuditTrailIndex;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -140,5 +145,123 @@ class DashboardActivityLogTest extends TestCase
         $component->assertViewHas('canViewAllActivities', true);
         $component->assertSee('Seluruh Sistem');
         $component->assertSee('Surat Masuk dari Rekanan Luar');
+    }
+
+    public function test_special_document_booking_records_selected_document_type_name_in_audit_log_metadata()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $docType = DocumentType::where('name', 'like', '%Memo%')->first() 
+            ?? DocumentType::firstOrCreate(['name' => 'Memo Internal', 'code' => 'MI', 'numbering_format' => '{NO}/MI/{UNIT}/{YYYY}']);
+        $senderDept = Unit::departments()->first() ?? Unit::first();
+        $recipientDept = Unit::departments()->where('id', '!=', $senderDept->id)->first() ?? $senderDept;
+        $classification = Classification::whereNotNull('parent_id')->first() ?? Classification::first();
+
+        Livewire::actingAs($superadmin)
+            ->test(InternalCreate::class)
+            ->set('document_type_id', $docType->id)
+            ->set('unit_id', $senderDept->id)
+            ->set('recipient_id', $recipientDept->id)
+            ->set('subject', 'Uji Coba Audit Trail Naskah Khusus')
+            ->set('classification_id', $classification->id)
+            ->set('document_date', date('Y-m-d'))
+            ->set('sifat', 'biasa')
+            ->call('bookNumber')
+            ->assertHasNoErrors();
+
+        $log = AuditLog::where('user_id', $superadmin->id)->latest('id')->first();
+        $this->assertNotNull($log);
+        $this->assertStringContainsString('Booking Nomor Surat Khusus', $log->action);
+        $this->assertIsArray($log->metadata);
+        $this->assertEquals($docType->name, $log->metadata['type']);
+        $this->assertNotEquals('internal', $log->metadata['type']);
+    }
+
+    public function test_scan_queue_records_document_type_name_in_audit_log_metadata_for_internal_document()
+    {
+        Storage::fake('nas');
+        $superadmin = User::where('username', 'superadmin')->first();
+        $docType = DocumentType::where('name', 'like', '%Surat Perintah%')->first()
+            ?? DocumentType::firstOrCreate(['name' => 'Surat Perintah', 'code' => 'SPRIN', 'numbering_format' => '{NO}/SPRIN/{YYYY}']);
+
+        $document = Document::create([
+            'number' => '055/SPRIN/X/2026',
+            'subject' => 'Surat Perintah Tugas Khusus',
+            'type' => 'internal',
+            'document_type_id' => $docType->id,
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        $file = UploadedFile::fake()->create('scan_sprin.pdf', 150, 'application/pdf');
+
+        Livewire::actingAs($superadmin)
+            ->test(ScanQueue::class)
+            ->call('openUploadModal', $document->id)
+            ->set('finalFile', $file)
+            ->call('saveFinalFile')
+            ->assertHasNoErrors();
+
+        $log = AuditLog::where('document_id', $document->id)->latest('id')->first();
+        $this->assertNotNull($log);
+        $this->assertStringContainsString('Unggah Scan Fisik Arsip', $log->action);
+        $this->assertEquals($docType->name, $log->metadata['type']);
+    }
+
+    public function test_audit_trail_index_renders_document_type_for_backward_compatible_internal_logs()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $docType = DocumentType::firstOrCreate(['name' => 'Surat Keputusan Direksi', 'code' => 'SKD', 'numbering_format' => '{NO}/SKD/{YYYY}']);
+
+        $document = Document::create([
+            'number' => '100/SKD/X/2026',
+            'subject' => 'SK Direksi Legacy Internal',
+            'type' => 'internal',
+            'document_type_id' => $docType->id,
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        // Simulasikan log lama yang masih tersimpan dengan type => 'internal'
+        AuditLog::record(
+            action: 'Registrasi & Arsip Surat Khusus: ' . $document->number,
+            documentId: $document->id,
+            metadata: [
+                'subject' => $document->subject,
+                'type' => 'internal',
+            ],
+            userId: $superadmin->id
+        );
+
+        Livewire::actingAs($superadmin)
+            ->test(AuditTrailIndex::class)
+            ->assertSee($docType->name)
+            ->assertDontSee('"type":"internal"');
+    }
+
+    public function test_dashboard_monitoring_table_displays_specific_document_type_name_for_internal_documents()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $docType = DocumentType::where('name', 'like', '%Surat Tugas%')->first()
+            ?? DocumentType::firstOrCreate(['name' => 'Surat Tugas', 'code' => 'STG', 'numbering_format' => '{NO}/STG/{YYYY}']);
+
+        $document = Document::create([
+            'number' => '777/STG/X/2026',
+            'subject' => 'Surat Tugas Monitoring Khusus',
+            'type' => 'internal',
+            'document_type_id' => $docType->id,
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        Livewire::actingAs($superadmin)
+            ->test(Dashboard::class)
+            ->assertSee('777/STG/X/2026')
+            ->assertSee($docType->name);
     }
 }

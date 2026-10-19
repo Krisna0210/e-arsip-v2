@@ -79,7 +79,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <!-- Input Kata Kunci -->
                 <div class="lg:col-span-2">
-                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">Kata Kunci Pencarian</label>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">Cari Dokumen</label>
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
@@ -89,7 +89,7 @@
                         <input
                             type="text"
                             wire:model.live.debounce.300ms="search"
-                            placeholder="Cari Nomor Surat, Perihal, Pengirim, atau Penerima..."
+                            placeholder="Cari Nomor Surat, Perihal..."
                             class="block w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] bg-slate-50 focus:bg-white transition-colors"
                         >
                     </div>
@@ -153,8 +153,8 @@
                     <thead>
                         <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-600">
                             <th class="px-5 py-3.5 w-1/4">Identitas Dokumen</th>
-                            <th class="px-5 py-3.5 w-1/3">Perihal & Distribusi</th>
-                            <th class="px-5 py-3.5 text-center">Lokasi Surat</th>
+                            <th class="px-5 py-3.5 w-1/3">Perihal</th>
+                            {{-- <th class="px-5 py-3.5 text-center">Lokasi Surat</th> --}}
                             <th class="px-5 py-3.5 text-center">Status</th>
                             <th class="px-5 py-3.5 text-right">Aksi</th>
                         </tr>
@@ -175,7 +175,7 @@
                                     <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium
                                             {{ $doc->type === 'incoming' ? 'bg-blue-50 text-blue-700 border border-blue-200' : ($doc->type === 'outgoing' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-amber-50 text-amber-700 border border-amber-200') }}">
-                                            {{ $doc->type === 'incoming' ? 'Surat Masuk' : ($doc->type === 'outgoing' ? 'Surat Keluar' : 'Surat Khusus') }}
+                                            {{ $doc->type === 'incoming' ? 'Surat Masuk' : ($doc->type === 'outgoing' ? 'Surat Keluar' : ($doc->documentType?->name ?? 'Surat Khusus')) }}
                                         </span>
                                         <span class="text-xs text-slate-400">
                                             {{ $doc->document_date ? \Carbon\Carbon::parse($doc->document_date)->translatedFormat('d M Y') : '-' }}
@@ -203,7 +203,7 @@
                                             </button>
                                         @endif
                                     </div>
-                                    <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-2">
+                                    {{-- <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-2">
                                         @if($doc->sender)
                                             <span class="truncate max-w-[200px]">Dari: <strong class="text-slate-700 font-semibold">{{ $doc->sender }}</strong></span>
                                         @elseif($doc->unit)
@@ -213,10 +213,10 @@
                                             <span class="text-slate-300">|</span>
                                             <span class="truncate max-w-[200px]">Ke: <strong class="text-slate-700 font-semibold">{{ $doc->recipient_name }}</strong></span>
                                         @endif
-                                    </div>
+                                    </div> --}}
                                 </td>
 
-                                <!-- Lokasi Fisik Loker -->
+                                {{-- <!-- Lokasi Fisik Loker -->
                                 <td class="px-5 py-4 align-top">
                                     @if($doc->folder)
                                         <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700">
@@ -228,7 +228,7 @@
                                     @else
                                         <span class="text-xs text-slate-400 italic">Belum ditentukan</span>
                                     @endif
-                                </td>
+                                </td> --}}
 
                                 <!-- Status Ketersediaan Fisik -->
                                 <td class="px-5 py-4 align-top text-center">
@@ -296,7 +296,7 @@
             <!-- Pagination -->
             @if($catalogDocuments->hasPages())
                 <div class="px-5 py-3 border-t border-slate-200 bg-slate-50/50">
-                    {{ $catalogDocuments->links() }}
+                    {{ $catalogDocuments->links('vendor.pagination.custom') }}
                 </div>
             @endif
         </div>
@@ -321,7 +321,7 @@
                     <thead>
                         <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-600">
                             <th class="px-5 py-3.5">Kode Tiket</th>
-                            <th class="px-5 py-3.5 w-1/3">Dokumen & Lokasi Fisik</th>
+                            <th class="px-5 py-3.5 w-1/3">Identitas Dokumen</th>
                             <th class="px-5 py-3.5">Masa Peminjaman</th>
                             <th class="px-5 py-3.5">Keperluan Pinjam</th>
                             <th class="px-5 py-3.5 text-center">Status</th>
@@ -364,13 +364,13 @@
                                             </button>
                                         @endif
                                     </div>
-                                    @if($loan->document && $loan->document->folder)
+                                    {{-- @if($loan->document && $loan->document->folder)
                                         <div class="mt-1.5">
                                             <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                                                 📁 {{ $loan->document->folder->name }}
                                             </span>
                                         </div>
-                                    @endif
+                                    @endif --}}
                                 </td>
 
                                 <!-- Masa Peminjaman -->
@@ -470,7 +470,7 @@
 
             @if($myLoans->hasPages())
                 <div class="px-5 py-3 border-t border-slate-200 bg-slate-50/50">
-                    {{ $myLoans->links() }}
+                    {{ $myLoans->links('vendor.pagination.custom') }}
                 </div>
             @endif
         </div>
@@ -740,7 +740,7 @@
 
             @if($circulationLoans->hasPages())
                 <div class="px-5 py-3 border-t border-slate-200 bg-slate-50/50">
-                    {{ $circulationLoans->links() }}
+                    {{ $circulationLoans->links('vendor.pagination.custom') }}
                 </div>
             @endif
         </div>

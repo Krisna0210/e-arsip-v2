@@ -1114,6 +1114,79 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
     - `test_scan_queue_prevents_upload_and_shows_error_when_nas_is_offline`
   - Seluruh rangkaian test suite proyek (41 *test cases*, 196 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
 
+### 59. Penyelarasan Nama Jenis Dokumen Dinamis pada Metadata Audit Trail Surat Khusus
+- **Pencatatan Log Surat Khusus (`app/Livewire/Registry/Internal/Create.php`)**:
+  - Pada method `bookNumber()` dan `saveAndArchive()`, metadata `type` tidak lagi menggunakan string hardcode `"internal"`.
+  - Sistem secara dinamis mengambil nama jenis naskah riil yang dipilih pengguna dari relasi master data:
+    `$docTypeName = $this->documentTypes->firstWhere('id', (int) $this->document_type_id)?->name ?? \App\Models\DocumentType::find($this->document_type_id)?->name ?? 'Surat Khusus'`.
+  - Metadata `AuditLog::record(...)` kini mencatat nama naskah resmi, seperti `"Memo Internal"`, `"Surat Perintah"`, `"Surat Tugas"`, `"Surat Keputusan"`, dll.
+- **Penyelarasan pada Antrean Scan Tapersip (`app/Livewire/Registry/ScanQueue.php`)**:
+  - Pada method `saveFinalFile()` saat pengunggahan scan PDF fisik arsip, metadata `type` otomatis diselaraskan menggunakan nama jenis dokumen riil (`$document->documentType?->name ?? 'Surat Khusus'`) alih-alih tipe mentah database (`'internal'`).
+- **Kompatibilitas Log Riwayat Lama / Backward-Compatibility (`audit-trail-index.blade.php` & `AuditTrailIndex.php`)**:
+  - Pada `AuditTrailIndex::render()`, relasi dokumen di-eager load hingga jenis naskah: `AuditLog::with(['user', 'document.documentType'])`.
+  - Pada tabel Audit Trail kolom *Detail Referensi*, jika rekaman lama masih menyimpan `type === 'internal'`, antarmuka secara otomatis me-resolve menjadi nama jenis dokumen asli dari dokumen terkait (`$log->document?->documentType?->name ?? 'Surat Khusus'`).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DashboardActivityLogTest.php`)**:
+  - Menambahkan 3 pengujian:
+    - `test_special_document_booking_records_selected_document_type_name_in_audit_log_metadata` (memvalidasi pencatatan nama jenis naskah dinamis pada booking Surat Khusus).
+    - `test_scan_queue_records_document_type_name_in_audit_log_metadata_for_internal_document` (memvalidasi pencatatan nama jenis naskah saat unggah scan).
+    - `test_audit_trail_index_renders_document_type_for_backward_compatible_internal_logs` (memvalidasi bahwa tampilan Audit Trail me-render nama jenis dokumen dan tidak lagi menampilkan `{"type":"internal"}`).
+  - Seluruh rangkaian test suite proyek (44 *test cases*, 208 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 60. Penyelarasan Badge Jenis Dokumen Dinamis pada Tabel Monitoring Arsip Dashboard
+- **Antarmuka Pengguna (`resources/views/livewire/dashboard.blade.php`)**:
+  - Pada tabel *Monitoring Arsip Dokumen* (kolom *Nomor & Jenis Dokumen*), badge naskah untuk kategori surat khusus tidak lagi menampilkan teks statis `"Surat Khusus"`.
+  - Sistem menampilkan nama jenis naskah spesifik yang dipilih oleh pengguna saat pembuatan dokumen:
+    `{{ $doc->documentType?->name ?? 'Surat Khusus' }}` (seperti *"Memo Internal"*, *"Surat Perintah"*, *"Surat Tugas"*, *"Surat Keputusan"*, dll.).
+  - Memanfaatkan relasi `documentType` yang sudah di-eager load pada kueri `$monitoringQuery` di `Dashboard.php` sehingga tidak memicu query tambahan (zero additional DB queries).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DashboardActivityLogTest.php`)**:
+  - Menambahkan test case `test_dashboard_monitoring_table_displays_specific_document_type_name_for_internal_documents` yang memvalidasi bahwa tabel monitoring di Dashboard menampilkan badge nama jenis dokumen yang dipilih (misal: *"Surat Tugas"*).
+  - Seluruh rangkaian test suite proyek (45 *test cases*, 210 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 61. Penyelarasan Badge Jenis Dokumen Dinamis pada Kolom Identitas Dokumen Sirkulasi & Peminjaman Berkas
+- **Komponen Livewire (`app/Livewire/Registry/DocumentLoanIndex.php`)**:
+  - Memastikan relasi `documentType` selalu di-eager load pada kueri:
+    - Tab 1 Katalog: `Document::with(['folder', 'unit', 'documentType', 'activeLoan.user'])`.
+    - Tab 2 Pinjaman Saya: `DocumentLoan::with(['document.folder', 'document.unit', 'document.documentType', 'officer'])`.
+    - Tab 3 Meja Sirkulasi: `DocumentLoan::with(['document.folder', 'document.unit', 'document.documentType', 'user.unit', 'officer'])`.
+  - Mencegah masalah query N+1 saat mengakses nama jenis dokumen di berbagai tab peminjaman.
+- **Antarmuka Pengguna (`resources/views/livewire/registry/document-loan-index.blade.php`)**:
+  - Pada tabel Katalog Arsip (*Tab 1*) kolom **"Identitas Dokumen"**, badge naskah tidak lagi bertuliskan statis `"Surat Khusus"`.
+  - Sistem menampilkan nama jenis naskah riil yang dipilih pengguna:
+    `{{ $doc->type === 'incoming' ? 'Surat Masuk' : ($doc->type === 'outgoing' ? 'Surat Keluar' : ($doc->documentType?->name ?? 'Surat Khusus')) }}`.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanTest.php`)**:
+  - Menambahkan pengujian `test_catalog_table_displays_specific_document_type_name_for_internal_documents` yang memvalidasi bahwa tabel katalog menampilkan badge nama jenis dokumen naskah dinas (misal: *"Surat Perintah"*) bukan sekadar label teknis.
+  - Seluruh rangkaian test suite proyek (46 *test cases*, 212 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 62. Penyelarasan Nama Jenis Dokumen Dinamis pada Antrean Scan Tapersip
+- **Komponen Livewire (`app/Livewire/Registry/ScanQueue.php`)**:
+  - Pada method `openUploadModal($id)`, kueri dokumen kini meng-eager load `documentType`: `Document::with(['createdBy', 'documentType'])->findOrFail($id)`.
+  - Properti `$uploadDocType` disetel secara dinamis: `$this->uploadDocType = $doc->type === 'outgoing' ? 'Surat Keluar' : ($doc->documentType?->name ?? 'Surat Khusus')`.
+  - Memastikan modal verifikasi unggah scan (`modal-upload-queue`) pada bagian *Identitas Dokumen -> Jenis* menampilkan jenis naskah spesifik yang dipilih pengguna (misal: *"Surat Tugas"*, *"Surat Perintah"*, *"Memo Internal"*, dll.).
+- **Antarmuka Pengguna (`resources/views/livewire/registry/scan-queue.blade.php`)**:
+  - Pada tabel antrean scan kolom **"Identitas Dokumen"**, label jenis naskah tidak lagi bertuliskan statis `"Surat Khusus"`.
+  - Teks kini menampilkan nama jenis naskah riil: `{{ $doc->type === 'outgoing' ? 'Surat Keluar' : ($doc->documentType?->name ?? 'Surat Khusus') }}`.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/NasStorageTest.php`)**:
+  - Menambahkan pengujian `test_scan_queue_table_and_modal_display_specific_document_type_name_for_internal_documents` yang memvalidasi bahwa tabel antrean scan maupun modal verifikasi unggah menampilkan nama jenis dokumen naskah dinas.
+  - Seluruh rangkaian test suite proyek (47 *test cases*, 215 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 63. Penerapan Custom Pagination Standar pada Seluruh Tab Halaman Cari & Pinjam Surat
+- **Antarmuka Pengguna (`resources/views/livewire/registry/document-loan-index.blade.php`)**:
+  - Mengganti pemanggilan paginasi bawaan Tailwind (`->links()`) dengan tampilan komponen paginasi kustom resmi proyek (`->links('vendor.pagination.custom')`) pada ketiga tab:
+    1. **Tab 1: Katalog & Cari Surat** (`$catalogDocuments->links('vendor.pagination.custom')`).
+    2. **Tab 2: Pinjaman Saya** (`$myLoans->links('vendor.pagination.custom')`).
+    3. **Tab 3: Sirkulasi & Persetujuan Tapersip** (`$circulationLoans->links('vendor.pagination.custom')`).
+  - Menghasilkan pengalaman pengguna yang selaras dan seragam dengan halaman explorer arsip lainnya:
+    - Informasi rekap bahasa Indonesia: *"Menampilkan X – Y dari Z data"*.
+    - Tombol navigasi mandiri (*Prev / Next*) dengan ikon panah tebal dan tombol nomor halaman aktif berlatar warna primer brand (`bg-[var(--color-primary)]`).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanTest.php`)**:
+  - Menambahkan pengujian `test_catalog_table_renders_custom_pagination_view` yang memvalidasi bahwa tampilan paginasi kustom (`vendor.pagination.custom`) ter-render dengan benar saat jumlah data melebihi batas per halaman.
+  - Seluruh rangkaian test suite proyek (48 *test cases*, 219 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+
+
+
+
+
 
 
 

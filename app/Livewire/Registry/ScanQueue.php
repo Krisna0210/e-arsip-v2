@@ -64,7 +64,7 @@ class ScanQueue extends Component
 
     public function openUploadModal($id)
     {
-        $doc = Document::with('createdBy')->findOrFail($id);
+        $doc = Document::with(['createdBy', 'documentType'])->findOrFail($id);
         
         // Cek permission archive (termasuk superadmin check)
         if (!Auth::user()->hasDocumentPermission('archive', $doc->sifat ?? 'biasa')) {
@@ -76,7 +76,7 @@ class ScanQueue extends Component
         $this->uploadDocNumber = $doc->number;
         $this->uploadDocSubject = $doc->subject;
         $this->uploadDocDate = $doc->document_date ? \Carbon\Carbon::parse($doc->document_date)->format('d M Y') : '-';
-        $this->uploadDocType = $doc->type === 'outgoing' ? 'Surat Keluar' : 'Surat Khusus';
+        $this->uploadDocType = $doc->type === 'outgoing' ? 'Surat Keluar' : ($doc->documentType?->name ?? 'Surat Khusus');
         $this->uploadDocTypeRaw = $doc->type;
         $this->uploadFolderId = $doc->folder_id;
         $this->uploadDocCreator = $doc->createdBy ? $doc->createdBy->name : '-';
@@ -107,7 +107,7 @@ class ScanQueue extends Component
         
         // Tetapkan loker terlebih dahulu agar struktur direktori di NAS sesuai
         $document->folder_id = $this->uploadFolderId;
-        $document->load('folder.parent');
+        $document->load(['folder.parent', 'documentType']);
 
         $directory = $document->getStorageDirectoryPath();
         $fileName = $document->generateArchiveFileName('pdf', '1.0');
@@ -137,12 +137,16 @@ class ScanQueue extends Component
             'retention_end_date' => $retentionEndDate,
         ]);
 
+        $typeLabel = $document->type === 'internal'
+            ? ($document->documentType?->name ?? 'Surat Khusus')
+            : ($document->documentType?->name ?? 'Surat Keluar');
+
         \App\Models\AuditLog::record(
             action: 'Unggah Scan Fisik Arsip: ' . ($document->number ?: $document->subject),
             documentId: $document->id,
             metadata: [
                 'subject' => $document->subject,
-                'type' => $document->type,
+                'type' => $typeLabel,
                 'folder_id' => $this->uploadFolderId,
             ]
         );

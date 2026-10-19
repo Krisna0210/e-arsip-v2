@@ -374,4 +374,52 @@ class DocumentLoanTest extends TestCase
             'user_id' => $borrower->id,
         ]);
     }
+
+    public function test_catalog_table_displays_specific_document_type_name_for_internal_documents()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $docType = \App\Models\DocumentType::where('name', 'like', '%Surat Perintah%')->first()
+            ?? \App\Models\DocumentType::firstOrCreate(['name' => 'Surat Perintah', 'code' => 'SPRIN', 'numbering_format' => '{NO}/SPRIN/{YYYY}']);
+
+        $document = Document::create([
+            'number' => '888/SPRIN/LOAN/2026',
+            'subject' => 'Surat Perintah Arsip Katalog',
+            'type' => 'internal',
+            'document_type_id' => $docType->id,
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        Livewire::actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->assertSee('888/SPRIN/LOAN/2026')
+            ->assertSee($docType->name);
+    }
+
+    public function test_catalog_table_renders_custom_pagination_view()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+
+        // Buat 12 dokumen arsip agar memicu paginasi (> 10 item per halaman)
+        for ($i = 1; $i <= 12; $i++) {
+            Document::create([
+                'number' => "DOC-PAGI-{$i}/2026",
+                'subject' => "Surat Uji Paginasi {$i}",
+                'type' => 'incoming',
+                'sifat' => 'biasa',
+                'status' => 'archived',
+                'document_date' => now()->subDays($i)->format('Y-m-d'),
+                'created_by' => $superadmin->id,
+            ]);
+        }
+
+        Livewire::actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->assertSee('Menampilkan')
+            ->assertSee('dari')
+            ->assertSee('data')
+            ->assertSee('Prev');
+    }
 }

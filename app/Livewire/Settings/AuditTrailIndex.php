@@ -45,7 +45,7 @@ class AuditTrailIndex extends Component
 
     public function render()
     {
-        $logs = AuditLog::with(['user', 'document'])
+        $logs = AuditLog::with(['user', 'document.documentType'])
             ->when($this->search, function (Builder $query) {
                 $query->where(function (Builder $q) {
                     $q->where('action', 'like', '%' . $this->search . '%')

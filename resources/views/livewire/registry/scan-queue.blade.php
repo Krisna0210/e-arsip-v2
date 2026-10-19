@@ -111,10 +111,17 @@
                                 </div>
                             </td>
                             <td class="px-3 py-4 text-sm text-gray-500">
-                                <div class="flex flex-col">
+                                <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                                     <span class="font-mono text-[var(--color-primary)] font-semibold">{{ $doc->number }}</span>
-                                    <span class="text-xs text-gray-500 mt-1">{{ $doc->type === 'outgoing' ? 'Surat Keluar' : 'Surat Khusus' }}</span>
-                                    <span class="text-xs text-gray-500">Pendaftar: {{ $doc->createdBy->name ?? '-' }}</span>
+                                </div>
+                                <div class="mt-1">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium
+                                            {{ $doc->type === 'incoming' ? 'bg-blue-50 text-blue-700 border border-blue-200' : ($doc->type === 'outgoing' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-amber-50 text-amber-700 border border-amber-200') }}">
+                                            {{ $doc->type === 'incoming' ? 'Surat Masuk' : ($doc->type === 'outgoing' ? 'Surat Keluar' : ($doc->documentType?->name ?? 'Surat Khusus')) }}
+                                    </span>
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                      Pendaftar: {{ $doc->createdBy->name ?? '-' }}
                                 </div>
                             </td>
                             <td class="px-3 py-4 text-sm text-gray-900 max-w-md">

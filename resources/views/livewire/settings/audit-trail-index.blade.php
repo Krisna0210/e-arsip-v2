@@ -92,8 +92,14 @@
                         </td>
                         <td class="px-5 py-4 align-top">
                             @if($log->metadata)
+                                @php
+                                    $metadata = $log->metadata;
+                                    if (is_array($metadata) && isset($metadata['type']) && $metadata['type'] === 'internal') {
+                                        $metadata['type'] = $log->document?->documentType?->name ?? 'Surat Khusus';
+                                    }
+                                @endphp
                                 <div class="text-xs bg-slate-50 border border-slate-100 p-2 rounded text-slate-600 font-mono overflow-x-auto max-w-xs">
-                                    {{ json_encode($log->metadata) }}
+                                    {{ json_encode($metadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}
                                 </div>
                             @elseif($log->before_value || $log->after_value)
                                 <div class="text-xs space-y-1">

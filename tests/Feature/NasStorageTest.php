@@ -181,4 +181,30 @@ class NasStorageTest extends TestCase
             'document_id' => $doc->id,
         ]);
     }
+
+    public function test_scan_queue_table_and_modal_display_specific_document_type_name_for_internal_documents()
+    {
+        Storage::fake('nas');
+        $superadmin = User::where('username', 'superadmin')->first();
+        $docType = \App\Models\DocumentType::where('name', 'like', '%Surat Tugas%')->first()
+            ?? \App\Models\DocumentType::firstOrCreate(['name' => 'Surat Tugas', 'code' => 'STG', 'numbering_format' => '{NO}/STG/{YYYY}']);
+
+        $doc = Document::create([
+            'number' => '999/STG/QUEUE/2026',
+            'subject' => 'Naskah Antrean Scan Khusus',
+            'type' => 'internal',
+            'document_type_id' => $docType->id,
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        Livewire::actingAs($superadmin)
+            ->test(ScanQueue::class)
+            ->assertSee('999/STG/QUEUE/2026')
+            ->assertSee($docType->name)
+            ->call('openUploadModal', $doc->id)
+            ->assertSet('uploadDocType', $docType->name);
+    }
 }

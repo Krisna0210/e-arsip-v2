@@ -132,12 +132,16 @@ class Create extends Component
 
         $document = $this->createDocument('waiting_for_file', $assignedSequence);
 
+        $docTypeName = $this->documentTypes->firstWhere('id', (int) $this->document_type_id)?->name
+            ?? \App\Models\DocumentType::find($this->document_type_id)?->name
+            ?? 'Surat Khusus';
+
         \App\Models\AuditLog::record(
             action: 'Booking Nomor Surat Khusus: ' . $this->number,
             documentId: $document->id,
             metadata: [
                 'subject' => $this->subject,
-                'type' => 'internal',
+                'type' => $docTypeName,
             ]
         );
 
@@ -173,12 +177,16 @@ class Create extends Component
         $document = $this->createDocument('archived', $assignedSequence);
         $this->handleFileAndVersion($document);
 
+        $docTypeName = $this->documentTypes->firstWhere('id', (int) $this->document_type_id)?->name
+            ?? \App\Models\DocumentType::find($this->document_type_id)?->name
+            ?? 'Surat Khusus';
+
         \App\Models\AuditLog::record(
             action: 'Registrasi & Arsip Surat Khusus: ' . $this->number,
             documentId: $document->id,
             metadata: [
                 'subject' => $this->subject,
-                'type' => 'internal',
+                'type' => $docTypeName,
             ]
         );
 

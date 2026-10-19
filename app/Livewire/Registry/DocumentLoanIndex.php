@@ -351,7 +351,7 @@ class DocumentLoanIndex extends Component
         $catalogDocuments = $catalogQuery->orderBy('document_date', 'desc')->paginate(10, ['*'], 'catalogPage');
 
         // 2. Data Pinjaman Saya (Tab 2)
-        $myLoans = DocumentLoan::with(['document.folder', 'document.unit', 'officer'])
+        $myLoans = DocumentLoan::with(['document.folder', 'document.unit', 'document.documentType', 'officer'])
             ->where('user_id', Auth::id())
             ->latest('created_at')
             ->paginate(10, ['*'], 'myLoansPage');
@@ -359,7 +359,7 @@ class DocumentLoanIndex extends Component
         // 3. Data Sirkulasi Tapersip (Tab 3) - Hanya diproses jika user memiliki izin
         $circulationLoans = null;
         if ($this->canManageCirculation) {
-            $circulationQuery = DocumentLoan::with(['document.folder', 'document.unit', 'user.unit', 'officer']);
+            $circulationQuery = DocumentLoan::with(['document.folder', 'document.unit', 'document.documentType', 'user.unit', 'officer']);
 
             if ($this->circulationSearch) {
                 $circulationQuery->where(function ($q) {

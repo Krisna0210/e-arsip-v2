@@ -193,7 +193,7 @@
                                         @elseif($doc->type === 'outgoing')
                                             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Surat Keluar</span>
                                         @else
-                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">Surat Khusus</span>
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">{{ $doc->documentType?->name ?? 'Surat Khusus' }}</span>
                                         @endif
                                     </div>
                                 </td>
