@@ -70,20 +70,28 @@ Route::middleware('auth')->group(function () {
             return view('pages.registry.outgoing.create');
         })->name('outgoing.create');
 
-                Route::middleware('module:internal_memo')->get('/internal', function () {
+        Route::middleware('module:internal_memo')->get('/special', function () {
             return view('pages.registry.internal.index');
+        })->name('special.index');
+
+        Route::get('/internal', function () {
+            return redirect()->route('registry.special.index');
         })->name('internal.index');
 
         Route::middleware('module:archive_queue')->get('/scan-queue', App\Livewire\Registry\ScanQueue::class)->name('scan-queue');
 
-        Route::middleware('module:input_internal')->get('/internal/create', function () {
+        Route::middleware('module:input_internal')->get('/special/create', function () {
             return view('pages.registry.internal.create');
+        })->name('special.create');
+
+        Route::get('/internal/create', function () {
+            return redirect()->route('registry.special.create');
         })->name('internal.create');
     });
 
 
 
-    Route::middleware('module:document_borrowing')->get('/borrowings', App\Livewire\Registry\DocumentLoanIndex::class)->name('borrowings.index');
+    Route::middleware('module:document_borrowing,loan_circulation')->get('/borrowings', App\Livewire\Registry\DocumentLoanIndex::class)->name('borrowings.index');
 
     Route::prefix('archive')->name('archive.')->group(function () {
         Route::middleware('module:destruction')->get('/destructions', function () {

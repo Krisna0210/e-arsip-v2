@@ -34,4 +34,18 @@ class AuditLog extends Model
     {
         return $this->belongsTo(Document::class);
     }
+
+    /**
+     * Record a new audit log entry.
+     */
+    public static function record(string $action, ?int $documentId = null, array $metadata = [], ?int $userId = null): self
+    {
+        return self::create([
+            'user_id' => $userId ?: auth()->id(),
+            'action' => $action,
+            'document_id' => $documentId,
+            'metadata' => $metadata,
+            'created_at' => now(),
+        ]);
+    }
 }

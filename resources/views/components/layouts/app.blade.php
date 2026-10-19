@@ -63,9 +63,9 @@
                             </a>
                             @endif
                             @if(auth()->user()->hasModuleAccess('input_internal'))
-                            <a href="{{ route('registry.internal.create') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg relative {{ request()->routeIs('registry.internal.create') ? 'bg-white/10 text-white font-medium before:absolute before:right-0 before:top-2 before:bottom-2 before:w-1 before:bg-emerald-400 before:rounded-l' : 'hover:bg-[var(--color-surface-sidebar-hover)] hover:text-white transition-colors' }}">
+                            <a href="{{ route('registry.special.create') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg relative {{ request()->routeIs('registry.special.create') || request()->routeIs('registry.internal.create') ? 'bg-white/10 text-white font-medium before:absolute before:right-0 before:top-2 before:bottom-2 before:w-1 before:bg-emerald-400 before:rounded-l' : 'hover:bg-[var(--color-surface-sidebar-hover)] hover:text-white transition-colors' }}">
                                 <svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
-                                <span class="text-sm">Memo Internal</span>
+                                <span class="text-sm">Surat Khusus</span>
                             </a>
                             @endif
                         </nav>
@@ -73,11 +73,11 @@
                     @endif
 
                     <!-- Kategori: Kearsipan -->
-                    @if(auth()->user()->hasModuleAccess('in_out_mail') || auth()->user()->hasModuleAccess('internal_memo') || auth()->user()->hasModuleAccess('archive_queue') || auth()->user()->hasModuleAccess('document_borrowing'))
+                    @if(auth()->user()->hasModuleAccess('in_out_mail') || auth()->user()->hasModuleAccess('internal_memo') || auth()->user()->hasModuleAccess('archive_queue') || auth()->user()->hasModuleAccess('document_borrowing') || auth()->user()->hasModuleAccess('loan_circulation'))
                     <div>
                         <h3 class="px-3 text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2 mt-4">Kearsipan</h3>
                         <nav class="space-y-1">
-                            @if(auth()->user()->hasModuleAccess('document_borrowing'))
+                            @if(auth()->user()->hasModuleAccess('document_borrowing') || auth()->user()->hasModuleAccess('loan_circulation'))
                             <a href="{{ route('borrowings.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg relative {{ request()->routeIs('borrowings.*') ? 'bg-white/10 text-white font-medium before:absolute before:right-0 before:top-2 before:bottom-2 before:w-1 before:bg-emerald-400 before:rounded-l' : 'hover:bg-[var(--color-surface-sidebar-hover)] hover:text-white transition-colors' }}">
                                 <svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -104,9 +104,9 @@
                             </a>
                             @endif
                             @if(auth()->user()->hasModuleAccess('internal_memo'))
-                            <a href="{{ route('registry.internal.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg relative {{ request()->routeIs('registry.internal.index') ? 'bg-white/10 text-white font-medium before:absolute before:right-0 before:top-2 before:bottom-2 before:w-1 before:bg-emerald-400 before:rounded-l' : 'hover:bg-[var(--color-surface-sidebar-hover)] hover:text-white transition-colors' }}">
+                            <a href="{{ route('registry.special.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg relative {{ request()->routeIs('registry.special.index') || request()->routeIs('registry.internal.index') ? 'bg-white/10 text-white font-medium before:absolute before:right-0 before:top-2 before:bottom-2 before:w-1 before:bg-emerald-400 before:rounded-l' : 'hover:bg-[var(--color-surface-sidebar-hover)] hover:text-white transition-colors' }}">
                                 <svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
-                                <span class="text-sm">Arsip Memo Internal</span>
+                                <span class="text-sm">Arsip Surat Khusus</span>
                             </a>
                             @endif</nav>
                     </div>

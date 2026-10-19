@@ -45,7 +45,23 @@
                 <span class="absolute inset-y-0 left-0 flex items-center pl-3">
                     <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 </span>
-                <input type="text" class="w-full bg-white border border-slate-200 text-sm rounded-lg pl-9 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-colors" placeholder="Cari kode atau nama unit...">
+                <input type="text" wire:model.live.debounce.300ms="searchUnit" class="w-full bg-white border border-slate-200 text-sm rounded-lg pl-9 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-colors" placeholder="Cari kode atau nama unit...">
+            </div>
+
+            <!-- Segmented Pill Filter -->
+            <div class="inline-flex p-1 bg-slate-200/70 rounded-xl text-xs font-semibold self-start sm:self-auto">
+                <button type="button" wire:click="setUnitTypeFilter('all')"
+                        class="px-3 py-1.5 rounded-lg transition-all {{ $unitTypeFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900' }}">
+                    Semua Unit
+                </button>
+                <button type="button" wire:click="setUnitTypeFilter('division')"
+                        class="px-3 py-1.5 rounded-lg transition-all {{ $unitTypeFilter === 'division' ? 'bg-white text-[var(--color-primary)] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900' }}">
+                    Divisi
+                </button>
+                <button type="button" wire:click="setUnitTypeFilter('department')"
+                        class="px-3 py-1.5 rounded-lg transition-all {{ $unitTypeFilter === 'department' ? 'bg-white text-[var(--color-primary)] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900' }}">
+                    Departemen
+                </button>
             </div>
         </div>
         <!-- Table -->
@@ -53,9 +69,10 @@
             <table class="w-full text-left border-collapse min-w-[700px]">
                 <thead>
                     <tr class="bg-[var(--color-background)] border-b border-[var(--color-border)] text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-                        <th class="px-5 py-3 w-1/5">Kode Unit</th>
+                        <th class="px-5 py-3 w-1/6">Kode Unit</th>
                         <th class="px-5 py-3 w-1/3">Nama Unit Kerja</th>
-                        <th class="px-5 py-3 w-1/4">Induk Unit</th>
+                        <th class="px-5 py-3 w-1/6">Tipe</th>
+                        <th class="px-5 py-3 w-1/4">Induk Divisi</th>
                         <th class="px-5 py-3">Status</th>
                         <th class="px-5 py-3 text-right">Opsi</th>
                     </tr>
@@ -65,7 +82,25 @@
                     <tr class="hover:bg-slate-50 transition-colors">
                         <td class="px-5 py-4"><span class="font-mono text-slate-700 font-semibold bg-slate-100 px-2 py-0.5 rounded text-xs">{{ $unit->code }}</span></td>
                         <td class="px-5 py-4 font-bold text-slate-800">{{ $unit->name }}</td>
-                        <td class="px-5 py-4 text-slate-500">{{ $unit->parent ? $unit->parent->name : '-' }}</td>
+                        <td class="px-5 py-4">
+                            @if(($unit->type ?? 'division') === 'division')
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                                    Divisi
+                                </span>
+                            @else
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200/60">
+                                    Departemen
+                                </span>
+                            @endif
+                        </td>
+                        <td class="px-5 py-4 text-slate-600">
+                            @if($unit->parent)
+                                <div class="font-medium text-slate-800">{{ $unit->parent->name }}</div>
+                                <div class="text-[11px] text-slate-400 font-mono">{{ $unit->parent->code }}</div>
+                            @else
+                                <span class="text-slate-400 italic text-xs">- (Induk Utama)</span>
+                            @endif
+                        </td>
                         <td class="px-5 py-4">
                             @if($unit->status === 'active')
                                 <x-ui.badge status="approved">Aktif</x-ui.badge>
@@ -80,7 +115,9 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="5" class="px-5 py-4 text-center text-slate-500">Belum ada data unit kerja.</td>
+                        <td colspan="6" class="px-5 py-6 text-center text-slate-500">
+                            Tidak ditemukan data unit kerja{{ $unitTypeFilter !== 'all' ? ' bertipe ' . ($unitTypeFilter === 'division' ? 'Divisi' : 'Departemen') : '' }}.
+                        </td>
                     </tr>
                     @endforelse
                 </tbody>
@@ -101,7 +138,7 @@
                 <span class="absolute inset-y-0 left-0 flex items-center pl-3">
                     <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 </span>
-                <input type="text" class="w-full bg-white border border-slate-200 text-sm rounded-lg pl-9 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-colors" placeholder="Cari nama jabatan...">
+                <input type="text" wire:model.live.debounce.300ms="searchPosition" class="w-full bg-white border border-slate-200 text-sm rounded-lg pl-9 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] focus:border-[var(--color-accent)] transition-colors" placeholder="Cari nama jabatan...">
             </div>
         </div>
         <!-- Table -->
@@ -155,28 +192,48 @@
     <!-- Slide-over: Tambah Unit Kerja -->
     <x-ui.modal id="slide-unit" title="{{ $unitId ? 'Edit Unit Kerja' : 'Tambah Unit Kerja Baru' }}">
         <form wire:submit="saveUnit" id="form-unit" class="space-y-5">
+            <!-- Tipe Unit Kerja (Segmented Radio) -->
+            <div>
+                <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Tipe Unit Kerja <span class="text-red-500">*</span></label>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="relative flex items-center justify-center cursor-pointer rounded-lg border px-4 py-2.5 text-center transition-all duration-150 select-none {{ $unitType === 'division' ? 'border-[var(--color-primary)] bg-emerald-50/40 text-[var(--color-primary)] font-bold ring-1 ring-[var(--color-primary)] shadow-xs' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-medium' }}">
+                        <input type="radio" wire:model.live="unitType" value="division" class="sr-only">
+                        <span class="text-xs">Divisi (Induk)</span>
+                    </label>
+                    <label class="relative flex items-center justify-center cursor-pointer rounded-lg border px-4 py-2.5 text-center transition-all duration-150 select-none {{ $unitType === 'department' ? 'border-[var(--color-primary)] bg-emerald-50/40 text-[var(--color-primary)] font-bold ring-1 ring-[var(--color-primary)] shadow-xs' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-medium' }}">
+                        <input type="radio" wire:model.live="unitType" value="department" class="sr-only">
+                        <span class="text-xs">Departemen (Sub-Unit)</span>
+                    </label>
+                </div>
+                @error('unitType') <span class="text-xs text-red-500 mt-1 block">{{ $message }}</span> @enderror
+            </div>
+
             <div>
                 <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Kode Unit <span class="text-red-500">*</span></label>
-                <input type="text" wire:model="unitCode" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: IT-01">
+                <input type="text" wire:model="unitCode" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: IT atau IT-DEV">
                 @error('unitCode') <span class="text-xs text-red-500 mt-1 block">{{ $message }}</span> @enderror
             </div>
             <div>
                 <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Nama Unit Kerja <span class="text-red-500">*</span></label>
-                <input type="text" wire:model="unitName" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: Departemen Teknologi Informasi">
+                <input type="text" wire:model="unitName" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: Divisi TI atau Departemen Aplikasi">
                 @error('unitName') <span class="text-xs text-red-500 mt-1 block">{{ $message }}</span> @enderror
             </div>
+
+            @if($unitType === 'department')
             <div>
-                <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Induk Unit (Parent)</label>
+                <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Divisi Induk <span class="text-red-500">*</span></label>
                 <select wire:model="parentUnitId" class="w-full bg-slate-50 border border-slate-200 text-sm text-slate-700 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors">
-                    <option value="">-- Tidak Ada / Sebagai Induk Utama --</option>
-                    @foreach($allUnits as $u)
-                        @if($u->id !== $unitId)
-                            <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->code }})</option>
+                    <option value="">-- Pilih Divisi Induk --</option>
+                    @foreach($divisionOptions as $div)
+                        @if($div->id !== $unitId)
+                            <option value="{{ $div->id }}">{{ $div->name }} ({{ $div->code }})</option>
                         @endif
                     @endforeach
                 </select>
                 @error('parentUnitId') <span class="text-xs text-red-500 mt-1 block">{{ $message }}</span> @enderror
             </div>
+            @endif
+
             <div>
                 <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Status</label>
                 <label class="flex items-center gap-2 cursor-pointer">

@@ -75,7 +75,7 @@
                             </td>
                             <td class="px-3 py-3 text-sm align-top">
                                 <div x-data="{ expanded: false }">
-                                    <div 
+                                    <div
                                         class="font-medium text-slate-800 dark:text-slate-200 leading-snug transition-all"
                                         :class="expanded ? 'whitespace-normal break-words' : 'line-clamp-2'"
                                         title="{{ $doc->subject }}"
@@ -83,9 +83,9 @@
                                         {{ $doc->subject }}
                                     </div>
                                     @if(mb_strlen($doc->subject ?? '') > 75)
-                                        <button 
-                                            type="button" 
-                                            @click="expanded = !expanded" 
+                                        <button
+                                            type="button"
+                                            @click="expanded = !expanded"
                                             class="text-[11px] font-bold text-[var(--color-primary)] hover:text-emerald-700 hover:underline mt-1 inline-flex items-center gap-0.5 focus:outline-none cursor-pointer"
                                         >
                                             <span x-text="expanded ? 'Show Less ▴' : 'Show More ▾'"></span>
@@ -140,19 +140,33 @@
                                 </div>
                             </td>
                             <td class="relative py-3 pl-3 pr-4 text-center text-sm font-medium sm:pr-6 align-top">
-                                @if($doc->currentVersion && $doc->currentVersion->file_path)
-                                    @if(Auth::user()->hasDocumentPermission('view', $doc->sifat))
-                                        <a href="{{ route('document.preview', $doc->currentVersion->id) }}" target="_blank" class="inline-flex items-center justify-center text-blue-600 hover:text-blue-900 bg-blue-50 dark:bg-blue-900/30 p-1.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors" title="Lihat Dokumen">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                                        </a>
+                                <div class="flex items-center justify-center gap-1.5">
+                                    @if($doc->currentVersion && $doc->currentVersion->file_path)
+                                        @if(Auth::user()->hasDocumentPermission('view', $doc->sifat))
+                                            <a href="{{ route('document.preview', $doc->currentVersion->id) }}" target="_blank" class="inline-flex items-center justify-center text-blue-600 hover:text-blue-900 bg-blue-50 dark:bg-blue-900/30 p-1.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors" title="Lihat Dokumen">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                            </a>
+                                        @else
+                                            <span class="inline-flex items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-md cursor-not-allowed" title="Akses Dibatasi: Memerlukan izin melihat dokumen {{ ucfirst($doc->sifat) }}">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                            </span>
+                                        @endif
                                     @else
-                                        <span class="inline-flex items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-md cursor-not-allowed" title="Akses Dibatasi: Memerlukan izin melihat dokumen {{ ucfirst($doc->sifat) }}">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                                        </span>
+                                        <span class="text-slate-400 dark:text-slate-600 font-mono text-sm inline-block select-none">-</span>
                                     @endif
-                                @else
-                                    <span class="text-slate-400 dark:text-slate-600 font-mono text-sm inline-block select-none">-</span>
-                                @endif
+
+                                    @if(Auth::user()->hasDocumentPermission('archive', $doc->sifat))
+                                        <button
+                                            type="button"
+                                            wire:click="openMoveModal({{ $doc->id }})"
+                                            class="inline-flex items-center justify-center text-amber-600 hover:text-amber-800 bg-amber-50 dark:bg-amber-900/30 p-1.5 rounded-md hover:bg-amber-100 dark:hover:bg-amber-800/50 transition-colors"
+                                            title="Pindahkan Lokasi / Loker Berkas">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                            </svg>
+                                        </button>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -262,4 +276,48 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal Pindah Lokasi / Loker Berkas -->
+    <x-ui.modal id="modal-move-document" title="Pindah Lokasi / Loker Berkas">
+        <form wire:submit.prevent="executeMoveDocument" class="space-y-4">
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Identitas Dokumen</span>
+                    <span class="text-xs font-mono font-bold text-[var(--color-primary)]">{{ $moveDocNumber }}</span>
+                </div>
+                <div class="text-xs font-semibold text-slate-800 leading-snug">
+                    {{ $moveDocSubject }}
+                </div>
+                <div class="text-[11px] text-slate-500 pt-1 border-t border-slate-200 flex items-center justify-between">
+                    <span>Loker Saat Ini:</span>
+                    <span class="font-semibold text-slate-700 font-mono">{{ $moveCurrentFolderName }}</span>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Pilih Loker Tujuan Baru <span class="text-red-500">*</span>
+                </label>
+                <select wire:model="moveTargetFolderId" class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] outline-none transition bg-white">
+                    <option value="">-- Tanpa Loker / Root --</option>
+                    @foreach($allFolders as $f)
+                        <option value="{{ $f->id }}">
+                            {{ $f->parent ? $f->parent->name . ' / ' : '' }}{{ $f->name }}
+                        </option>
+                    @endforeach
+                </select>
+                <p class="text-[11px] text-slate-400 mt-1">Berkas fisik di storage NAS akan otomatis dipindahkan ke direktori loker tujuan.</p>
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-4">
+                <button type="button" @click="$dispatch('close-modal', 'modal-move-document')" class="px-4 py-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                    Batal
+                </button>
+                <button type="submit" class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[var(--color-primary)] rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors shadow-2xs" wire:loading.attr="disabled">
+                    <span wire:loading.remove wire:target="executeMoveDocument">Pindahkan Berkas</span>
+                    <span wire:loading wire:target="executeMoveDocument">Memindahkan...</span>
+                </button>
+            </div>
+        </form>
+    </x-ui.modal>
 </div>

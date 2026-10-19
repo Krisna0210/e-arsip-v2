@@ -27,6 +27,14 @@ class Create extends Component
     public $sifat = 'biasa';
     public $file;
     public $showSuccessModal = false;
+    public $showArchiveSuccessModal = false;
+
+    // Data ringkasan setelah berhasil diarsipkan langsung
+    public $savedDocumentNumber = '';
+    public $savedDocumentSubject = '';
+    public $savedDocumentSender = '';
+    public $savedDocumentRecipient = '';
+    public $savedDocumentFolderName = '';
 
     public $classifications;
     public $documentTypes;
@@ -34,16 +42,22 @@ class Create extends Component
     public $folders;
     public function mount()
     {
+        $this->document_date = date('Y-m-d');
         $this->classifications = Classification::whereNotNull('parent_id')->get();
+        if ($this->classifications->isEmpty()) {
+            $this->classifications = Classification::all();
+        }
 
-        $memoType = \App\Models\DocumentType::where('name', 'like', '%Memo%')->first();
-        if ($memoType) {
-            $this->document_type_id = $memoType->id;
-        }
         $this->documentTypes = \App\Models\DocumentType::all();
-        $this->units = Unit::all();
+        $this->units = Unit::departments()->with('parent')->where('status', 'active')->orderBy('name')->get();
         $this->folders = \App\Models\Folder::forType('internal')->get();
+
+        // Otomatisasi default departemen pengirim dari akun staf yang sedang login
+        $userUnit = Auth::user()?->unit;
+        if ($userUnit && $userUnit->type === 'department' && $this->units->contains('id', $userUnit->id)) {
+            $this->unit_id = $userUnit->id;
         }
+    }
 
     protected function baseRules($isStrict = false)
     {
@@ -93,9 +107,17 @@ class Create extends Component
         $unitCode = $unit ? $unit->code : 'ORG';
         $month = $this->document_date ? date('m', strtotime($this->document_date)) : date('m');
         
+        $kosur = $docTypeRecord?->code ?: 'MI';
+
+        // Resolusi Divisi otomatis dari akun login (dengan fallback ke unit formulir)
+        $divCode = Auth::user()?->getDivisionCode();
+        if (empty($divCode)) {
+            $divCode = $unit ? $unit->getDivisionCode() : 'DIV';
+        }
+
         return str_replace(
-            ['{NO}', '{CLASS}', '{kodeklasi}', '{UNIT}', '{YYYY}', '{MM}'],
-            [$sequenceNo, $classCode, $classCode, $unitCode, $year, $month],
+            ['{NO}', '{KOSUR}', '{kosur}', '{DIV}', '{div}', '{CLASS}', '{kodeklasi}', '{UNIT}', '{YYYY}', '{MM}'],
+            [$sequenceNo, $kosur, $kosur, $divCode, $divCode, $classCode, $classCode, $unitCode, $year, $month],
             $format
         );
     }
@@ -109,6 +131,15 @@ class Create extends Component
         $this->file = null; // Do not attach file for booking
 
         $document = $this->createDocument('waiting_for_file', $assignedSequence);
+
+        \App\Models\AuditLog::record(
+            action: 'Booking Nomor Surat Khusus: ' . $this->number,
+            documentId: $document->id,
+            metadata: [
+                'subject' => $this->subject,
+                'type' => 'internal',
+            ]
+        );
 
         $this->showSuccessModal = true;
     }
@@ -142,8 +173,58 @@ class Create extends Component
         $document = $this->createDocument('archived', $assignedSequence);
         $this->handleFileAndVersion($document);
 
-        session()->flash('success', "Dokumen Memo Internal berhasil disimpan dan diarsipkan dengan nomor: {$this->number}");
-        return redirect()->route('registry.internal.index');
+        \App\Models\AuditLog::record(
+            action: 'Registrasi & Arsip Surat Khusus: ' . $this->number,
+            documentId: $document->id,
+            metadata: [
+                'subject' => $this->subject,
+                'type' => 'internal',
+            ]
+        );
+
+        $document->load(['unit', 'folder']);
+        $recipient = \App\Models\Unit::find($this->recipient_id);
+
+        $this->savedDocumentNumber = $document->number ?: 'Tanpa Nomor';
+        $this->savedDocumentSubject = $document->subject;
+        $this->savedDocumentSender = $document->unit ? $document->unit->name : '-';
+        $this->savedDocumentRecipient = $recipient ? $recipient->name : '-';
+        $this->savedDocumentFolderName = $document->folder ? $document->folder->name : 'Tanpa Loker / Root';
+        $this->showArchiveSuccessModal = true;
+    }
+
+    public function resetFormAndInputAgain()
+    {
+        $this->reset([
+            'number',
+            'recipient_id',
+            'subject',
+            'document_type_id',
+            'classification_id',
+            'folder_id',
+            'file',
+            'showSuccessModal',
+            'showArchiveSuccessModal',
+            'savedDocumentNumber',
+            'savedDocumentSubject',
+            'savedDocumentSender',
+            'savedDocumentRecipient',
+            'savedDocumentFolderName',
+        ]);
+
+        $this->document_date = date('Y-m-d');
+        $this->sifat = 'biasa';
+
+        // Re-apply smart default department
+        $userUnit = Auth::user()?->unit;
+        if ($userUnit && $userUnit->type === 'department' && $this->units->contains('id', $userUnit->id)) {
+            $this->unit_id = $userUnit->id;
+        }
+    }
+
+    public function redirectToIndex()
+    {
+        return redirect()->route('registry.special.index');
     }
 
     public function save()
@@ -158,6 +239,14 @@ class Create extends Component
 
     protected function createDocument($status, ?int $sequenceNumber = null)
     {
+        $classification = Classification::find($this->classification_id);
+        $retentionStartDate = null;
+        $retentionEndDate = null;
+        if ($classification && $classification->active_years > 0) {
+            $retentionStartDate = $this->document_date ?: date('Y-m-d');
+            $retentionEndDate = date('Y-m-d', strtotime("+{$classification->active_years} years", strtotime($retentionStartDate)));
+        }
+
         $document = Document::create([
             'document_type_id' => $this->document_type_id,
             'type' => 'internal',
@@ -170,6 +259,8 @@ class Create extends Component
             'folder_id' => $this->folder_id,
             'sifat' => $this->sifat,
             'status' => $status,
+            'retention_start_date' => $retentionStartDate,
+            'retention_end_date' => $retentionEndDate,
             'created_by' => Auth::id(),
         ]);
 

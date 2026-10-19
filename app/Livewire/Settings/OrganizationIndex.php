@@ -13,14 +13,20 @@ class OrganizationIndex extends Component
 
     public $activeTab = 'unit'; // 'unit' or 'position'
 
-    // Unit Properties
+    // Unit Filter & Search
+    public $unitTypeFilter = 'all'; // 'all', 'division', 'department'
+    public $searchUnit = '';
+
+    // Unit Form Properties
     public $unitId;
     public $unitCode;
     public $unitName;
+    public $unitType = 'division'; // 'division' or 'department'
     public $parentUnitId;
     public $unitStatus = 'active';
 
     // Position Properties
+    public $searchPosition = '';
     public $positionId;
     public $posName;
     public $posLevel;
@@ -32,11 +38,18 @@ class OrganizationIndex extends Component
         $this->resetPage();
     }
 
+    public function setUnitTypeFilter($filter)
+    {
+        $this->unitTypeFilter = $filter;
+        $this->resetPage('unitPage');
+    }
+
     // --- Unit Methods ---
 
     public function createUnit()
     {
         $this->reset(['unitId', 'unitCode', 'unitName', 'parentUnitId']);
+        $this->unitType = 'division';
         $this->unitStatus = 'active';
         $this->dispatch('open-modal', id: 'slide-unit');
     }
@@ -47,6 +60,7 @@ class OrganizationIndex extends Component
         $this->unitId = $unit->id;
         $this->unitCode = $unit->code;
         $this->unitName = $unit->name;
+        $this->unitType = $unit->type ?? 'division';
         $this->parentUnitId = $unit->parent_id;
         $this->unitStatus = $unit->status;
 
@@ -55,11 +69,21 @@ class OrganizationIndex extends Component
 
     public function saveUnit()
     {
-        $this->validate([
+        $rules = [
             'unitCode' => 'required|string|max:255|unique:units,code,' . $this->unitId,
             'unitName' => 'required|string|max:255',
-            'parentUnitId' => 'nullable|exists:units,id',
+            'unitType' => 'required|in:division,department',
             'unitStatus' => 'required|string|in:active,inactive',
+        ];
+
+        if ($this->unitType === 'department') {
+            $rules['parentUnitId'] = 'required|exists:units,id';
+        } else {
+            $rules['parentUnitId'] = 'nullable';
+        }
+
+        $this->validate($rules, [
+            'parentUnitId.required' => 'Divisi Induk wajib dipilih untuk unit bertipe Departemen.',
         ]);
 
         Unit::updateOrCreate(
@@ -67,13 +91,15 @@ class OrganizationIndex extends Component
             [
                 'code' => $this->unitCode,
                 'name' => $this->unitName,
-                'parent_id' => $this->parentUnitId ?: null,
+                'type' => $this->unitType,
+                'parent_id' => $this->unitType === 'department' ? $this->parentUnitId : null,
                 'status' => $this->unitStatus,
             ]
         );
 
         $this->dispatch('close-modal', id: 'slide-unit');
         $this->reset(['unitId', 'unitCode', 'unitName', 'parentUnitId']);
+        $this->unitType = 'division';
         $this->unitStatus = 'active';
     }
 
@@ -131,13 +157,42 @@ class OrganizationIndex extends Component
 
     public function render()
     {
-        $units = Unit::with('parent')->latest()->paginate(10, ['*'], 'unitPage');
-        $positions = Position::latest()->paginate(10, ['*'], 'positionPage');
+        $unitsQuery = Unit::with('parent');
+
+        if ($this->unitTypeFilter === 'division') {
+            $unitsQuery->where('type', 'division');
+        } elseif ($this->unitTypeFilter === 'department') {
+            $unitsQuery->where('type', 'department');
+        }
+
+        if (!empty(trim($this->searchUnit))) {
+            $term = trim($this->searchUnit);
+            $unitsQuery->where(function ($q) use ($term) {
+                $q->where('name', 'like', "%{$term}%")
+                  ->orWhere('code', 'like', "%{$term}%");
+            });
+        }
+
+        $units = $unitsQuery->latest()->paginate(10, ['*'], 'unitPage');
+
+        $positionsQuery = Position::query();
+        if (!empty(trim($this->searchPosition))) {
+            $term = trim($this->searchPosition);
+            $positionsQuery->where('name', 'like', "%{$term}%");
+        }
+        $positions = $positionsQuery->latest()->paginate(10, ['*'], 'positionPage');
+
+        $divisionOptions = Unit::where('type', 'division')
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
         $allUnits = Unit::all();
 
         return view('livewire.settings.organization-index', [
             'units' => $units,
             'positions' => $positions,
+            'divisionOptions' => $divisionOptions,
             'allUnits' => $allUnits,
         ]);
     }

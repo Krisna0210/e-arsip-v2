@@ -1,6 +1,6 @@
 <x-layouts.app>
     <x-slot name="title">
-        Registrasi Memo Internal - E-Arsip
+        Registrasi Surat Khusus - E-Arsip
     </x-slot>
 
     @livewire('registry.internal.create')

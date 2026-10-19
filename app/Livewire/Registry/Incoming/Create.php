@@ -21,16 +21,34 @@ class Create extends Component
     public $sender;
     public $subject;
     public $unit_id;
+    public $classification_id;
     public $folder_id;
     public $sifat = 'biasa';
     public $file;
+    public $showSuccessModal = false;
+
+    // Data ringkasan setelah berhasil diarsipkan
+    public $savedDocumentNumber = '';
+    public $savedDocumentSubject = '';
+    public $savedDocumentSender = '';
+    public $savedDocumentUnitName = '';
+    public $savedDocumentFolderName = '';
 
     public $units;
     public $folders;
+    public $classifications;
 
     public function mount()
     {
-        $this->units = Unit::all();
+        $this->document_date = date('Y-m-d');
+        $this->received_date = date('Y-m-d');
+
+        $this->classifications = Classification::whereNotNull('parent_id')->get();
+        if ($this->classifications->isEmpty()) {
+            $this->classifications = Classification::all();
+        }
+
+        $this->units = Unit::with('parent')->where('status', 'active')->orderBy('type')->orderBy('name')->get();
         $this->folders = \App\Models\Folder::forType('incoming')->get();
     }
 
@@ -42,6 +60,7 @@ class Create extends Component
             'received_date' => 'required|date|after_or_equal:document_date',
             'sender' => 'required|string|max:255',
             'subject' => 'required|string|max:255',
+            'classification_id' => 'required|exists:classifications,id',
             'folder_id' => 'nullable|exists:folders,id',
             'unit_id' => 'required|exists:units,id',
             'sifat' => 'required|in:biasa,penting,rahasia',
@@ -57,12 +76,68 @@ class Create extends Component
 
         $this->handleFileAndVersion($document);
 
-        session()->flash('success', 'Dokumen berhasil disimpan ke arsip.');
+        \App\Models\AuditLog::record(
+            action: 'Registrasi Surat Masuk: ' . ($this->number ?: $this->subject),
+            documentId: $document->id,
+            metadata: [
+                'subject' => $this->subject,
+                'type' => 'incoming',
+                'sender' => $this->sender,
+            ]
+        );
+
+        $document->load(['unit', 'folder']);
+        $this->savedDocumentNumber = $document->number ?: 'Tanpa Nomor';
+        $this->savedDocumentSubject = $document->subject;
+        $this->savedDocumentSender = $document->sender;
+        $this->savedDocumentUnitName = $document->unit ? $document->unit->name : '-';
+        $this->savedDocumentFolderName = $document->folder ? $document->folder->name : 'Tanpa Loker / Root';
+        $this->showSuccessModal = true;
+    }
+
+    public function resetFormAndInputAgain()
+    {
+        $this->reset([
+            'number',
+            'sender',
+            'subject',
+            'unit_id',
+            'classification_id',
+            'folder_id',
+            'file',
+            'showSuccessModal',
+            'savedDocumentNumber',
+            'savedDocumentSubject',
+            'savedDocumentSender',
+            'savedDocumentUnitName',
+            'savedDocumentFolderName',
+        ]);
+
+        $this->document_date = date('Y-m-d');
+        $this->received_date = date('Y-m-d');
+        $this->sifat = 'biasa';
+    }
+
+    public function redirectToIndex()
+    {
         return redirect()->route('registry.incoming.index');
+    }
+
+    public function finishAndRedirect()
+    {
+        return redirect()->route('dashboard');
     }
 
     protected function createDocument($status)
     {
+        $classification = Classification::find($this->classification_id);
+        $retentionStartDate = null;
+        $retentionEndDate = null;
+        if ($classification && $classification->active_years > 0) {
+            $retentionStartDate = $this->document_date ?: date('Y-m-d');
+            $retentionEndDate = date('Y-m-d', strtotime("+{$classification->active_years} years", strtotime($retentionStartDate)));
+        }
+
         return Document::create([
             'type' => 'incoming',
             'number' => $this->number,
@@ -71,9 +146,12 @@ class Create extends Component
             'sender' => $this->sender,
             'subject' => $this->subject,
             'unit_id' => $this->unit_id,
+            'classification_id' => $this->classification_id,
             'folder_id' => $this->folder_id,
             'sifat' => $this->sifat,
             'status' => $status,
+            'retention_start_date' => $retentionStartDate,
+            'retention_end_date' => $retentionEndDate,
             'created_by' => Auth::id(),
         ]);
     }

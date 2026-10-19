@@ -9,19 +9,13 @@
                 </div>
             </div>
         </div>
-
-        <div class="mt-4 sm:mt-0 flex items-center gap-2">
-            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                Tapersip Beroperasi
-            </span>
-        </div>
     </div>
 
     <!-- Tab Navigasi Mandiri -->
     <div class="border-b border-slate-200">
         <nav class="-mb-px flex space-x-6" aria-label="Tabs">
-            <!-- Tab 1: Katalog & Cari Surat -->
+            @if($this->canBorrow)
+            {{-- Tab 1: Katalog & Cari Surat --}}
             <button
                 type="button"
                 wire:click="setTab('catalog')"
@@ -32,7 +26,7 @@
                 <span>Katalog & Cari Surat</span>
             </button>
 
-            <!-- Tab 2: Pinjaman Saya -->
+            {{-- Tab 2: Pinjaman Saya --}}
             <button
                 type="button"
                 wire:click="setTab('my_loans')"
@@ -50,9 +44,10 @@
                     </span>
                 @endif
             </button>
+            @endif
 
-            <!-- Tab 3: Sirkulasi & Persetujuan Tapersip (Khusus Pengelola Kearsipan) -->
             @if($this->canManageCirculation)
+            {{-- Tab 3: Sirkulasi & Persetujuan Tapersip (Khusus Pengelola Kearsipan) --}}
             <button
                 type="button"
                 wire:click="setTab('circulation')"
@@ -77,7 +72,7 @@
     <!-- ========================================== -->
     <!-- TAB 1: KATALOG & CARI SURAT                -->
     <!-- ========================================== -->
-    @if($activeTab === 'catalog')
+    @if($activeTab === 'catalog' && $this->canBorrow)
     <div class="space-y-5">
         <!-- Panel Filter & Pencarian -->
         <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
@@ -107,7 +102,7 @@
                         <option value="">Semua Jenis Naskah</option>
                         <option value="incoming">Surat Masuk</option>
                         <option value="outgoing">Surat Keluar</option>
-                        <option value="internal">Memo Internal</option>
+                        <option value="internal">Surat Khusus</option>
                     </select>
                 </div>
 
@@ -180,7 +175,7 @@
                                     <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium
                                             {{ $doc->type === 'incoming' ? 'bg-blue-50 text-blue-700 border border-blue-200' : ($doc->type === 'outgoing' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-amber-50 text-amber-700 border border-amber-200') }}">
-                                            {{ $doc->type === 'incoming' ? 'Surat Masuk' : ($doc->type === 'outgoing' ? 'Surat Keluar' : 'Memo Internal') }}
+                                            {{ $doc->type === 'incoming' ? 'Surat Masuk' : ($doc->type === 'outgoing' ? 'Surat Keluar' : 'Surat Khusus') }}
                                         </span>
                                         <span class="text-xs text-slate-400">
                                             {{ $doc->document_date ? \Carbon\Carbon::parse($doc->document_date)->translatedFormat('d M Y') : '-' }}
@@ -311,7 +306,7 @@
     <!-- ========================================== -->
     <!-- TAB 2: PINJAMAN SAYA                       -->
     <!-- ========================================== -->
-    @if($activeTab === 'my_loans')
+    @if($activeTab === 'my_loans' && $this->canBorrow)
     <div class="space-y-5">
         <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div class="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -422,24 +417,41 @@
                                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
                                             Ditolak Tapersip
                                         </span>
+                                    @elseif($loan->status === 'cancelled')
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                            Dibatalkan
+                                        </span>
                                     @endif
                                 </td>
 
                                 <!-- Aksi -->
                                 <td class="px-5 py-4 align-top text-right">
-                                    @if(in_array($loan->status, ['requested', 'borrowed']))
-                                        <button
-                                            type="button"
-                                            wire:click="openTicketModal({{ $loan->id }})"
-                                            title="Cetak Ulang Tiket"
-                                            class="inline-flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-lg shadow-2xs transition-colors">
-                                            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                            </svg>
-                                        </button>
-                                    @else
-                                        <span class="text-slate-400 font-mono text-sm inline-block select-none pr-3">-</span>
-                                    @endif
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        @if(in_array($loan->status, ['requested', 'borrowed']))
+                                            <button
+                                                type="button"
+                                                wire:click="openTicketModal({{ $loan->id }})"
+                                                title="Cetak Ulang Tiket"
+                                                class="inline-flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold px-2.5 py-1.5 rounded-lg shadow-2xs transition-colors">
+                                                <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                </svg>
+                                            </button>
+
+                                            @if($loan->status === 'requested')
+                                            <button
+                                                type="button"
+                                                wire:click="cancelLoanRequest({{ $loan->id }})"
+                                                wire:confirm="Batalkan permohonan peminjaman fisik tiket {{ $loan->loan_code }} ini?"
+                                                title="Batalkan Permohonan"
+                                                class="inline-flex items-center px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 transition-colors shadow-2xs">
+                                                Batal
+                                            </button>
+                                            @endif
+                                        @else
+                                            <span class="text-slate-400 font-mono text-sm inline-block select-none pr-3">-</span>
+                                        @endif
+                                    </div>
                                 </td>
                             </tr>
                         @empty
@@ -465,9 +477,9 @@
     </div>
     @endif
 
-    <!-- ========================================== -->
-    <!-- TAB 3: SIRKULASI & PERSETUJUAN TAPERSIP    -->
-    <!-- ========================================== -->
+    {{-- ========================================== --}}
+    {{-- TAB 3: SIRKULASI & PERSETUJUAN TAPERSIP    --}}
+    {{-- ========================================== --}}
     @if($activeTab === 'circulation' && $this->canManageCirculation)
     <div class="space-y-5">
         <!-- Panel Pencarian Cepat Sirkulasi -->
@@ -494,6 +506,7 @@
                     <option value="borrowed">Sedang Dipinjam Staf</option>
                     <option value="returned">Selesai / Kembali ke Loker</option>
                     <option value="rejected">Ditolak</option>
+                    <option value="cancelled">Dibatalkan Pemohon</option>
                 </select>
             </div>
         </div>
@@ -619,6 +632,10 @@
                                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
                                             Ditolak
                                         </span>
+                                    @elseif($loan->status === 'cancelled')
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                            Dibatalkan
+                                        </span>
                                     @endif
                                 </td>
 
@@ -727,6 +744,16 @@
                 </div>
             @endif
         </div>
+    </div>
+    @endif
+
+    @if(!$this->canBorrow && !$this->canManageCirculation)
+    <div class="bg-white p-12 rounded-xl border border-slate-200 text-center text-slate-500">
+        <svg class="mx-auto h-12 w-12 text-slate-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+        <p class="text-sm font-semibold text-slate-700">Akses Terbatas</p>
+        <p class="text-xs text-slate-400 mt-1">Anda tidak memiliki hak akses untuk meminjam atau mengelola sirkulasi dokumen fisik.</p>
     </div>
     @endif
 

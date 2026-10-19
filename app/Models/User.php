@@ -38,6 +38,29 @@ class User extends Authenticatable
     }
 
     /**
+     * Cek apakah user adalah staf Tapersip (Tata Persuratan & Kearsipan)
+     */
+    public function isTapersip(): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->hasModuleAccess('archive_queue')
+            || $this->hasModuleAccess('loan_circulation')
+            || $this->hasDocumentPermission('archive')
+            || (isset($this->role) && str_contains(strtolower($this->role->name), 'tapersip'));
+    }
+
+    /**
+     * Cek apakah user berhak memantau seluruh aktivitas sistem (Superadmin & Tapersip)
+     */
+    public function canViewAllActivities(): bool
+    {
+        return $this->isSuperAdmin() || $this->isTapersip();
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -143,5 +166,21 @@ class User extends Authenticatable
     public function position(): BelongsTo
     {
         return $this->belongsTo(Position::class);
+    }
+
+    /**
+     * Get the division unit associated with this user's work unit.
+     */
+    public function getDivision(): ?Unit
+    {
+        return $this->unit ? $this->unit->getDivision() : null;
+    }
+
+    /**
+     * Get the division code of this user's work unit.
+     */
+    public function getDivisionCode(): string
+    {
+        return $this->unit ? $this->unit->getDivisionCode() : '';
     }
 }

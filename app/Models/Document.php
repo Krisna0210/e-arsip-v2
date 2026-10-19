@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
+use App\Models\AuditLog;
 
 class Document extends Model
 {
@@ -22,6 +25,7 @@ class Document extends Model
         'sender',
         'recipient_name',
         'signer_id',
+        'signer_type',
         'subject',
         'unit_id',
         'classification_id',
@@ -145,7 +149,7 @@ class Document extends Model
         $typeFolder = match($this->type) {
             'incoming' => 'Surat Masuk',
             'outgoing' => 'Surat Keluar',
-            'internal' => 'Memo Internal',
+            'internal' => 'Surat Khusus',
             default => 'Umum',
         };
 
@@ -155,6 +159,74 @@ class Document extends Model
             : 'Tanpa Loker';
 
         return "documents/{$typeFolder}/{$folderPath}";
+    }
+
+    /**
+     * Relocate document to a new folder, syncing physical file on NAS storage.
+     */
+    public function relocateFolder(?int $newFolderId, ?int $userId = null): bool
+    {
+        $oldFolder = $this->folder;
+        $oldFolderName = $oldFolder ? $oldFolder->name : 'Tanpa Loker';
+
+        $newFolder = $newFolderId ? Folder::find($newFolderId) : null;
+        $newFolderName = $newFolder ? $newFolder->name : 'Tanpa Loker';
+
+        if ($this->folder_id == $newFolderId) {
+            return true;
+        }
+
+        // Jika dokumen memiliki versi file fisik yang tersimpan
+        $currentVersion = $this->currentVersion;
+        if ($currentVersion && !empty($currentVersion->file_path)) {
+            $oldFilePath = $currentVersion->file_path;
+            $fileName = basename($oldFilePath);
+
+            // Simulasikan folder_id baru untuk menghitung direktori tujuan
+            $this->folder_id = $newFolderId;
+            $this->setRelation('folder', $newFolder);
+            $newDirectory = $this->getStorageDirectoryPath();
+            $newFilePath = rtrim($newDirectory, '/') . '/' . $fileName;
+
+            // Pindahkan file pada NAS (dengan fallback local storage jika ada)
+            $nasDisk = Storage::disk('nas');
+            $publicDisk = Storage::disk('public');
+
+            $moved = false;
+
+            if ($nasDisk->exists($oldFilePath)) {
+                $nasDisk->makeDirectory($newDirectory);
+                $nasDisk->move($oldFilePath, $newFilePath);
+                $moved = true;
+            } elseif ($publicDisk->exists($oldFilePath)) {
+                $publicDisk->makeDirectory($newDirectory);
+                $publicDisk->move($oldFilePath, $newFilePath);
+                $moved = true;
+            }
+
+            // Perbarui path pada tabel document_versions
+            if ($moved) {
+                $currentVersion->update(['file_path' => $newFilePath]);
+            }
+        } else {
+            $this->folder_id = $newFolderId;
+        }
+
+        $this->save();
+
+        AuditLog::record(
+            action: "Pemindahan Loker: " . ($this->number ?: $this->subject),
+            documentId: $this->id,
+            metadata: [
+                'from_folder' => $oldFolderName,
+                'to_folder' => $newFolderName,
+                'old_folder_id' => $oldFolder?->id,
+                'new_folder_id' => $newFolderId,
+            ],
+            userId: $userId ?: Auth::id()
+        );
+
+        return true;
     }
 }
 

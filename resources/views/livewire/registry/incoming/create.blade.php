@@ -7,18 +7,11 @@
                 <p class="text-sm text-gray-500">Isi formulir di bawah ini untuk mencatat surat masuk baru.</p>
             </div>
 
-            <!-- Flash Message -->
-            @if (session()->has('success'))
-                <div class="p-4 mb-6 text-sm text-green-800 rounded-lg bg-green-50">
-                    {{ session('success') }}
-                </div>
-            @endif
-
             <form wire:submit.prevent="save" class="space-y-8">
                 <!-- Section 1: Informasi Surat -->
                 <div class="space-y-6">
                     <h3 class="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Informasi Surat</h3>
-                    
+
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Nomor Surat</label>
                         <input type="text" wire:model="number" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] outline-none transition" placeholder="Contoh: 123/UM/2026">
@@ -45,6 +38,19 @@
                     </div>
 
                     <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Unit Tujuan <span class="text-red-500">*</span></label>
+                        <select wire:model="unit_id" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] outline-none transition bg-white">
+                            <option value="">-- Pilih Unit Tujuan --</option>
+                            @foreach($units as $unit)
+                                <option value="{{ $unit->id }}">
+                                    {{ $unit->name }} ({{ $unit->code }}){{ $unit->parent ? ' - ' . $unit->parent->code : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('unit_id') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                    </div>
+
+                    <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Perihal</label>
                         <textarea wire:model="subject" rows="3" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] outline-none transition" placeholder="Ringkasan isi surat..."></textarea>
                         @error('subject') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
@@ -54,11 +60,22 @@
                 <!-- Section 2: Klasifikasi & Distribusi -->
                 <div class="space-y-6">
                     <h3 class="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Klasifikasi & Distribusi</h3>
-                    
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Klasifikasi Arsip <span class="text-red-500">*</span></label>
+                        <select wire:model="classification_id" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] outline-none transition bg-white">
+                            <option value="">-- Pilih Klasifikasi --</option>
+                            @foreach($classifications as $classification)
+                                <option value="{{ $classification->id }}">{{ $classification->code }} - {{ $classification->name ?? $classification->subject }}</option>
+                            @endforeach
+                        </select>
+                        @error('classification_id') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                    </div>
+
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Lokasi Penyimpanan (Loker)</label>
                         <select wire:model="folder_id" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] outline-none transition bg-white">
-                            <option value="">-- Tanpa Loker / Root --</option>
+                            <option value="">-- Tanpa Loker --</option>
                             @foreach($folders as $folder)
                                 <option value="{{ $folder->id }}">{{ $folder->name }}</option>
                             @endforeach
@@ -66,66 +83,28 @@
                         @error('folder_id') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                     </div>
 
-                    <div x-data>
-                        <label class="block text-sm font-medium text-gray-700 mb-3">Sifat Surat</label>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <!-- Biasa -->
-                            <label class="relative flex cursor-pointer rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:bg-gray-50 focus:outline-none transition-all duration-200" 
-                                   :class="{ 'border-emerald-500 ring-2 ring-emerald-500 bg-emerald-50/20': $wire.sifat === 'biasa' }">
+                    <div x-data class="space-y-1.5">
+                        <label class="block text-sm font-medium text-gray-700">
+                            Sifat Surat <span class="text-red-500">*</span>
+                        </label>
+                        <div class="grid grid-cols-3 gap-3">
+                            <label class="relative flex items-center justify-center cursor-pointer rounded-lg border px-3 py-2.5 text-center transition-all duration-150 select-none"
+                                   :class="$wire.sifat === 'biasa' ? 'border-emerald-600 bg-emerald-50/60 text-emerald-800 font-bold ring-1 ring-emerald-600 shadow-2xs' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-medium'">
                                 <input type="radio" wire:model="sifat" value="biasa" class="sr-only">
-                                <span class="flex flex-1">
-                                    <span class="flex flex-col">
-                                        <span class="block text-sm font-semibold text-gray-900" :class="{ 'text-emerald-700': $wire.sifat === 'biasa' }">Biasa</span>
-                                        <span class="mt-1 flex items-center text-xs text-gray-500">Reguler</span>
-                                    </span>
-                                </span>
-                                <svg class="h-6 w-6 text-emerald-600 transition-opacity duration-200" :class="{'opacity-100': $wire.sifat === 'biasa', 'opacity-0': $wire.sifat !== 'biasa'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
-                                </svg>
+                                <span class="text-xs">Biasa</span>
                             </label>
-                            
-                            <!-- Penting -->
-                            <label class="relative flex cursor-pointer rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:bg-gray-50 focus:outline-none transition-all duration-200" 
-                                   :class="{ 'border-amber-500 ring-2 ring-amber-500 bg-amber-50/20': $wire.sifat === 'penting' }">
+                            <label class="relative flex items-center justify-center cursor-pointer rounded-lg border px-3 py-2.5 text-center transition-all duration-150 select-none"
+                                   :class="$wire.sifat === 'penting' ? 'border-amber-600 bg-amber-50/60 text-amber-800 font-bold ring-1 ring-amber-600 shadow-2xs' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-medium'">
                                 <input type="radio" wire:model="sifat" value="penting" class="sr-only">
-                                <span class="flex flex-1">
-                                    <span class="flex flex-col">
-                                        <span class="block text-sm font-semibold text-gray-900" :class="{ 'text-amber-700': $wire.sifat === 'penting' }">Penting</span>
-                                        <span class="mt-1 flex items-center text-xs text-gray-500">Prioritas</span>
-                                    </span>
-                                </span>
-                                <svg class="h-6 w-6 text-amber-600 transition-opacity duration-200" :class="{'opacity-100': $wire.sifat === 'penting', 'opacity-0': $wire.sifat !== 'penting'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
-                                </svg>
+                                <span class="text-xs">Penting</span>
                             </label>
-
-                            <!-- Rahasia -->
-                            <label class="relative flex cursor-pointer rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:bg-gray-50 focus:outline-none transition-all duration-200" 
-                                   :class="{ 'border-rose-500 ring-2 ring-rose-500 bg-rose-50/20': $wire.sifat === 'rahasia' }">
+                            <label class="relative flex items-center justify-center cursor-pointer rounded-lg border px-3 py-2.5 text-center transition-all duration-150 select-none"
+                                   :class="$wire.sifat === 'rahasia' ? 'border-rose-600 bg-rose-50/60 text-rose-800 font-bold ring-1 ring-rose-600 shadow-2xs' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-medium'">
                                 <input type="radio" wire:model="sifat" value="rahasia" class="sr-only">
-                                <span class="flex flex-1">
-                                    <span class="flex flex-col">
-                                        <span class="block text-sm font-semibold text-gray-900" :class="{ 'text-rose-700': $wire.sifat === 'rahasia' }">Rahasia</span>
-                                        <span class="mt-1 flex items-center text-xs text-gray-500">Konfidensial</span>
-                                    </span>
-                                </span>
-                                <svg class="h-6 w-6 text-rose-600 transition-opacity duration-200" :class="{'opacity-100': $wire.sifat === 'rahasia', 'opacity-0': $wire.sifat !== 'rahasia'}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
-                                </svg>
+                                <span class="text-xs">Rahasia</span>
                             </label>
                         </div>
                         @error('sifat') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Unit Tujuan</label>
-                        <select wire:model="unit_id" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] outline-none transition bg-white">
-                            <option value="">-- Pilih Unit Tujuan --</option>
-                            @foreach($units as $unit)
-                                <option value="{{ $unit->id }}">{{ $unit->name }}</option>
-                            @endforeach
-                        </select>
-                        @error('unit_id') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
                     </div>
                 </div>
 
@@ -134,7 +113,7 @@
                     <button type="submit" class="w-full sm:w-auto px-6 py-2.5 bg-[var(--color-primary)] text-white rounded-lg font-medium shadow-sm hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-primary)] transition-all">
                         Simpan ke Arsip
                     </button>
-                    
+
                     <div wire:loading class="text-sm text-gray-500">
                         Memproses...
                     </div>
@@ -146,21 +125,21 @@
     <!-- Right Pane: PDF Preview -->
     <div class="w-full lg:w-1/2 bg-gray-50 p-6 lg:p-8 xl:p-10 lg:sticky lg:top-0 h-[600px] lg:h-screen flex flex-col">
         <h3 class="text-lg font-semibold text-gray-900 mb-4 flex-none">Pratinjau Dokumen</h3>
-        
+
                 <div class="flex-1 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center bg-white relative overflow-hidden transition-colors"
              x-data="{ isDropping: false, objectUrl: null }"
              x-on:dragover.prevent="isDropping = true"
              x-on:dragleave.prevent="isDropping = false"
-             x-on:drop.prevent="isDropping = false; 
-                let f = $event.dataTransfer.files[0]; 
-                if(f && f.type === 'application/pdf') { objectUrl = URL.createObjectURL(f); } 
+             x-on:drop.prevent="isDropping = false;
+                let f = $event.dataTransfer.files[0];
+                if(f && f.type === 'application/pdf') { objectUrl = URL.createObjectURL(f); }
                 $wire.upload('file', f);"
              :class="{ 'border-[var(--color-primary)] bg-blue-50/50': isDropping }">
-            
+
             <template x-if="objectUrl">
                 <object x-bind:data="objectUrl" type="application/pdf" class="w-full h-full absolute inset-0 rounded-xl z-10"></object>
             </template>
-            
+
             <div x-show="!objectUrl" class="w-full h-full flex flex-col items-center justify-center relative">
                 @if ($file)
                     @if (!in_array($file->extension(), ['pdf', 'PDF']))
@@ -208,7 +187,7 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
-            
+
             <!-- Progress Bar for File Upload -->
             <div x-data="{ isUploading: false, progress: 0 }"
                  x-on:livewire-upload-start="isUploading = true"
@@ -225,6 +204,80 @@
             </div>
         </div>
         @error('file') <div class="text-red-500 text-sm mt-3 font-medium bg-red-50 p-3 rounded-lg border border-red-100">{{ $message }}</div> @enderror
+    </div>
+
+    <!-- Modal Sukses Arsip Surat Masuk -->
+    <div x-data="{ show: @entangle('showSuccessModal') }" x-show="show" x-cloak class="relative z-[999]" aria-labelledby="modal-title" role="dialog" aria-modal="true" style="display: none;">
+        <div x-show="show" x-transition.opacity class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm"></div>
+        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+            <div class="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+                <div x-show="show" x-transition class="relative transform overflow-hidden rounded-2xl bg-white px-4 pb-5 pt-6 text-left shadow-2xl transition-all sm:my-8 w-full sm:max-w-md sm:p-6">
+                    <div>
+                        <!-- Icon Checkmark Bulat -->
+                        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                            <svg class="h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="2.2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+
+                        <div class="mt-4 text-center">
+                            <h3 class="text-lg font-bold text-slate-900 font-jakarta" id="modal-title">
+                                Berhasil Diarsipkan!
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-1">
+                                Berkas surat masuk fisik dan file scan telah berhasil dicatat dan disimpan ke repositori arsip.
+                            </p>
+
+                            <!-- Ringkasan Kartu Data Naskah -->
+                            <div class="mt-4 bg-slate-50 rounded-xl p-4 border border-slate-200 text-left space-y-2.5">
+                                <div>
+                                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nomor Surat</div>
+                                    <div class="font-mono text-sm font-bold text-[var(--color-primary)] mt-0.5">
+                                        {{ $savedDocumentNumber }}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Perihal</div>
+                                    <div class="text-xs font-semibold text-slate-800 line-clamp-2 mt-0.5">
+                                        {{ $savedDocumentSubject }}
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/80 text-xs">
+                                    <div>
+                                        <div class="text-[10px] text-slate-400">Pengirim:</div>
+                                        <div class="font-medium text-slate-700 truncate">{{ $savedDocumentSender }}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-[10px] text-slate-400">Tujuan:</div>
+                                        <div class="font-medium text-slate-700 truncate">{{ $savedDocumentUnitName }}</div>
+                                    </div>
+                                </div>
+                                <div class="pt-1 text-[11px] text-slate-500 flex items-center gap-1.5">
+                                    <span class="text-slate-400">Loker:</span>
+                                    <span class="font-semibold text-slate-700 font-mono">{{ $savedDocumentFolderName }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tombol Aksi Cepat -->
+                    <div class="mt-6 flex flex-col gap-2">
+                        <button wire:click="resetFormAndInputAgain" type="button" class="w-full inline-flex justify-center items-center gap-1.5 rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:brightness-110 transition-all">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                            <span>Input Surat Masuk Lagi</span>
+                        </button>
+                        <div class="grid grid-cols-2 gap-2 pt-1">
+                            <button wire:click="redirectToIndex" type="button" class="w-full inline-flex justify-center rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                                Daftar Arsip
+                            </button>
+                            <button wire:click="finishAndRedirect" type="button" class="w-full inline-flex justify-center rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                                Ke Dashboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 

@@ -4,6 +4,7 @@ namespace App\Livewire\Registry;
 
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Services\NasHealthService;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\WithFileUploads;
@@ -41,6 +42,26 @@ class ScanQueue extends Component
         $this->resetPage();
     }
 
+    public function setFilterType($type)
+    {
+        $this->filterType = $type;
+        $this->resetPage();
+    }
+
+    public function getNasStatusProperty()
+    {
+        return NasHealthService::check();
+    }
+
+    public function refreshNasConnection()
+    {
+        NasHealthService::check(true);
+        $this->dispatch('notify', [
+            'message' => 'Status koneksi NAS telah diperbarui.',
+            'type' => 'info',
+        ]);
+    }
+
     public function openUploadModal($id)
     {
         $doc = Document::with('createdBy')->findOrFail($id);
@@ -55,7 +76,7 @@ class ScanQueue extends Component
         $this->uploadDocNumber = $doc->number;
         $this->uploadDocSubject = $doc->subject;
         $this->uploadDocDate = $doc->document_date ? \Carbon\Carbon::parse($doc->document_date)->format('d M Y') : '-';
-        $this->uploadDocType = $doc->type === 'outgoing' ? 'Surat Keluar' : 'Memo Internal';
+        $this->uploadDocType = $doc->type === 'outgoing' ? 'Surat Keluar' : 'Surat Khusus';
         $this->uploadDocTypeRaw = $doc->type;
         $this->uploadFolderId = $doc->folder_id;
         $this->uploadDocCreator = $doc->createdBy ? $doc->createdBy->name : '-';
@@ -76,6 +97,13 @@ class ScanQueue extends Component
         if (!Auth::user()->hasDocumentPermission('archive', $document->sifat ?? 'biasa')) {
             abort(403, 'Unauthorized action.');
         }
+
+        // Cek konektivitas NAS sebelum menyimpan file fisik
+        $nasStatus = NasHealthService::check(true);
+        if (!$nasStatus['online']) {
+            $this->addError('finalFile', 'Penyimpanan NAS sedang tidak terhubung atau tidak dapat diakses. Mohon periksa koneksi server NAS sebelum mengarsipkan.');
+            return;
+        }
         
         // Tetapkan loker terlebih dahulu agar struktur direktori di NAS sesuai
         $document->folder_id = $this->uploadFolderId;
@@ -93,11 +121,31 @@ class ScanQueue extends Component
             'status' => 'active',
         ]);
 
+        $classification = $document->classification;
+        $retentionStartDate = null;
+        $retentionEndDate = null;
+        if ($classification && $classification->active_years > 0) {
+            $retentionStartDate = $document->document_date ?: date('Y-m-d');
+            $retentionEndDate = date('Y-m-d', strtotime("+{$classification->active_years} years", strtotime($retentionStartDate)));
+        }
+
         $document->update([
             'current_version_id' => $version->id,
             'status' => 'archived',
             'folder_id' => $this->uploadFolderId,
+            'retention_start_date' => $retentionStartDate,
+            'retention_end_date' => $retentionEndDate,
         ]);
+
+        \App\Models\AuditLog::record(
+            action: 'Unggah Scan Fisik Arsip: ' . ($document->number ?: $document->subject),
+            documentId: $document->id,
+            metadata: [
+                'subject' => $document->subject,
+                'type' => $document->type,
+                'folder_id' => $this->uploadFolderId,
+            ]
+        );
 
         $this->reset(['uploadDocId', 'finalFile', 'uploadDocNumber', 'uploadDocSubject', 'uploadDocDate', 'uploadDocType', 'uploadDocTypeRaw', 'uploadFolderId', 'uploadDocCreator']);
         $this->dispatch('close-modal', 'modal-upload-queue');
@@ -106,6 +154,11 @@ class ScanQueue extends Component
 
     public function render()
     {
+        $baseCountQuery = Document::where('status', 'waiting_for_file')->whereIn('type', ['outgoing', 'internal']);
+        $countAll = (clone $baseCountQuery)->count();
+        $countOutgoing = (clone $baseCountQuery)->where('type', 'outgoing')->count();
+        $countInternal = (clone $baseCountQuery)->where('type', 'internal')->count();
+
         $query = Document::with(['documentType', 'classification', 'unit', 'createdBy'])
             ->where('status', 'waiting_for_file')
             ->whereIn('type', ['outgoing', 'internal']);
@@ -127,12 +180,16 @@ class ScanQueue extends Component
         $documents = $query->orderBy('created_at', 'asc')->paginate(10); // asc: yang paling lama antre didahulukan
 
         $availableFolders = $this->uploadDocTypeRaw
-            ? \App\Models\Folder::forType($this->uploadDocTypeRaw)->orderBy('name')->get()
+            ? \App\Models\Folder::forType($this->uploadDocTypeRaw)->with('parent')->orderBy('name')->get()
             : collect();
 
         return view('livewire.registry.scan-queue', [
             'documents' => $documents,
             'availableFolders' => $availableFolders,
+            'countAll' => $countAll,
+            'countOutgoing' => $countOutgoing,
+            'countInternal' => $countInternal,
+            'nasStatus' => $this->nasStatus,
         ])->layout('components.layouts.app', ['title' => 'Antrean Scan Tapersip']);
     }
 }

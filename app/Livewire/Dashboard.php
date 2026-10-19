@@ -12,6 +12,20 @@ class Dashboard extends Component
 {
     use WithPagination;
 
+    public $monitoringFilter = 'all'; // 'all', 'waiting', 'archived'
+    public $monitoringSearch = '';
+
+    public function setMonitoringFilter($filter)
+    {
+        $this->monitoringFilter = $filter;
+        $this->resetPage('monitoringPage');
+    }
+
+    public function updatedMonitoringSearch()
+    {
+        $this->resetPage('monitoringPage');
+    }
+
     public function render()
     {
         $user = Auth::user();
@@ -30,17 +44,32 @@ class Dashboard extends Component
         $countWaiting = $countWaitingQuery->count();
 
         // Kueri Monitoring Arsip Dokumen:
-        // 1. Personal per akun staf (kecuali Superadmin)
-        // 2. Status 'waiting_for_file' selalu tampil (agar tidak ada berkas yang terlupakan)
-        // 3. Status 'archived' hanya tampil jika selesai dalam 30 hari terakhir
-        $monitoringQuery = Document::with(['unit', 'documentType', 'classification', 'createdBy'])
-            ->where(function ($q) {
+        $monitoringQuery = Document::with(['unit', 'documentType', 'classification', 'createdBy']);
+
+        // Filter status monitoring
+        if ($this->monitoringFilter === 'waiting') {
+            $monitoringQuery->where('status', 'waiting_for_file');
+        } elseif ($this->monitoringFilter === 'archived') {
+            $monitoringQuery->where('status', 'archived');
+        } else {
+            $monitoringQuery->where(function ($q) {
                 $q->where('status', 'waiting_for_file')
                   ->orWhere(function ($qArchived) {
                       $qArchived->where('status', 'archived')
                                 ->where('updated_at', '>=', now()->subDays(30));
                   });
             });
+        }
+
+        // Filter pencarian nomor, subjek, atau penerima
+        if (!empty(trim($this->monitoringSearch))) {
+            $term = trim($this->monitoringSearch);
+            $monitoringQuery->where(function ($q) use ($term) {
+                $q->where('number', 'like', "%{$term}%")
+                  ->orWhere('subject', 'like', "%{$term}%")
+                  ->orWhere('recipient_name', 'like', "%{$term}%");
+            });
+        }
 
         if (!$isSuperAdmin) {
             $monitoringQuery->where('created_by', Auth::id());
@@ -51,7 +80,14 @@ class Dashboard extends Component
             ->orderBy('created_at', 'desc')
             ->paginate(5, ['*'], 'monitoringPage');
 
-        $recentActivities = AuditLog::with(['user', 'document'])
+        $canViewAllActivities = $user ? $user->canViewAllActivities() : false;
+
+        $activitiesQuery = AuditLog::with(['user', 'document']);
+        if (!$canViewAllActivities) {
+            $activitiesQuery->where('user_id', Auth::id());
+        }
+
+        $recentActivities = $activitiesQuery
             ->latest('created_at')
             ->take(5)
             ->get();
@@ -82,6 +118,7 @@ class Dashboard extends Component
             'monitoringDocuments' => $monitoringDocuments,
             'recentActivities' => $recentActivities,
             'isSuperAdmin' => $isSuperAdmin,
+            'canViewAllActivities' => $canViewAllActivities,
             'canViewIncoming' => $canViewIncoming,
             'canViewOutgoing' => $canViewOutgoing,
             'canViewInternal' => $canViewInternal,

@@ -680,4 +680,452 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
 - **Verifikasi Pengujian**:
   - Seluruh pengujian otomatis proyek (`DocumentLoanTest`, `NasStorageTest`, `SequenceNumberingTest`, `ExampleTest`) terkonfirmasi lulus 100% (*13 tests, 51 assertions*).
 
+### 37. Penanganan Dual Kondisi Penomoran Surat Keluar (Direktur vs Pimpinan Unit Kerja, Format 2 Digit, & Nomor Urut Terpisah)
+- **Skema Database & Model**:
+  - Migrasi `2026_10_13_132642_add_signer_type_and_dir_sequence_tables.php`:
+    - Tabel `documents`: Menambahkan kolom `signer_type` (`enum('pimpinan_unit', 'direktur')`, default `'pimpinan_unit'`, berindeks).
+    - Tabel `document_types`: Menambahkan kolom `starting_sequence_dir` (unsignedInteger, default 0).
+  - Model `Document`: Menambahkan `'signer_type'` ke dalam `$fillable`.
+  - Model `DocumentType`: Menambahkan `'starting_sequence_dir'` ke dalam `$fillable`.
+- **Formulir Registrasi Surat Keluar (`outgoing/create.blade.php`)**:
+  - Pada Section 1 (Informasi Surat), ditambahkan komponen minimalis **Pilihan Pejabat Penandatangan Surat** (`wire:model.live="signer_type"`):
+    1. **Pimpinan Unit Kerja** (`pimpinan_unit`): Format `01/[UNIT]-[KLASI]` (contoh: `01/OPS-HM.00/10/2026`).
+    2. **Direktur** (`direktur`): Format `01/DIR-[UNIT]-[KLASI]` (contoh: `01/DIR-OPS-HM.00/10/2026`).
+  - **Desain Minimalis & Bersih (Text-Only Selector)**:
+    - Menghilangkan ikon-ikon dekoratif yang berlebihan, subteks panjang, dan contoh format yang membingungkan.
+    - Menggunakan dua tombol pilihan teks bersih (*Pimpinan Unit Kerja* & *Direktur*) berbingkai rapi (`rounded-lg border px-4 py-2.5 text-xs text-center`) dengan highlight aktif elegan (`border-[var(--color-primary)] bg-emerald-50/40 text-[var(--color-primary)] font-bold ring-1`).
+    - Menjaga ketinggian dan kerapatan form tetap simetris dan serasi dengan kolom input lainnya.
+- **Logika Backend Nomor Urut Terpisah & 2 Digit (`Outgoing\Create.php`)**:
+  - **Opsi B (Nomor Urut Terpisah)**: Kueri nomor urut dipartisi secara independen per pejabat penandatangan:
+    `Document::where('document_type_id', $id)->where('type', 'outgoing')->where('signer_type', $this->signer_type)->whereYear('document_date', $year)->max('sequence_number')`
+    - Surat Direktur dan Surat Pimpinan Unit Kerja masing-masing memiliki buku urut mandiri (tidak saling mendahului atau bertabrakan).
+  - **Nomor Urut 2 Digit**: Format nomor urut menggunakan padding 2 digit: `str_pad($nextSequence, 2, '0', STR_PAD_LEFT)` (`01`, `02`, dst.).
+  - **Formula Penggantian Cerdas Prefix `DIR-`**:
+    - Jika penandatangan adalah **Direktur**: Nilai placeholder `{DIR}` otomatis diisi `DIR-`, atau jika format master data belum memiliki `{DIR}`, sistem otomatis menyematkan prefix `DIR-` pada kode unit (`DIR-{$unitCode}`).
+    - Jika penandatangan adalah **Pimpinan Unit Kerja**: Placeholder `{DIR}` dikosongkan dan kode unit tetap murni (`{$unitCode}`).
+- **Pembaruan Master Data Jenis Dokumen (`ArchiveClassificationIndex`)**:
+  - Modal form jenis dokumen menyediakan 2 kolom sequence awal manual mandiri:
+    - *No. Manual Unit Kerja* (`typeStartingSequence`).
+    - *No. Manual Direktur* (`typeStartingSequenceDir`).
+    - *Tahun Berlaku* (`typeStartingYear`).
+  - Tabel master data menampilkan rincian kedua urutan manual aktif.
+- **Verifikasi Pengujian Otomatis**:
+  - Test case `SequenceNumberingTest::test_outgoing_dual_condition_numbering_for_director_and_unit_head` memvalidasi:
+    - Penerbitan nomor Direktur: `01/DIR-OPS-HM.00/10/2026`.
+    - Penerbitan nomor Pimpinan Unit Kerja: `01/OPS-HM.00/10/2026` (nomor urut terpisah dari 01 mandiri).
+    - Penerbitan nomor Direktur kedua: `02/DIR-OPS-HM.00/10/2026`.
+  - Seluruh pengujian otomatis proyek (14 *test cases*, 60 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 38. Default & Penguncian Read-Only Jenis Dokumen pada Form Registrasi Surat Keluar
+- **Formulir Registrasi Surat Keluar (`outgoing/create.blade.php`)**:
+  - Kolom **Jenis Dokumen** pada Section 2 (*Klasifikasi & Atribut*) tetap mempertahankan elemen form kontrol `<select wire:model="document_type_id">` asli.
+  - Elemen dropdown disetel *disabled/read-only* dengan styling `bg-gray-100/80 text-gray-700 cursor-not-allowed select-none` untuk mencegah manipulasi pilihan.
+  - Opsi kosong `-- Pilih Jenis Dokumen --` ditiadakan sehingga opsi langsung terpilih (*default*) ke jenis dokumen `"Surat Keluar"` yang terpasang dari backend.
+- **Backend Component (`Outgoing\Create.php`)**:
+  - Pada metode `mount()`, sistem secara otomatis mendeteksi dan mengaitkan ID master data `"Surat Keluar"` ke `$document_type_id`.
+  - Jika master data belum tersedia, sistem secara otomatis melakukan inisialisasi awal (*firstOrCreate*) dengan format standar penomoran keluar `{NO}/{DIR}{UNIT}-{CLASS}/{MM}/{YYYY}`.
+- **Verifikasi Pengujian Otomatis**:
+  - Ditambahkan pengujian otomatis `SequenceNumberingTest::test_outgoing_create_defaults_to_surat_keluar_document_type` yang memverifikasi bahwa inisialisasi form langsung mengunci ID jenis dokumen Surat Keluar.
+  - Seluruh pengujian otomatis proyek (15 *test cases*, 62 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 39. Diferensiasi Unit Kerja (Divisi vs Departemen) & Filter Dropdown Korespondensi
+- **Skema Database & Model**:
+  - Migrasi `2026_10_15_000001_add_type_to_units_table.php`: Menambahkan kolom `type` (`enum('division', 'department')`, default `'division'`) setelah kolom `name` pada tabel `units`.
+  - Model `Unit`:
+    - Menambahkan `'type'` ke dalam array `$fillable`.
+    - Menambahkan local query scope: `scopeDivisions()` (`where('type', 'division')`) dan `scopeDepartments()` (`where('type', 'department')`).
+    - Menjaga relasi hierarki self-referencing `parent_id` (Departemen menginduk ke Divisi).
+  - Seeder `UnitSeeder`:
+    - Mengklasifikasikan unit utama (IT, HRD, FIN, LGL, OPS) sebagai `division`.
+    - Menambahkan data awal sub-unit departemen: `IT-DEV`, `IT-INF`, `HRD-REC`, `FIN-PAY`, `OPS-LOG` dengan `type = 'department'` dan mengaitkan `parent_id` ke divisi induk masing-masing.
+- **Master Data Organisasi (`organization-index.blade.php` & `OrganizationIndex.php`)**:
+  - **Segmented Filter Pills**: Menambahkan tombol filter jenis unit di toolbar tab Unit Kerja: `[ Semua Unit ]`, `[ Divisi ]`, `[ Departemen ]`.
+  - **Pencarian Real-Time**: Input pencarian kode dan nama unit dihubungkan secara reaktif (`wire:model.live.debounce.300ms="searchUnit"`).
+  - **Tabel Unit Kerja**: Menambahkan kolom badge **Tipe** (`Divisi` dengan aksen indigo, `Departemen` dengan aksen teal) dan kolom **Induk Divisi** yang menampilkan nama dan kode divisi induk.
+  - **Modal Tambah/Edit Unit**:
+    - Komponen radio selector rapi untuk memilih tipe: `Divisi (Induk)` atau `Departemen (Sub-Unit)`.
+    - Pilihan **Divisi Induk** ditampilkan secara kondisional dan wajib dipilih jika tipe adalah `Departemen`. Jika `Divisi`, kolom induk otomatis disembunyikan dan `parent_id` disimpan sebagai `null`.
+- **Filtering Dropdown Korespondensi**:
+  - **Registrasi Surat Keluar (`Outgoing\Create.php` & `outgoing/create.blade.php`)**:
+    - Dropdown **Unit Pengirim** dikunci hanya mengambil unit dengan tipe `division` (`Unit::divisions()->where('status', 'active')->orderBy('name')->get()`).
+    - Label diperjelas menjadi *"Unit Pengirim (Divisi)"*.
+  - **Registrasi Memo Internal (`Internal\Create.php` & `internal/create.blade.php`)**:
+    - Dropdown **Unit Pengirim** dan **Unit Tujuan** dikunci hanya mengambil unit dengan tipe `department` (`Unit::departments()->with('parent')->where('status', 'active')->orderBy('name')->get()`).
+    - Label diperjelas menjadi *"Unit Pengirim (Departemen)"* dan *"Unit Tujuan (Departemen)"*.
+    - Opsi dropdown menyertakan konteks divisi induk: `[Nama Departemen] ([Kode]) - [Nama Divisi Induk]`.
+- **Verifikasi Pengujian Otomatis**:
+  - Dibuat test suite baru `tests/Feature/OrganizationUnitTest.php` (4 test cases, 25 assertions):
+    - `test_admin_can_filter_units_by_type_division_and_department`
+    - `test_admin_can_create_division_and_department_with_parent`
+    - `test_outgoing_create_only_contains_division_units`
+    - `test_internal_create_only_contains_department_units`
+  - Seluruh rangkaian pengujian proyek (19 *test cases*, 87 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 40. Pembaruan Nomenklatur & URL: Penggantian "Memo Internal" Menjadi "Surat Khusus"
+- **Routing & URL Sejajar (`routes/web.php`)**:
+  - Halaman arsip naskah khusus dialihkan ke URL standar bahasa Inggris: `/registry/special` (`name: registry.special.index`).
+  - Halaman pendaftaran/booking dialihkan ke URL: `/registry/special/create` (`name: registry.special.create`).
+  - Rute lama `/registry/internal` dan `/registry/internal/create` tetap disediakan sebagai rute pengarah balik (*backward-compatible redirect*) demi mencegah tautan mati (*broken links*).
+- **Navigasi Sidebar (`components/layouts/app.blade.php`)**:
+  - Menu input surat: `"Memo Internal"` diperbarui menjadi **`"Surat Khusus"`** (`route('registry.special.create')`).
+  - Menu kearsipan explorer: `"Arsip Memo Internal"` diperbarui menjadi **`"Arsip Surat Khusus"`** (`route('registry.special.index')`).
+- **Teks Formulir & Petunjuk Alur Kerja (`resources/views/livewire/registry/internal/create.blade.php` & `Create.php`)**:
+  - Judul form registrasi diubah menjadi **"Registrasi Surat Khusus"**.
+  - Teks deskripsi dan panduan staf pada kartu alur kanan diubah menjadi petunjuk penerbitan nomor Surat Khusus resmi.
+  - Flash notification saat simpan/arsip diubah menjadi *"Dokumen Surat Khusus berhasil disimpan..."* dan mengarahkan ke `registry.special.index`.
+- **Explorer Loker & Page Wrappers (`internal/index.blade.php` & pages)**:
+  - Judul modal loker disesuaikan menjadi **"Tambah Loker Surat Khusus"**.
+  - Header halaman wrapper diubah menjadi **"Surat Khusus"** dengan deskripsi *"Kelola dan pantau seluruh dokumen surat khusus"*.
+- **Penyimpanan NAS & Model Document (`Document.php`)**:
+  - Metode `Document::getStorageDirectoryPath()` untuk dokumen tipe `'internal'` disesuaikan menjadi folder fisik **`documents/Surat Khusus/...`**.
+- **Dashboard, Antrean Scan, Peminjaman Surat, & Role Matrix**:
+  - Kartu statistik 3: **"Total Surat Khusus"**.
+  - Badge jenis naskah pada tabel dokumen di Dashboard, Antrean Scan Tapersip, dan Sirkulasi Peminjaman Berkas diubah menjadi **`"Surat Khusus"`**.
+  - Role editor: Label hak akses diperjelas menjadi *"Input Surat Khusus"*, *"Arsip Surat Khusus"*, dan *"Total Surat Khusus"*.
+- **Pengecualian Khusus Sesuai Arahan**:
+  - Profil jenis dokumen pada master data `document_types` dengan nama **"Memo Internal"** (format `{NO}/MI/{UNIT}/{YYYY}`) tetap dipertahankan murni tanpa perubahan.
+- **Verifikasi Pengujian Otomatis**:
+  - Dibuat test suite baru `tests/Feature/SpecialLetterTest.php` yang memverifikasi akses route baru `/registry/special`, pengalihan route lama, dan penamaan folder direktori penyimpanan Surat Khusus.
+  - Seluruh pengujian proyek (21 *test cases*, 96 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 41. Kode Jenis Dokumen & Variabel Dinamis {KOSUR} pada Format Penomoran
+- **Skema Database & Model (`DocumentType`)**:
+  - Migrasi `2026_10_15_000002_add_code_to_document_types_table.php`: Menambahkan kolom `code` (`string(20)->nullable()`) setelah kolom `name` pada tabel `document_types`.
+  - Model `DocumentType`: Menambahkan `'code'` ke dalam `$fillable`.
+  - Seeder `DocumentTypeSeeder`: Mengisi kode baku dan format untuk jenis dokumen:
+    - *Surat Keluar* ➔ `code: SK`
+    - *Surat Edaran* ➔ `code: SE`
+    - *PKS* ➔ `code: PKS`
+    - *Memo Internal* ➔ `code: MI`
+    - *Surat Keputusan* ➔ `code: SKP`
+    - *Surat Tugas* ➔ `code: ST`
+- **Master Data Jenis Dokumen (`ArchiveClassificationIndex.php` & Blade)**:
+  - **Tabel Jenis Dokumen**: Ditambahkan kolom pertama **Kode (KOSUR)** dengan font monospace badge rapi (`font-mono text-xs bg-slate-100`).
+  - **Modal Tambah/Edit Jenis Dokumen**:
+    - Input grid simetris: **Kode (KOSUR) \*** (`wire:model.live="typeCode"`) dan **Nama Jenis Dokumen \*** (`wire:model="typeName"`).
+    - Validasi: `required|string|max:20|unique:document_types,code,ID`.
+    - Helper format penomoran: Mengikutsertakan variabel baku `{KOSUR}`.
+    - Live Preview Penomoran: Menggantikan `{KOSUR}` secara *real-time* sesuai apa yang diketik admin di input kode.
+- **Generator Nomor Surat (`Outgoing\Create.php` & `Internal\Create.php`)**:
+  - Variabel `{KOSUR}` dan `{kosur}` otomatis diparsing dan digantikan dengan kode jenis naskah (`$docTypeRecord?->code`).
+- **Verifikasi Pengujian Otomatis**:
+  - Pengujian `SequenceNumberingTest::test_admin_can_set_document_type_code_in_master_data` dan `SequenceNumberingTest::test_numbering_format_replaces_kosur_placeholder`.
+  - Seluruh rangkaian test suite (23 *test cases*, 100 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 42. Resolusi Bug UniqueConstraintViolationException pada Master Data Jenis Dokumen
+- **Akar Masalah**:
+  - Pada metode `saveDocType()` sebelumnya, field `typeName` belum memiliki aturan validasi keunikan (`unique:document_types,name,ID`), sementara di tingkat database MySQL terdapat indeks unik `document_types_name_unique`.
+  - Saat pengguna mengedit jenis dokumen lain dan memasukkan nama yang sudah ada (misalnya: mengubah "PKS" menjadi "Surat Keputusan"), validator Livewire meloloskannya sehingga Laravel langsung meluncurkan query `UPDATE` mentah ke MySQL, yang mengakibatkan aplikasi mengalami crash fatal `1062 Duplicate entry`.
+  - Selain itu, penggunaan *SoftDeletes* pada tabel `document_types` berpotensi memicu tabrakan constraint unik MySQL jika record yang dihapus masih tersimpan dengan nama yang sama.
+- **Perbaikan Backend & Validasi (`ArchiveClassificationIndex.php`)**:
+  - Menambahkan aturan validasi eksplisit dengan pengecualian ID saat ini dan pengecualian baris soft-deleted:
+    `'typeName' => ['required', 'string', 'max:255', Rule::unique('document_types', 'name')->ignore($this->typeId)->whereNull('deleted_at')]`
+    `'typeCode' => ['required', 'string', 'max:20', Rule::unique('document_types', 'code')->ignore($this->typeId)->whereNull('deleted_at')]`
+  - Menyediakan pesan validasi ramah pengguna dalam bahasa Indonesia:
+    `"Nama Jenis Dokumen sudah digunakan oleh jenis naskah lain."`
+    `"Kode Jenis Dokumen (KOSUR) sudah digunakan oleh jenis naskah lain."`
+  - Menyematkan blok defensif `try...catch (UniqueConstraintViolationException $e)` yang menangkap kemungkinan race condition di tingkat database dan mengubahnya menjadi pesan error formulir tanpa pernah melempar error 500 ke pengguna.
+- **Skema Database (`2026_10_15_000003_drop_unique_name_from_document_types_table.php`)**:
+  - Melepas constraint kaku `document_types_name_unique` dari database agar kompatibel penuh dengan arsitektur *SoftDeletes*, dan menyerahkan penegakan keunikan aktif secara presisi kepada validasi Laravel.
+- **Verifikasi Pengujian Otomatis**:
+  - Ditambahkan pengujian otomatis `SequenceNumberingTest::test_duplicate_document_type_name_or_code_returns_validation_error_gracefully`.
+  - Seluruh rangkaian unit & feature test suite (24 *test cases*, 106 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 43. Dukungan Variabel Dinamis {DIV} untuk Resolusi Divisi Akun pada Format Penomoran
+- **Model Hierarki Organisasi (`Unit` & `User`)**:
+  - Model `Unit`:
+    - Menambahkan `getDivision(): ?Unit` untuk melacak divisi induk (atau mengembalikan unit itu sendiri jika sudah bertipe `'division'`).
+    - Menambahkan `getDivisionCode(): string` untuk mengekstrak singkatan kode divisi.
+  - Model `User`:
+    - Menambahkan `getDivision(): ?Unit` dan `getDivisionCode(): string` yang secara otomatis mengidentifikasi divisi tempat akun staf bernaung.
+- **Generator Nomor Surat (`Outgoing\Create.php` & `Internal\Create.php`)**:
+  - Variabel `{DIV}` dan `{div}` secara otomatis digantikan dengan kode divisi akun pembuat surat (`Auth::user()?->getDivisionCode()`).
+  - Mekanisme *fallback* cerdas: jika akun login belum memiliki unit (misal Superadmin), sistem mengambil kode divisi dari unit yang dipilih pada formulir, atau fallback ke `'DIV'` guna mencegah nomor rusak atau slash ganda (`//`).
+- **Antarmuka Pengaturan Kearsipan (`archive-classification-index.blade.php`)**:
+  - Menambahkan badge panduan variabel `{DIV}` (`bg-indigo-50 text-indigo-700`) beserta catatan informasi bahwa `{DIV}` dibaca otomatis dari akun login.
+  - Live Preview penomoran langsung merefleksikan kode divisi akun pengguna secara *real-time*.
+- **Verifikasi Pengujian Otomatis**:
+  - Ditambahkan pengujian `SequenceNumberingTest::test_numbering_format_replaces_div_placeholder_from_user_division` yang memvalidasi bahwa staf pada suatu departemen otomatis menghasilkan nomor dengan kode divisi induknya.
+  - Ditambahkan kelengkapan username pada `UserFactory`.
+  - Seluruh rangkaian pengujian (25 *test cases*, 108 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 44. Pemfungsian Log Aktivitas Sistem Dashboard & Pembatasan Hak Akses Personal/Tapersip
+- **Model `AuditLog`**:
+  - Menambahkan method static `AuditLog::record(string $action, ?int $documentId = null, array $metadata = [], ?int $userId = null): self` sebagai helper pencatatan log terpusat dan terstandarisasi.
+- **Pencatatan Otomatis pada Alur Transaksional Aplikasi**:
+  - **Surat Keluar (`Outgoing\Create.php`)**: Mencatat aksi booking nomor dan registrasi/arsip langsung.
+  - **Surat Khusus (`Internal\Create.php`)**: Mencatat aksi booking nomor dan registrasi/arsip langsung.
+  - **Surat Masuk (`Incoming\Create.php`)**: Mencatat aksi pendaftaran surat masuk.
+  - **Antrean Scan Tapersip (`ScanQueue.php`)**: Mencatat aksi pengunggahan berkas scan PDF final.
+  - **Peminjaman Berkas Fisik (`DocumentLoanIndex.php`)**: Mencatat pengajuan pinjam, persetujuan fisik, pengembalian berkas, dan penolakan tiket peminjaman.
+- **Pembedaan Hak Akses Audit Trail (`User.php` & `Dashboard.php`)**:
+  - Model `User`: Menambahkan `isTapersip(): bool` dan `canViewAllActivities(): bool` untuk mendeteksi apakah akun berhak memantau seluruh aktivitas sistem.
+  - `Dashboard.php`:
+    - Jika user adalah **Superadmin atau Petugas Tapersip**: Kueri menampilkan rekam jejak pengawasan seluruh pengguna sistem (`canViewAllActivities = true`).
+    - Jika user adalah **Staf Biasa**: Kueri dibatasi secara otomatis hanya untuk aktivitas yang dilakukan oleh akun staf tersebut (`where('user_id', Auth::id())`).
+- **Redesain Antarmuka Timeline Dashboard (`dashboard.blade.php`)**:
+  - Menghilangkan layout *zigzag* 2-sisi yang sebelumnya pecah pada container sempit.
+  - Mengimplementasikan **Clean Monochromatic Flat Activity List**:
+    - Menghilangkan konsep kotak-dalam-kotak (*nested boxes*) dan garis timeline ganda.
+    - Menghilangkan warna pembeda (tanpa dot/badge warna-warni) sehingga tampilan sangat tenang, netral (*slate*), dan bersih (*enterprise minimalist*).
+    - Pola hierarki 2 baris ringkas: Aksi & waktu relatif di baris atas, nomor surat resmi + nama staf + subjek ringkas di baris bawah.
+    - Dipisahkan dengan garis rambut halus (`divide-y divide-slate-100`) dan efek hover lembut.
+    - Header widget dilengkapi badge netral: `"Seluruh Sistem"` vs `"Aktivitas Anda"`.
+- **Verifikasi Pengujian Otomatis**:
+  - Dibuat test suite `tests/Feature/DashboardActivityLogTest.php` (4 test cases, 15 assertions):
+    - `test_activity_is_recorded_when_outgoing_letter_is_booked`
+    - `test_staff_only_sees_their_own_activities_on_dashboard`
+    - `test_superadmin_sees_all_activities_on_dashboard`
+    - `test_tapersip_sees_all_activities_on_dashboard`
+  - Seluruh rangkaian test suite (29 *test cases*, 123 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 45. Ekspor Master Data Database Menjadi Seeder Resmi (Units, Document Types, Roles, & Classifications)
+- **Tujuan Arsitektur**:
+  - Memastikan seluruh konfigurasi master data yang sudah disetel di database tersimpan secara permanen ke dalam file seeder Laravel, sehingga saat migrasi/deployment ke server baru (`php artisan migrate --seed`), seluruh master data langsung tersedia tanpa perlu entri manual ulang.
+- **Pembaruan 4 Berkas Seeder**:
+  1. **`UnitSeeder.php`**:
+     - Memuat **13 unit kerja riil**: 4 Divisi (`TEK`, `OPS`, `SDM`, `KEU`) dan 9 Departemen (`MGTTI`, `PP`, `HR`, `FIN`, `AKT`, `HMS`, `HK`, `UM`, `SEKR`).
+     - Relasi `parent_id` dihubungkan secara dinamis melalui pencarian `parent_code` pada saat seeding.
+  2. **`DocumentTypeSeeder.php`**:
+     - Memuat **15 jenis dokumen lengkap** beserta kode singkatan (KOSUR), sifat default, dan formula penomoran dinamis:
+       - Surat Keluar (`SK`), Surat Edaran (`SE`), Surat Perintah (`SPRIN`), Memo Internal (`M`), Surat Keputusan (`KPTS`), Surat Tugas (`STG`), Surat Pengumuman (`PENG`), Surat Perjanjian Kerja (`SPJK`), SuratPerjalananDinas (`SPD`), Berita Acara (`BA`), Surat Kuasa (`SKS`), Surat Keterangan (`SKTR`), Notulen (`NTL`), Surat Pernyataan (`SPN`), Surat Perintah Kerja (`SPK`).
+  3. **`RoleSeeder.php`**:
+     - Memuat **6 peran sistem**: `Superadmin`, `Admin`, `Manager`, `User`, `AdminTapersip`, `Staf`.
+     - Menyimpan konfigurasi array `module_visibility` per role.
+     - Menyinkronkan seluruh matriks izin (`role_permission`) untuk sifat naskah *biasa*, *penting*, dan *rahasia*.
+  4. **`ClassificationSeeder.php`**:
+     - Memuat seluruh **105 data klasifikasi arsip** beserta masa aktif JRA, inaktif, dan nasib akhir berkas (*permanen / musnah / dinilai kembali*).
+     - Relasi hierarki pohon klasifikasi `parent_id` dihubungkan secara dinamis via `parent_code`.
+- **Penyesuaian `DatabaseSeeder.php`**:
+  - Menghubungkan akun bawaan Superadmin secara dinamis ke unit kerja pertama (`TEK`) tanpa hardcode ID.
+- **Verifikasi Database & Pengujian**:
+  - Perintah `php artisan db:seed` berhasil mengeksekusi seluruh seeder tanpa kendala (105 klasifikasi, 13 unit, 6 role, 15 jenis dokumen).
+  - Seluruh rangkaian test suite (29 *test cases*, 126 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 46. Penyatuan Hak Akses Tab "Katalog & Cari Surat" dan "Pinjaman Saya" pada Manajemen Kepatuhan
+- **Relokasi Hak Akses Role (`role-editor.blade.php`)**:
+  - Menghapus checklist `document_borrowing` dari Blok 1 (*Alur Kerja Utama*).
+  - Memindahkan checklist `document_borrowing` ke Blok 2 (**Manajemen Kepatuhan**) dengan label **`Katalog & Pinjaman Saya`** bersanding dengan `loan_circulation` (*Sirkulasi & Persetujuan Tapersip*).
+- **Multi-Modul Route Access (`CheckModuleAccess.php` & `routes/web.php`)**:
+  - Memperbarui middleware `CheckModuleAccess` agar mendukung parameter variadik (`string ...$modules`), mengecek apakah akun memiliki salah satu dari izin yang ditentukan.
+  - Route `/borrowings` diamankan dengan `module:document_borrowing,loan_circulation`.
+  - Sidebar kearsipan menampilkan tautan *"Cari & Pinjam Surat"* jika user memiliki `document_borrowing` atau `loan_circulation`.
+- **Logika Kontrol Tab Adaptif (`DocumentLoanIndex.php` & Blade)**:
+  - Menambahkan computed property `canBorrow` (`Auth::user()->isSuperAdmin() || Auth::user()->hasModuleAccess('document_borrowing')`).
+  - Menentukan tab aktif awal secara adaptif di `mount()`:
+    - Jika user memiliki `canBorrow`, default ke tab `'catalog'`.
+    - Jika user hanya memiliki `canManageCirculation`, default otomatis dialihkan ke tab `'circulation'`.
+  - Pada `setTab($tab)`: memproteksi tab sirkulasi maupun katalog/pinjaman agar user tidak bisa memaksakan URL/state tab di luar izin perannya.
+  - Memproteksi aksi pengajuan pinjam (`openLoanModal` dan `submitLoanRequest`) dengan pengecekan `canBorrow`.
+  - Pada tampilan Blade `document-loan-index.blade.php`:
+    - Tab 1 (*Katalog & Cari Surat*) dan Tab 2 (*Pinjaman Saya*) dibungkus dalam satu blok kondisi `@if($this->canBorrow)`.
+    - Mengonversi komentar HTML menjadi komentar Blade (`{{-- ... --}}`) untuk mencegah kebocoran teks pada DOM dan pengujian.
+- **Verifikasi Pengujian Otomatis**:
+  - Ditambahkan pengujian di `DocumentLoanTest`:
+    - `test_user_without_document_borrowing_permission_cannot_see_catalog_and_my_loans_tabs`
+    - `test_user_with_document_borrowing_permission_can_see_catalog_and_my_loans_tabs`
+  - Seluruh rangkaian test suite (31 *test cases*, 140 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 47. Penyelarasan Desain & Interaktivitas Kartu Statistik (Bento Grid) Dashboard
+- **Penyelarasan Visual Monokrom & Konsisten (`dashboard.blade.php`)**:
+  - Menyeragamkan seluruh kartu statistik ke latar putih bersih (`bg-white border border-slate-200/90`) dengan tipografi seragam (`text-2xl font-bold text-slate-800`), menggantikan variasi kartu gradasi hijau tebal atau kartu kuning/merah pekat yang sebelumnya tidak berimbang.
+  - Setiap kartu dilengkapi kontainer ikon dengan warna aksen lembut (*emerald, blue, purple, amber, rose*).
+- **Interaktivitas Navigasi Langsung (*Clickable Stat Cards*)**:
+  - Setiap kartu statistik kini bertindak sebagai tautan aktif (*hyperlink*) yang langsung membuka halaman operasional terkait saat diklik:
+    - *Total Surat Masuk* ➔ `/registry/incoming` (`route('registry.incoming.index')`)
+    - *Total Surat Keluar* ➔ `/registry/outgoing` (`route('registry.outgoing.index')`)
+    - *Total Surat Khusus* ➔ `/registry/special` (`route('registry.special.index')`)
+    - *Menunggu Upload* ➔ `/registry/scan-queue` (`route('registry.scan-queue')`)
+    - *Peringatan Retensi* ➔ `/archive/destructions` (`route('archive.destructions')`)
+  - Membersihkan kode tombol *Export Laporan* yang sebelumnya tidak aktif (*dead code*).
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite (31 *test cases*, 140 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 48. Quick Actions Header Bar & Filter Pencarian Monitoring Arsip Dokumen Dashboard
+- **Quick Actions Bar pada Header Dashboard (`dashboard.blade.php`)**:
+  - Menyediakan tombol akses cepat di kanan header yang responsif dan terkontrol hak akses modul:
+    - `+ Surat Masuk` (`input_incoming`) ➔ `/registry/incoming/create`
+    - `+ No. Surat Keluar` (`input_outgoing`) ➔ `/registry/outgoing/create`
+    - `+ No. Surat Khusus` (`input_internal`) ➔ `/registry/special/create`
+  - Memaksimalkan efisiensi kerja staf langsung dari dashboard tanpa harus membuka menu navigasi sidebar.
+- **Pencarian Cepat & Filter Status Monitoring (`Dashboard.php` & `dashboard.blade.php`)**:
+  - Menambahkan properti `$monitoringSearch` dan `$monitoringFilter` (`all`, `waiting`, `archived`) pada komponen Livewire `Dashboard`.
+  - Toolbar di atas tabel Monitoring Arsip dilengkapi:
+    - Input pencarian cepat kata kunci (nomor surat, perihal, atau nama penerima) secara *real-time debounce*.
+    - *Segmented Pill Filters*: `[ Semua ]`, `[ Menunggu ]`, dan `[ Selesai ]`.
+  - Memberikan kemudahan bagi staf untuk memantau apakah naskah fisik yang didaftarkan sudah diarsipkan atau masih berstatus menunggu unggah.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite (31 *test cases*, 140 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 49. Penyempurnaan Formulir Registrasi Surat Masuk (Klasifikasi, Tanggal Otomatis, & Toggle Sifat)
+- **Penambahan Klasifikasi Arsip & Integrasi JRA (`Incoming\Create.php` & Blade)**:
+  - Menambahkan dropdown input **Klasifikasi Arsip** (`classification_id`) pada Section 2 (Klasifikasi & Distribusi) yang memuat seluruh hierarki sub-klasifikasi aktif.
+  - Perhitungan otomatis masa aktif Jadwal Retensi Arsip (JRA): Saat surat masuk disimpan, sistem otomatis menghitung `retention_start_date` dan `retention_end_date` berdasarkan `active_years` pada klasifikasi terpilih, sehingga surat masuk langsung terpantau dalam audit retensi dan kartu statistik dashboard.
+- **Nilai Bawaan Tanggal Hari Ini (*Default Date UX*)**:
+  - Tanggal surat (`document_date`) dan tanggal diterima (`received_date`) otomatis terisi tanggal hari ini saat form dimuat (`mount()`), mengurangi beban entri data manual staf.
+- **Penyederhanaan Antarmuka (*Clean & Compact UI*)**:
+  - Mengganti radio cards besar pada "Sifat Surat" menjadi **Segmented 3-Column Button Toggle** yang padat dan hemat ruang vertikal (Biasa, Penting, Rahasia).
+  - Merapikan dropdown "Unit Tujuan" dengan mencantumkan nama, kode unit, dan kode divisi induk.
+  - Membersihkan alert box flash message statis yang tidak efektif di atas form.
+- **Verifikasi Pengujian Otomatis**:
+  - Dibuat test suite baru `tests/Feature/IncomingMailTest.php` (3 test cases, 17 assertions):
+    - `test_incoming_create_mounts_with_default_dates_and_classifications`
+    - `test_user_can_register_incoming_mail_with_classification_and_retention`
+    - `test_incoming_mail_validation_fails_without_classification`
+  - Seluruh rangkaian test suite (34 *test cases*, 157 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 50. Penyempurnaan Formulir Registrasi Surat Keluar (Default Divisi Akun, Tanggal Otomatis, & JRA)
+- **Otomatisasi Default Divisi & Tanggal Hari Ini (`Outgoing\Create.php`)**:
+  - Tanggal surat (`document_date`) otomatis terisi tanggal hari ini (`date('Y-m-d')`) saat form dimuat.
+  - Dropdown Divisi Pengirim (`unit_id`) secara pintar langsung memilihkan divisi tempat akun staf yang login bernaung (`Auth::user()?->getDivision()?->id`).
+- **Integrasi Jadwal Retensi Arsip (JRA)**:
+  - Pada saat surat keluar disimpan dan diarsipkan (`createDocument()`), sistem otomatis menghitung `retention_start_date` dan `retention_end_date` berdasarkan `active_years` pada klasifikasi surat terpilih.
+- **Penyederhanaan Antarmuka (Compact Sifat Toggle)**:
+  - Mengganti kartu radio besar pada "Sifat Surat" menjadi **Segmented 3-Column Button Toggle** (Biasa, Penting, Rahasia) yang padat, modern, dan hemat ruang.
+  - Memastikan form tetap bersih, minimalis, dan bebas dari elemen kartu estimasi nomor tambahan sesuai arahan pengguna.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite (34 *test cases*, 157 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 51. Penyempurnaan Formulir Registrasi Surat Khusus (Default Departemen Akun, Tanggal Otomatis, Toggle Sifat, & JRA)
+- **Otomatisasi Departemen Pengirim & Tanggal Hari Ini (`Internal\Create.php`)**:
+  - Tanggal surat (`document_date`) otomatis terisi tanggal hari ini (`date('Y-m-d')`) saat form dimuat.
+  - Dropdown Departemen Pengirim (`unit_id`) secara pintar memilihkan departemen tempat akun staf yang login bernaung (`Auth::user()?->unit?->id`), sehingga staf hanya perlu memilih Unit Tujuan dan Perihal.
+- **Integrasi Jadwal Retensi Arsip (JRA)**:
+  - Pada saat surat khusus disimpan dan diarsipkan (`createDocument()`), sistem otomatis menghitung `retention_start_date` dan `retention_end_date` berdasarkan `active_years` pada klasifikasi surat terpilih.
+- **Penyederhanaan Antarmuka (Compact Sifat Toggle)**:
+  - Mengganti kartu radio besar pada "Sifat Surat" menjadi **Segmented 3-Column Button Toggle** (Biasa, Penting, Rahasia) yang padat, modern, dan hemat ruang.
+  - Menjaga form tetap bersih, minimalis, dan bebas dari elemen tambahan yang berlebihan sesuai arahan pengguna.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite (34 *test cases*, 157 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 52. Fitur Pembatalan Mandiri Permohonan Pinjam Fisik & Pembersihan Header Peminjaman
+- **Pembersihan Header Halaman (`document-loan-index.blade.php`)**:
+  - Menghilangkan badge dekoratif statis *"Tapersip Beroperasi"* di sudut kanan atas agar tampilan header bersih, tenang, dan profesional.
+- **Fitur Pembatalan Mandiri Pemohon (*Self-Cancel Request*)**:
+  - Pada tab *Pinjaman Saya*, untuk setiap permohonan yang masih berstatus `Menunggu` (`requested`), ditambahkan tombol aksi **"Batal"** bersanding dengan tombol cetak tiket.
+  - Memverifikasi kepemilikan pemohon sebelum membatalkan (`$loan->user_id === Auth::id()`).
+  - Menambahkan status `'cancelled'` pada kolom enum tabel `document_loans` (`2026_10_15_000004_add_cancelled_to_document_loans_status_enum.php`).
+  - Dokumen fisik yang dibatalkan otomatis kembali berstatus **Tersedia** di katalog tanpa menunggu aksi penolakan petugas Tapersip.
+  - Menampilkan badge netral abu-abu `"Dibatalkan"` pada tab Pinjaman Saya dan Meja Kerja Sirkulasi Tapersip.
+  - Mencatat aksi pembatalan ke dalam `AuditLog::record(...)`.
+- **Verifikasi Pengujian Otomatis**:
+  - Ditambahkan pengujian di `DocumentLoanTest::test_user_can_cancel_their_own_pending_loan_request`.
+  - Seluruh rangkaian test suite (35 *test cases*, 162 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 53. Penyempurnaan Antrean Scan Tapersip (JRA Otomatis, Segmented Filter dengan Counter, & Hierarki Loker Modal)
+- **Integrasi Jadwal Retensi Arsip (JRA) pada Finalisasi Scan (`ScanQueue.php`)**:
+  - Saat petugas Tapersip mengunggah berkas scan fisik final (`saveFinalFile()`), sistem otomatis menghitung `retention_start_date` dan `retention_end_date` berdasarkan `active_years` klasifikasi naskah.
+- **Segmented Filter Pills Berpenghitung Antrean (`scan-queue.blade.php`)**:
+  - Mengganti dropdown filter jenis naskah dengan *Segmented Filter Pills* horizontal dengan badge counter langsung:
+    `[ Semua (X) ]`, `[ Surat Keluar (Y) ]`, dan `[ Surat Khusus (Z) ]`.
+  - Petugas dapat langsung melihat beban kerja antrean scan secara *real-time*.
+- **Hierarki Jalur Loker pada Modal Unggah Scan**:
+  - Dropdown Loker Penyimpanan menampilkan jalur induk berjenjang (`Induk / Loker`) untuk mencegah kesalahan penyimpanan berkas.
+- **Keterbacaan Perihal Naskah**:
+  - Mengganti pemotongan teks kaku `truncate` dengan text wrapping dan toggle expandable *Show More / Show Less* untuk memudahkan pencocokan fisik naskah.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite (35 *test cases*, 162 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 54. Fitur Relokasi / Pemindahan Loker Berkas dengan Sinkronisasi Storage NAS Otomatis
+- **Helper Transaksional pada Model Document (`Document::relocateFolder`)**:
+  - Menyediakan method terpusat `$document->relocateFolder(?int $newFolderId, ?int $userId = null): bool` yang menangani sinkronisasi fisik dan database secara atomik.
+  - Memeriksa keberadaan file fisik di storage NAS (`Storage::disk('nas')`) atau *fallback storage* lokal.
+  - Menyiapkan direktori loker tujuan baru di storage NAS secara otomatis (`Storage::disk('nas')->makeDirectory($newDirectory)`).
+  - Memindahkan berkas fisik di NAS (`Storage::disk('nas')->move($oldPath, $newPath)`) dan memperbarui kolom `file_path` pada `document_versions`.
+  - Memperbarui kolom `folder_id` pada tabel `documents`.
+  - Mencatat aksi pemindahan loker secara otomatis ke `AuditLog::record(...)` lengkap dengan nama loker asal dan nama loker tujuan.
+- **Implementasi Titik Aksi pada 3 Halaman Explorer Arsip**:
+  - **Arsip Surat Masuk (`Incoming\Index.php` & `incoming/index.blade.php`)**.
+  - **Arsip Surat Keluar (`Outgoing\Index.php` & `outgoing/index.blade.php`)**.
+  - **Arsip Surat Khusus (`Internal\Index.php` & `internal/index.blade.php`)**.
+  - Pada kolom Aksi tabel arsip, ditambahkan tombol *Pindahkan Lokasi / Loker Berkas* (ikon folder berpindah berwarna kuning/amber) khusus bagi pengguna yang memiliki izin `archive` (Tapersip & Superadmin).
+  - Modal pop-up `modal-move-document` menampilkan nomor dokumen, perihal, nama loker saat ini, serta pilihan dropdown loker tujuan baru berjalur hierarkis.
+- **Verifikasi Pengujian Otomatis**:
+  - Dibuat test suite baru `tests/Feature/RelocateDocumentTest.php` (2 test cases, 15 assertions):
+    - `test_authorized_user_can_relocate_document_with_nas_file_sync` (memvalidasi pemindahan file fisik di storage NAS palsu, pembaruan database, dan pencatatan audit log).
+    - `test_user_without_archive_permission_cannot_relocate_document` (memvalidasi proteksi otorisasi 403 bagi staf biasa).
+  - Seluruh rangkaian test suite (37 *test cases*, 177 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 55. Custom Pop-Up Dialog Sukses Pengarsipan Surat Masuk (Success Action Modal Dialog)
+- **Komponen Livewire (`Incoming\Create.php`)**:
+  - Mengganti alur *redirect* instan dengan modal interaktif pasca-simpan: `$this->showSuccessModal = true`.
+  - Menyimpan data ringkasan dokumen yang baru saja diarsipkan (`savedDocumentNumber`, `savedDocumentSubject`, `savedDocumentSender`, `savedDocumentUnitName`, `savedDocumentFolderName`).
+  - Menyediakan 3 metode aksi cepat:
+    - `resetFormAndInputAgain()`: Mereset seluruh field form secara instan dan mengembalikan tanggal hari ini agar staf dapat mencatat tumpukan surat masuk berikutnya tanpa meninggalkan halaman.
+    - `redirectToIndex()`: Mengarahkan pengguna ke halaman daftar arsip surat masuk (`/registry/incoming`).
+    - `finishAndRedirect()`: Mengarahkan pengguna kembali ke Dashboard utama.
+- **Antarmuka Pengguna (`incoming/create.blade.php`)**:
+  - Menambahkan modal pop-up beranimasi centang sukses hijau (*checkmark*).
+  - Menampilkan kartu ringkasan naskah: Nomor surat, perihal, instansi pengirim, unit kerja tujuan, dan nama loker penyimpanan.
+  - Menyediakan tombol aksi utama *"Input Surat Masuk Lagi"* serta pilihan *"Daftar Arsip"* dan *"Ke Dashboard"*.
+- **Verifikasi Pengujian Otomatis**:
+  - Diperbarui `tests/Feature/IncomingMailTest.php`:
+    - `test_user_can_register_incoming_mail_with_classification_and_retention` (memvalidasi pembukaan modal sukses dan kelengkapan data ringkasan).
+    - `test_user_can_reset_form_to_input_another_incoming_mail` (memvalidasi reset form untuk pencatatan beruntun).
+  - Seluruh rangkaian test suite (38 *test cases*, 186 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 56. Standarisasi Custom Pop-Up Dialog Sukses Pengarsipan (Surat Masuk, Surat Keluar, & Surat Khusus)
+- **Komponen Livewire (`Outgoing\Create.php` & `Internal\Create.php`)**:
+  - Mengganti alur *redirect* instan pada aksi Tapersip *"Simpan & Arsipkan"* dengan modal interaktif pasca-simpan: `$this->showArchiveSuccessModal = true`.
+  - Menyimpan data ringkasan dokumen yang baru saja diarsipkan langsung (`savedDocumentNumber`, `savedDocumentSubject`, `savedDocumentSender`, `savedDocumentRecipient`, `savedDocumentUnitName`, `savedDocumentFolderName`, `savedDocumentSignerLabel`).
+  - Menyediakan 3 metode aksi cepat:
+    - `resetFormAndInputAgain()`: Mereset seluruh field form secara instan dan mengembalikan tanggal hari ini serta default divisi/departemen akun staf agar dapat mencatat naskah berikutnya secara beruntun.
+    - `redirectToIndex()`: Mengarahkan pengguna ke halaman daftar arsip masing-masing (`/registry/outgoing` dan `/registry/special`).
+    - `finishAndRedirect()`: Mengarahkan pengguna kembali ke Dashboard utama.
+- **Antarmuka Pengguna (`outgoing/create.blade.php` & `internal/create.blade.php`)**:
+  - Menambahkan modal pop-up beranimasi centang sukses hijau (*checkmark*).
+  - Menampilkan kartu ringkasan naskah lengkap: Nomor surat resmi, perihal, instansi/unit pengirim, tujuan/penerima, penandatangan, dan loker penyimpanan.
+  - Menyediakan tombol aksi utama *"Input Surat Keluar/Khusus Lagi"* serta pilihan *"Daftar Arsip"* dan *"Ke Dashboard"*.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite (38 *test cases*, 186 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 57. Penetapan Opsi Netral Pilihan Jenis Dokumen pada Formulir Surat Khusus
+- **Penghapusan Auto-Default "Memo" (`app/Livewire/Registry/Internal/Create.php`)**:
+  - Menghapus pra-seleksi otomatis jenis dokumen `Memo` pada lifecycle `mount()`, sehingga properti `$document_type_id` berstatus netral/kosong saat form pertama kali dimuat.
+  - Memastikan pengguna secara sadar memilih jenis dokumen yang relevan (seperti Surat Perintah, Surat Keputusan, Memo, dll.) sesuai kebutuhan naskah dinas.
+  - Menambahkan `'document_type_id'` ke dalam array reset pada method `resetFormAndInputAgain()` agar saat aksi *"Input Surat Khusus Lagi"* ditekan, dropdown jenis dokumen kembali kosong ke placeholder default.
+- **Penyempurnaan Antarmuka Form (`resources/views/livewire/registry/internal/create.blade.php`)**:
+  - Menambahkan indikator tanda bintang merah `<span class="text-red-500">*</span>` pada label *"Jenis Dokumen"* untuk mempertegas bahwa pilihan ini wajib diisi.
+  - Mempertahankan opsi placeholder `"-- Pilih Jenis Dokumen --"` sebagai pilihan pertama.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite (38 *test cases*, 186 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 58. Indikator Konektivitas & Health-Check Storage NAS pada Antrean Scan Tapersip
+- **Layanan Pengecekan Terpusat (`App\Services\NasHealthService`)**:
+  - Menyediakan method `NasHealthService::check(bool $forceRefresh = false): array` untuk memverifikasi kesiapan storage NAS secara aman tanpa risiko *fatal error* atau *blocking hang*.
+  - Melakukan uji tulis dan baca file detak jantung (*transient heartbeat file*: `.healthcheck_*.tmp`) langsung ke disk `Storage::disk('nas')`.
+  - Membaca kapasitas sisa storage via `disk_free_space()` dan `disk_total_space()` serta mengonversinya ke format yang mudah dibaca (*free_space*, misal: "120.5 GB").
+  - Menerapkan *caching* 30 detik (`Cache::remember`) guna menjaga performa kueri livewire saat staf memfilter antrean atau mengetik kata kunci pencarian.
+- **Backend Komponen Livewire (`App\Livewire\Registry\ScanQueue`)**:
+  - Menyediakan computed property `$this->nasStatus` yang dikirim ke view.
+  - Menyediakan method aksi `refreshNasConnection()` untuk memungkinkan petugas melakukan cek ulang status jaringan NAS secara manual disertai flash notifikasi.
+  - **Safety Interlock**: Pada method `saveFinalFile()`, sistem melakukan verifikasi paksa real-time status NAS sebelum menyimpan berkas fisik. Jika NAS offline/terputus, eksekusi dihentikan dengan aman dan pesan kesalahan ramah ditampilkan pada formulir tanpa menyebabkan crash atau data korup.
+- **Antarmuka Pengguna (`resources/views/livewire/registry/scan-queue.blade.php`)**:
+  - **Header Pill Badge**: Ditempatkan di kanan atas judul halaman:
+    - *Status Online*: Badge hijau lembut beranimasi titik detak jantung (*pulsing green dot*), teks `NAS Online`, info sisa kapasitas penyimpanan, dan tombol refresh ber-spinner halus.
+    - *Status Offline*: Badge merah tegas, teks `NAS Terputus`, keterangan `Hubungi Administrator`, dan tombol cepat `Cek Lagi`.
+  - **Modal Safety Interlock**:
+    - Banner peringatan merah muncul di dalam modal verifikasi unggah scan jika koneksi NAS terputus.
+    - Tombol *"Simpan & Arsipkan Permanen"* otomatis dinonaktifkan (*disabled*) untuk mencegah kegagalan unggah.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/NasStorageTest.php`)**:
+  - Menambahkan 3 unit & feature test:
+    - `test_nas_health_service_detects_online_status_and_metrics`
+    - `test_scan_queue_renders_nas_online_badge_and_allows_manual_refresh`
+    - `test_scan_queue_prevents_upload_and_shows_error_when_nas_is_offline`
+  - Seluruh rangkaian test suite proyek (41 *test cases*, 196 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

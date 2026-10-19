@@ -22,7 +22,7 @@ return new class extends Migration
             $table->date('returned_date')->nullable();
             $table->text('purpose');
             $table->text('notes')->nullable();
-            $table->enum('status', ['requested', 'borrowed', 'returned', 'rejected'])->default('requested')->index();
+            $table->enum('status', ['requested', 'borrowed', 'returned', 'rejected', 'cancelled'])->default('requested')->index();
             $table->timestamps();
             $table->softDeletes();
         });

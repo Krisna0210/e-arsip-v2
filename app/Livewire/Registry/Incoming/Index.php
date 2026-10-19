@@ -4,6 +4,7 @@ namespace App\Livewire\Registry\Incoming;
 
 use App\Models\Document;
 use App\Models\Folder;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -25,6 +26,13 @@ class Index extends Component
     public $folderName = '';
     public $folderParentId = null;
     public $folderDescription = '';
+
+    // Modal Pindah Loker
+    public $moveDocId = null;
+    public $moveDocNumber = '';
+    public $moveDocSubject = '';
+    public $moveCurrentFolderName = '';
+    public $moveTargetFolderId = null;
 
     protected $queryString = [
         'activeFolderId' => ['except' => null],
@@ -91,6 +99,41 @@ public function updatedActiveFolderId()
         $this->dispatch('notify', ['message' => 'Loker berhasil dihapus', 'type' => 'success']);
     }
 
+    public function openMoveModal($docId)
+    {
+        $doc = Document::with('folder')->findOrFail($docId);
+
+        if (!Auth::user()->hasDocumentPermission('archive', $doc->sifat ?? 'biasa')) {
+            $this->dispatch('notify', ['message' => 'Anda tidak memiliki hak akses untuk memindahkan loker dokumen ini.', 'type' => 'error']);
+            return;
+        }
+
+        $this->moveDocId = $doc->id;
+        $this->moveDocNumber = $doc->number ?: 'Tanpa Nomor';
+        $this->moveDocSubject = $doc->subject;
+        $this->moveCurrentFolderName = $doc->folder ? $doc->folder->name : 'Tanpa Loker / Root';
+        $this->moveTargetFolderId = $doc->folder_id;
+
+        $this->dispatch('open-modal', 'modal-move-document');
+    }
+
+    public function executeMoveDocument()
+    {
+        if (!$this->moveDocId) return;
+
+        $doc = Document::with(['currentVersion', 'folder'])->findOrFail($this->moveDocId);
+
+        if (!Auth::user()->hasDocumentPermission('archive', $doc->sifat ?? 'biasa')) {
+            abort(403, 'Akses ditolak: Anda tidak memiliki hak akses untuk memindahkan dokumen ini.');
+        }
+
+        $doc->relocateFolder($this->moveTargetFolderId ?: null);
+
+        $this->reset(['moveDocId', 'moveDocNumber', 'moveDocSubject', 'moveCurrentFolderName', 'moveTargetFolderId']);
+        $this->dispatch('close-modal', 'modal-move-document');
+        $this->dispatch('notify', ['message' => 'Loker dan berkas fisik dokumen berhasil dipindahkan.', 'type' => 'success']);
+    }
+
     public function render()
     {
         // Recursive loading of children for incoming
@@ -103,7 +146,7 @@ public function updatedActiveFolderId()
             }])
             ->get();
             
-        $allFolders = Folder::forType('incoming')->orderBy('name')->get();
+        $allFolders = Folder::forType('incoming')->with('parent')->orderBy('name')->get();
 
         $query = Document::with(['folder', 'documentType', 'classification', 'unit', 'currentVersion'])
             ->where('type', 'incoming');

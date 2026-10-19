@@ -9,10 +9,18 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CheckModuleAccess
 {
-    public function handle(Request $request, Closure $next, string $module): Response
+    public function handle(Request $request, Closure $next, string ...$modules): Response
     {
         if (Auth::check()) {
-            if (!Auth::user()->hasModuleAccess($module)) {
+            $hasAccess = false;
+            foreach ($modules as $module) {
+                if (Auth::user()->hasModuleAccess($module)) {
+                    $hasAccess = true;
+                    break;
+                }
+            }
+
+            if (!$hasAccess) {
                 Auth::logout();
                 $request->session()->invalidate();
                 $request->session()->regenerateToken();

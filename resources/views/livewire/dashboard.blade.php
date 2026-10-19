@@ -5,12 +5,30 @@
             <h1 class="text-2xl font-bold text-[var(--color-text-primary)]">Dashboard Kearsipan</h1>
             <p class="text-sm text-[var(--color-text-secondary)] mt-1">Ringkasan statistik repositori dokumen digital perusahaan Anda.</p>
         </div>
-        {{-- <div class="flex items-center gap-3">
-            <x-ui.button variant="secondary" class="bg-white">
-                <svg class="w-4 h-4 mr-2 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                Export Laporan
-            </x-ui.button>
-        </div> --}}
+
+        <!-- Quick Actions Bar (Responsive & Permission-Aware) -->
+        <div class="flex items-center gap-2 flex-wrap">
+            @if(auth()->user()->hasModuleAccess('input_incoming'))
+            <a href="{{ route('registry.incoming.create') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-2xs">
+                <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                <span>Surat Masuk</span>
+            </a>
+            @endif
+
+            @if(auth()->user()->hasModuleAccess('input_outgoing'))
+            <a href="{{ route('registry.outgoing.create') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white transition-colors shadow-2xs">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                <span>No. Surat Keluar</span>
+            </a>
+            @endif
+
+            @if(auth()->user()->hasModuleAccess('input_internal'))
+            <a href="{{ route('registry.special.create') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-2xs">
+                <svg class="w-3.5 h-3.5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                <span>No. Surat Khusus</span>
+            </a>
+            @endif
+        </div>
     </div>
 
     <!-- Bento Grid Stats (Conditional on Role Permissions) -->
@@ -18,81 +36,87 @@
     <div class="grid {{ $gridColsClass }} gap-4">
         <!-- Card 1: Total Surat Masuk -->
         @if($canViewIncoming)
-        <x-ui.card class="bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-0 shadow-lg shadow-emerald-500/20 relative overflow-hidden group">
-            <div class="absolute right-0 top-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-xl group-hover:scale-150 transition-transform duration-500"></div>
-            <div class="relative z-10 p-5">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <p class="text-emerald-100 text-sm font-medium mb-1">Total Surat Masuk</p>
-                        <h3 class="text-3xl font-bold tracking-tight">{{ $countIncoming }} <span class="text-lg font-normal text-emerald-100">Arsip</span></h3>
-                    </div>
-                    <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                        <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
-                    </div>
-                </div>
+        <a href="{{ route('registry.incoming.index') }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-emerald-300 hover:shadow-xs transition-all group flex justify-between items-start">
+            <div>
+                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Total Surat Masuk</p>
+                <h3 class="text-2xl font-bold text-slate-800 tracking-tight group-hover:text-[var(--color-primary)] transition-colors">
+                    {{ $countIncoming }} <span class="text-xs font-normal text-slate-400">Arsip</span>
+                </h3>
             </div>
-        </x-ui.card>
+            <div class="p-2.5 bg-emerald-50 rounded-lg text-emerald-600 group-hover:bg-emerald-100 transition-colors shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                </svg>
+            </div>
+        </a>
         @endif
 
         <!-- Card 2: Total Surat Keluar -->
         @if($canViewOutgoing)
-        <x-ui.card class="p-5 border border-slate-200 bg-white hover:border-blue-300 transition-colors shadow-sm">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="text-slate-500 text-sm font-medium mb-1">Total Surat Keluar</p>
-                    <h3 class="text-2xl font-bold text-slate-800 tracking-tight">{{ $countOutgoing }} <span class="text-sm font-normal text-slate-500">Arsip</span></h3>
-                </div>
-                <div class="p-2 bg-blue-50 rounded-lg text-blue-600">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                </div>
+        <a href="{{ route('registry.outgoing.index') }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-blue-300 hover:shadow-xs transition-all group flex justify-between items-start">
+            <div>
+                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Total Surat Keluar</p>
+                <h3 class="text-2xl font-bold text-slate-800 tracking-tight group-hover:text-blue-700 transition-colors">
+                    {{ $countOutgoing }} <span class="text-xs font-normal text-slate-400">Arsip</span>
+                </h3>
             </div>
-        </x-ui.card>
+            <div class="p-2.5 bg-blue-50 rounded-lg text-blue-600 group-hover:bg-blue-100 transition-colors shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                </svg>
+            </div>
+        </a>
         @endif
 
-        <!-- Card 3: Total Memo Internal -->
+        <!-- Card 3: Total Surat Khusus -->
         @if($canViewInternal)
-        <x-ui.card class="p-5 border border-slate-200 bg-white hover:border-purple-300 transition-colors shadow-sm">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="text-slate-500 text-sm font-medium mb-1">Total Memo Internal</p>
-                    <h3 class="text-2xl font-bold text-slate-800 tracking-tight">{{ $countInternal }} <span class="text-sm font-normal text-slate-500">Arsip</span></h3>
-                </div>
-                <div class="p-2 bg-purple-50 rounded-lg text-purple-600">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
-                </div>
+        <a href="{{ route('registry.special.index') }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-purple-300 hover:shadow-xs transition-all group flex justify-between items-start">
+            <div>
+                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Total Surat Khusus</p>
+                <h3 class="text-2xl font-bold text-slate-800 tracking-tight group-hover:text-purple-700 transition-colors">
+                    {{ $countInternal }} <span class="text-xs font-normal text-slate-400">Arsip</span>
+                </h3>
             </div>
-        </x-ui.card>
+            <div class="p-2.5 bg-purple-50 rounded-lg text-purple-600 group-hover:bg-purple-100 transition-colors shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+                </svg>
+            </div>
+        </a>
         @endif
 
         <!-- Card 4: Antrean Menunggu Upload / Scan -->
         @if($canViewWaiting)
-        <x-ui.card class="p-5 border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-colors shadow-sm">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="text-amber-800 text-sm font-bold mb-1">Menunggu Upload</p>
-                    <h3 class="text-2xl font-bold text-amber-900 tracking-tight">{{ $countWaiting }} <span class="text-sm font-normal text-amber-700">Berkas</span></h3>
-                </div>
-                <div class="p-2 bg-amber-200 rounded-lg text-amber-800">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                </div>
+        <a href="{{ route('registry.scan-queue') }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-amber-300 hover:shadow-xs transition-all group flex justify-between items-start">
+            <div>
+                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Menunggu Upload</p>
+                <h3 class="text-2xl font-bold text-slate-800 tracking-tight group-hover:text-amber-700 transition-colors">
+                    {{ $countWaiting }} <span class="text-xs font-normal text-slate-400">Berkas</span>
+                </h3>
             </div>
-        </x-ui.card>
+            <div class="p-2.5 bg-amber-50 rounded-lg text-amber-600 group-hover:bg-amber-100 transition-colors shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+        </a>
         @endif
 
         <!-- Card 5: Peringatan Retensi JRA -->
         @if($canViewRetention)
-        <x-ui.card class="p-5 border border-rose-200 bg-rose-50 hover:bg-rose-100 transition-colors shadow-sm">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="text-rose-600 text-sm font-bold mb-1">Peringatan Retensi</p>
-                    <h3 class="text-2xl font-bold text-rose-700 tracking-tight">{{ $countRetention }} <span class="text-sm font-normal text-rose-600">Arsip</span></h3>
-                    <p class="text-[11px] text-rose-500 font-medium mt-1">Kadaluwarsa dlm 30 hari</p>
-                </div>
-                <div class="p-2 bg-rose-200 rounded-lg text-rose-700">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                </div>
+        <a href="{{ route('archive.destructions') }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-rose-300 hover:shadow-xs transition-all group flex justify-between items-start">
+            <div>
+                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Peringatan Retensi</p>
+                <h3 class="text-2xl font-bold text-slate-800 tracking-tight group-hover:text-rose-700 transition-colors">
+                    {{ $countRetention }} <span class="text-xs font-normal text-slate-400">Arsip</span>
+                </h3>
             </div>
-        </x-ui.card>
+            <div class="p-2.5 bg-rose-50 rounded-lg text-rose-600 group-hover:bg-rose-100 transition-colors shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+        </a>
         @endif
     </div>
     @endif
@@ -103,16 +127,50 @@
         <!-- Kolom Kiri: Tabel Monitoring Arsip Dokumen (Makan 2 kolom) -->
         <div class="lg:col-span-2 space-y-6">
             <x-ui.card class="overflow-hidden shadow-sm border-slate-200">
-                <div class="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+                <div class="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
                     <div class="flex items-center">
                         <h2 class="text-lg font-bold text-slate-800 tracking-tight">Monitoring Arsip Dokumen</h2>
-                        @if(!$isSuperAdmin)
-                            <span class="ml-2.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">Naskah Surat Anda</span>
-                        @else
-                            <span class="ml-2.5 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">Seluruh Naskah Sistem</span>
-                        @endif
                     </div>
-                    {{-- <a href="{{ route('registry.outgoing.index') }}" class="text-xs font-semibold text-[var(--color-primary)] hover:text-emerald-700 transition-colors">Buka Arsip Dokumen &rarr;</a> --}}
+
+                    <!-- Toolbar Pencarian & Filter Status -->
+                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <!-- Input Pencarian Cepat -->
+                        <div class="relative w-full sm:w-44">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none">
+                                <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
+                                </svg>
+                            </span>
+                            <input
+                                type="text"
+                                wire:model.live.debounce.300ms="monitoringSearch"
+                                placeholder="Cari nomor/perihal..."
+                                class="w-full bg-white border border-slate-200 text-xs rounded-lg pl-5 pr-1.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] transition-colors placeholder:text-slate-400"
+                            >
+                        </div>
+
+                        <!-- Segmented Pill Filter Status -->
+                        <div class="inline-flex p-0.5 bg-slate-200/70 rounded-lg text-xs font-semibold">
+                            <button
+                                type="button"
+                                wire:click="setMonitoringFilter('all')"
+                                class="px-2.5 py-1 rounded-md transition-all {{ $monitoringFilter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900' }}">
+                                Semua
+                            </button>
+                            <button
+                                type="button"
+                                wire:click="setMonitoringFilter('waiting')"
+                                class="px-2.5 py-1 rounded-md transition-all {{ $monitoringFilter === 'waiting' ? 'bg-white text-amber-800 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900' }}">
+                                Menunggu
+                            </button>
+                            <button
+                                type="button"
+                                wire:click="setMonitoringFilter('archived')"
+                                class="px-2.5 py-1 rounded-md transition-all {{ $monitoringFilter === 'archived' ? 'bg-white text-emerald-800 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900' }}">
+                                Selesai
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm text-left">
@@ -135,13 +193,13 @@
                                         @elseif($doc->type === 'outgoing')
                                             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Surat Keluar</span>
                                         @else
-                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">Memo Internal</span>
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">Surat Khusus</span>
                                         @endif
                                     </div>
                                 </td>
                                 <td class="px-3 py-3.5 align-top">
                                     <div x-data="{ expanded: false }">
-                                        <div 
+                                        <div
                                             class="font-medium text-slate-800 leading-snug transition-all"
                                             :class="expanded ? 'whitespace-normal break-words' : 'line-clamp-2'"
                                             title="{{ $doc->subject }}"
@@ -149,9 +207,9 @@
                                             {{ $doc->subject }}
                                         </div>
                                         @if(mb_strlen($doc->subject ?? '') > 75)
-                                            <button 
-                                                type="button" 
-                                                @click="expanded = !expanded" 
+                                            <button
+                                                type="button"
+                                                @click="expanded = !expanded"
                                                 class="text-[11px] font-bold text-[var(--color-primary)] hover:text-emerald-700 hover:underline mt-1 inline-flex items-center gap-0.5 focus:outline-none cursor-pointer"
                                             >
                                                 <span x-text="expanded ? 'Show Less ▴' : 'Show More ▾'"></span>
@@ -209,34 +267,63 @@
         <div class="space-y-6">
             <x-ui.card class="shadow-sm border-slate-200 flex flex-col h-full">
                 <div class="px-5 py-4 border-b border-slate-200 bg-slate-50/50 flex justify-between items-center">
-                    <h2 class="text-lg font-bold text-slate-800 tracking-tight">Log Aktivitas Sistem</h2>
+                    <div class="flex items-center">
+                        <h2 class="text-lg font-bold text-slate-800 tracking-tight">Log Aktivitas Sistem</h2>
+                        @if($canViewAllActivities)
+                            <span class="ml-2.5 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">Seluruh Sistem</span>
+                        @else
+                            <span class="ml-2.5 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">Aktivitas Anda</span>
+                        @endif
+                    </div>
                 </div>
-                <div class="p-5 flex-1">
-                    <div class="relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+                <div class="p-2 sm:p-3 flex-1">
+                    <div class="divide-y divide-slate-100">
                         @forelse($recentActivities as $activity)
-                            <div class="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active mb-6 last:mb-0">
-                                <div class="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-slate-100 text-slate-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
-                                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div class="py-3 px-3 rounded-lg hover:bg-slate-50/70 transition-colors">
+                                <!-- Baris 1: Aksi & Waktu Relatif -->
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="text-xs font-semibold text-slate-800 leading-snug">
+                                        {{ $activity->action }}
+                                    </div>
+                                    <time class="text-[11px] text-slate-400 font-mono shrink-0 whitespace-nowrap">
+                                        {{ $activity->created_at->diffForHumans() }}
+                                    </time>
                                 </div>
-                                <div class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
-                                    <div class="flex items-center justify-between mb-1">
-                                        <div class="font-bold text-slate-900 text-sm">
-                                            {{ $activity->user->name ?? 'Sistem' }}
-                                        </div>
-                                        <time class="font-mono text-xs text-slate-500">{{ $activity->created_at->diffForHumans() }}</time>
-                                    </div>
-                                    <div class="text-sm text-slate-600 line-clamp-2">
-                                        {{ $activity->action }} {{ $activity->document ? 'Dokumen #' . $activity->document->id : '' }}
-                                    </div>
+
+                                <!-- Baris 2: Nomor Surat / Identitas + Pelaku + Subjek -->
+                                <div class="text-xs text-slate-500 mt-1 flex items-center flex-wrap gap-1.5 leading-normal">
+                                    @if($activity->document && $activity->document->number)
+                                        <span class="font-mono text-slate-700 font-medium">
+                                            {{ $activity->document->number }}
+                                        </span>
+                                        <span class="text-slate-300">•</span>
+                                    @endif
+
+                                    <span class="text-slate-600 font-medium">
+                                        {{ $activity->user_id === auth()->id() ? 'Anda' : ($activity->user->name ?? 'Sistem') }}
+                                    </span>
+
+                                    @if($activity->document && $activity->document->subject)
+                                        <span class="text-slate-300">•</span>
+                                        <span class="text-slate-500 line-clamp-1 truncate max-w-[180px]" title="{{ $activity->document->subject }}">
+                                            {{ $activity->document->subject }}
+                                        </span>
+                                    @endif
                                 </div>
                             </div>
                         @empty
-                            <div class="text-center text-slate-500 py-4 text-sm">Belum ada aktivitas tercatat.</div>
+                            <div class="text-center py-10 text-slate-400">
+                                <svg class="w-8 h-8 mx-auto mb-2 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <p class="text-xs font-medium text-slate-500">Belum ada aktivitas tercatat.</p>
+                                <p class="text-[11px] text-slate-400 mt-0.5">Aktivitas registrasi dan pengarsipan akan muncul di sini.</p>
+                            </div>
                         @endforelse
                     </div>
                 </div>
-                <div class="px-5 py-3 border-t border-slate-100 bg-slate-50 text-center">
-                    <a href="{{ route('settings.audit-trail') }}" class="text-sm font-medium text-slate-500 hover:text-[var(--color-primary)] transition-colors">Lihat Semua Aktivitas</a>
+                <div class="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-center">
+                    <a href="{{ route('settings.audit-trail') }}" class="text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors">
+                        Buka Seluruh Audit Trail Log &rarr;
+                    </a>
                 </div>
             </x-ui.card>
         </div>

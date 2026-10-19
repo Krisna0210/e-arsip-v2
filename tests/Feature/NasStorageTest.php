@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Registry\ScanQueue;
 use App\Models\Document;
 use App\Models\DocumentVersion;
 use App\Models\User;
+use App\Services\NasHealthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class NasStorageTest extends TestCase
@@ -123,5 +127,58 @@ class NasStorageTest extends TestCase
         ]);
 
         $this->assertEquals('documents/Surat Masuk/Tanpa Loker', $docWithoutFolder->getStorageDirectoryPath());
+    }
+
+    public function test_nas_health_service_detects_online_status_and_metrics()
+    {
+        Storage::fake('nas');
+        $status = NasHealthService::check(true);
+
+        $this->assertTrue($status['online']);
+        $this->assertEquals('connected', $status['status']);
+        $this->assertNotEmpty($status['root_path']);
+    }
+
+    public function test_scan_queue_renders_nas_online_badge_and_allows_manual_refresh()
+    {
+        Storage::fake('nas');
+        $superadmin = User::where('username', 'superadmin')->first();
+
+        Livewire::actingAs($superadmin)
+            ->test(ScanQueue::class)
+            ->assertSee('NAS Online')
+            ->call('refreshNasConnection')
+            ->assertDispatched('notify');
+    }
+
+    public function test_scan_queue_prevents_upload_and_shows_error_when_nas_is_offline()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+
+        $doc = Document::create([
+            'number' => '099/TEST/OFFLINE/2026',
+            'subject' => 'Surat Pengujian Offline NAS',
+            'type' => 'outgoing',
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        config(['filesystems.disks.nas.root' => 'Z:\\non_existent_nas_path_12345']);
+
+        $file = UploadedFile::fake()->create('test.pdf', 200, 'application/pdf');
+
+        Livewire::actingAs($superadmin)
+            ->test(ScanQueue::class)
+            ->call('openUploadModal', $doc->id)
+            ->set('finalFile', $file)
+            ->call('saveFinalFile')
+            ->assertHasErrors(['finalFile'])
+            ->assertSee('NAS Terputus');
+
+        $this->assertDatabaseMissing('document_versions', [
+            'document_id' => $doc->id,
+        ]);
     }
 }

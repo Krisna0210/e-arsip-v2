@@ -11,9 +11,11 @@ class DocumentType extends Model
 
     protected $fillable = [
         'name',
+        'code',
         'default_sifat',
         'numbering_format',
         'starting_sequence',
+        'starting_sequence_dir',
         'starting_sequence_year',
     ];
 }

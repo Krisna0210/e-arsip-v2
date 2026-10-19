@@ -236,4 +236,142 @@ class DocumentLoanTest extends TestCase
         $this->assertEquals('borrowed', $loan->status);
         $this->assertEquals($officer->id, $loan->officer_id);
     }
+
+    public function test_user_without_document_borrowing_permission_cannot_see_catalog_and_my_loans_tabs()
+    {
+        $role = Role::create([
+            'name' => 'Petugas Sirkulasi Saja',
+            'status' => 'active',
+            'module_visibility' => ['loan_circulation'], // Hanya sirkulasi tanpa pinjam/katalog
+        ]);
+
+        $officer = User::create([
+            'name' => 'Petugas Khusus Sirkulasi',
+            'username' => 'sirkulasisaja',
+            'email' => 'sirkulasi@arsip.com',
+            'password' => bcrypt('password'),
+            'role_id' => $role->id,
+            'status' => 'active',
+        ]);
+
+        $component = Livewire::actingAs($officer)
+            ->test(DocumentLoanIndex::class);
+
+        // canBorrow harus false
+        $this->assertFalse($component->get('canBorrow'));
+        $this->assertTrue($component->get('canManageCirculation'));
+
+        // Tab Katalog & Pinjaman Saya tidak muncul
+        $component->assertDontSee('Katalog & Cari Surat', false);
+        $component->assertDontSee('Pinjaman Saya');
+        $component->assertSee('Sirkulasi & Persetujuan Tapersip', false);
+
+        // Tab aktif awal otomatis dialihkan ke 'circulation'
+        $this->assertEquals('circulation', $component->get('activeTab'));
+
+        // Jika mencoba memaksa setTab ke 'catalog' atau 'my_loans', ditolak
+        $component->call('setTab', 'catalog');
+        $this->assertEquals('circulation', $component->get('activeTab'));
+
+        $component->call('setTab', 'my_loans');
+        $this->assertEquals('circulation', $component->get('activeTab'));
+    }
+
+    public function test_user_with_document_borrowing_permission_can_see_catalog_and_my_loans_tabs()
+    {
+        $role = Role::create([
+            'name' => 'Peminjam Saja',
+            'status' => 'active',
+            'module_visibility' => ['document_borrowing'],
+        ]);
+
+        $borrower = User::create([
+            'name' => 'Staf Peminjam',
+            'username' => 'stafpeminjam',
+            'email' => 'peminjam@arsip.com',
+            'password' => bcrypt('password'),
+            'role_id' => $role->id,
+            'status' => 'active',
+        ]);
+
+        $component = Livewire::actingAs($borrower)
+            ->test(DocumentLoanIndex::class);
+
+        $this->assertTrue($component->get('canBorrow'));
+        $this->assertFalse($component->get('canManageCirculation'));
+
+        $component->assertSee('Katalog & Cari Surat', false);
+        $component->assertSee('Pinjaman Saya');
+        $component->assertDontSee('Sirkulasi & Persetujuan Tapersip', false);
+        $this->assertEquals('catalog', $component->get('activeTab'));
+    }
+
+    public function test_user_can_cancel_their_own_pending_loan_request()
+    {
+        $role = Role::create([
+            'name' => 'Staf Peminjam Aktif',
+            'status' => 'active',
+            'module_visibility' => ['document_borrowing'],
+        ]);
+
+        $borrower = User::create([
+            'name' => 'Staf Pembatal',
+            'username' => 'stafpembatal',
+            'email' => 'pembatal@arsip.com',
+            'password' => bcrypt('password'),
+            'role_id' => $role->id,
+            'status' => 'active',
+        ]);
+
+        $otherUser = User::create([
+            'name' => 'Staf Lain',
+            'username' => 'staflain',
+            'email' => 'lain@arsip.com',
+            'password' => bcrypt('password'),
+            'role_id' => $role->id,
+            'status' => 'active',
+        ]);
+
+        $document = Document::create([
+            'number' => '005/TEST/2026',
+            'subject' => 'Surat Uji Pembatalan Permohonan Pinjam',
+            'type' => 'incoming',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'document_date' => now(),
+            'created_by' => $borrower->id,
+        ]);
+
+        $loan = DocumentLoan::create([
+            'loan_code' => DocumentLoan::generateTicketCode(),
+            'document_id' => $document->id,
+            'user_id' => $borrower->id,
+            'borrow_date' => now(),
+            'expected_return_date' => now()->addDays(5),
+            'purpose' => 'Uji Batal Pinjam',
+            'status' => 'requested',
+        ]);
+
+        // 1. User lain tidak boleh membatalkan
+        Livewire::actingAs($otherUser)
+            ->test(DocumentLoanIndex::class)
+            ->call('cancelLoanRequest', $loan->id)
+            ->assertStatus(403);
+
+        // 2. Pemilik sah berhasil membatalkan permohonan
+        Livewire::actingAs($borrower)
+            ->test(DocumentLoanIndex::class)
+            ->call('cancelLoanRequest', $loan->id)
+            ->assertDispatched('notify');
+
+        $loan->refresh();
+        $this->assertEquals('cancelled', $loan->status);
+        $this->assertEquals('Dibatalkan oleh pemohon', $loan->notes);
+
+        // Pastikan audit log tercatat
+        $this->assertDatabaseHas('audit_logs', [
+            'document_id' => $document->id,
+            'user_id' => $borrower->id,
+        ]);
+    }
 }

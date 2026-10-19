@@ -126,6 +126,7 @@
             <table class="w-full text-left border-collapse min-w-[700px]">
                 <thead>
                     <tr class="bg-[var(--color-background)] border-b border-[var(--color-border)] text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
+                        <th class="px-5 py-3 w-1/6">Kode (KOSUR)</th>
                         <th class="px-5 py-3 w-1/3">Nama Jenis Dokumen</th>
                         <th class="px-5 py-3 w-1/4">Sifat Akses Default</th>
                         <th class="px-5 py-3 w-1/3">Format Penomoran Standar</th>
@@ -135,6 +136,11 @@
                 <tbody class="text-sm divide-y divide-[var(--color-border)]">
                     @forelse($documentTypes as $docType)
                     <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-5 py-4">
+                            <span class="font-mono text-slate-700 font-semibold bg-slate-100 px-2.5 py-0.5 rounded text-xs border border-slate-200">
+                                {{ $docType->code ?? '-' }}
+                            </span>
+                        </td>
                         <td class="px-5 py-4 font-bold text-slate-800">{{ $docType->name }}</td>
                         <td class="px-5 py-4">
                             @if($docType->default_sifat === 'biasa')
@@ -147,9 +153,15 @@
                         </td>
                         <td class="px-5 py-4">
                             <div class="font-mono text-xs text-slate-700 font-semibold">{{ $docType->numbering_format ?: '-' }}</div>
-                            @if($docType->starting_sequence > 0)
-                                <div class="text-[11px] text-emerald-700 mt-0.5 font-medium">
-                                    Urutan Manual: <strong>{{ $docType->starting_sequence }}</strong> (Thn {{ $docType->starting_sequence_year ?: date('Y') }})
+                            @if($docType->starting_sequence > 0 || $docType->starting_sequence_dir > 0)
+                                <div class="text-[11px] text-emerald-700 mt-1 font-medium space-y-0.5">
+                                    @if($docType->starting_sequence > 0)
+                                        <div>Urutan Unit: <strong>{{ $docType->starting_sequence }}</strong></div>
+                                    @endif
+                                    @if($docType->starting_sequence_dir > 0)
+                                        <div>Urutan Direktur: <strong>{{ $docType->starting_sequence_dir }}</strong></div>
+                                    @endif
+                                    <div class="text-[10px] text-slate-500">(Thn {{ $docType->starting_sequence_year ?: date('Y') }})</div>
                                 </div>
                             @endif
                         </td>
@@ -160,7 +172,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="4" class="px-5 py-4 text-center text-slate-500">Belum ada data jenis dokumen.</td>
+                        <td colspan="5" class="px-5 py-4 text-center text-slate-500">Belum ada data jenis dokumen.</td>
                     </tr>
                     @endforelse
                 </tbody>
@@ -234,10 +246,17 @@
     <!-- Slide-over: Tambah Jenis Dokumen -->
     <x-ui.modal id="slide-doctype" title="{{ $typeId ? 'Edit Jenis Dokumen' : 'Tambah Jenis Dokumen Baru' }}">
         <form wire:submit="saveDocType" id="form-doctype" class="space-y-5">
-            <div>
-                <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Nama Jenis Dokumen <span class="text-red-500">*</span></label>
-                <input wire:model="typeName" type="text" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: Surat Edaran" required>
-                @error('typeName') <span class="text-xs text-red-500">{{ $message }}</span> @enderror
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Kode (KOSUR) <span class="text-red-500">*</span></label>
+                    <input wire:model.live="typeCode" type="text" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 font-mono uppercase focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: SK" required>
+                    @error('typeCode') <span class="text-xs text-red-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Nama Jenis Dokumen <span class="text-red-500">*</span></label>
+                    <input wire:model="typeName" type="text" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: Surat Keluar" required>
+                    @error('typeName') <span class="text-xs text-red-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
             </div>
             <div>
                 <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Sifat Kerahasiaan Default <span class="text-red-500">*</span></label>
@@ -250,37 +269,53 @@
             </div>
             <div>
                 <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">Struktur Penomoran Otomatis</label>
-                <input wire:model="typeNumbering" type="text" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: [Urutan]/SE/[KodeUnit]/[Tahun]">
-                <p class="text-[11px] text-slate-500 mt-1.5">Variabel tersedia: <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">[Urutan]</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">[KodeUnit]</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">[BulanRomawi]</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">[Tahun]</code>.</p>
+                <input wire:model.live="typeNumbering" type="text" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: {NO}/{KOSUR}/{DIV}/{UNIT}-{CLASS}/{MM}/{YYYY}">
+                <p class="text-[11px] text-slate-500 mt-1.5">Variabel tersedia: <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700 font-bold">{NO}</code>, <code class="bg-emerald-50 text-[var(--color-primary)] font-bold border border-emerald-200 px-1.5 py-0.5 rounded">{KOSUR}</code>, <code class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 px-1.5 py-0.5 rounded">{DIV}</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">{DIR}</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">{UNIT}</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">{CLASS}</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">{MM}</code>, <code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700">{YYYY}</code>.</p>
+                <p class="text-[10px] text-slate-400 mt-1">*Variabel <span class="font-mono text-indigo-600 font-semibold">{DIV}</span> otomatis mengambil kode Divisi dari unit kerja akun pengguna yang membuat surat.</p>
                 @error('typeNumbering') <span class="text-xs text-red-500">{{ $message }}</span> @enderror
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-100">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-100">
                 <div>
                     <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">
-                        Nomor Terakhir Buku Manual
+                        No. Manual Unit Kerja
                     </label>
-                    <input wire:model="typeStartingSequence" type="number" min="0" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: 85">
-                    <p class="text-[11px] text-slate-500 mt-1 leading-snug">Isi jika kantor sudah punya nomor terakhir sebelum sistem diluncurkan (misal: 85, maka nomor baru terbit 086). Kosongkan jika mulai dari 1.</p>
+                    <input wire:model="typeStartingSequence" type="number" min="0" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: 85">
+                    <p class="text-[10px] text-slate-500 mt-1 leading-snug">Nomor manual terakhir surat pimpinan unit.</p>
                     @error('typeStartingSequence') <span class="text-xs text-red-500">{{ $message }}</span> @enderror
                 </div>
                 <div>
                     <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">
-                        Tahun Berlaku Urutan
+                        No. Manual Direktur
                     </label>
-                    <input wire:model="typeStartingYear" type="number" min="2000" max="2100" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-4 py-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="{{ date('Y') }}">
-                    <p class="text-[11px] text-slate-500 mt-1 leading-snug">Tahun berlakunya sequence awal di atas (default: {{ date('Y') }}). Reset otomatis saat berganti tahun.</p>
+                    <input wire:model="typeStartingSequenceDir" type="number" min="0" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="Cth: 20">
+                    <p class="text-[10px] text-slate-500 mt-1 leading-snug">Nomor manual terakhir surat Direktur/Direksi.</p>
+                    @error('typeStartingSequenceDir') <span class="text-xs text-red-500">{{ $message }}</span> @enderror
+                </div>
+                <div>
+                    <label class="block text-[0.75rem] font-semibold text-[var(--color-text-primary)] uppercase tracking-wider mb-1.5">
+                        Tahun Berlaku
+                    </label>
+                    <input wire:model="typeStartingYear" type="number" min="2000" max="2100" class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:bg-white transition-colors" placeholder="{{ date('Y') }}">
+                    <p class="text-[10px] text-slate-500 mt-1 leading-snug">Tahun berlakunya urutan (default: {{ date('Y') }}).</p>
                     @error('typeStartingYear') <span class="text-xs text-red-500">{{ $message }}</span> @enderror
                 </div>
             </div>
             
             @if($typeNumbering)
+            @php
+                $sampleDiv = auth()->user()?->getDivisionCode() ?: 'IT';
+            @endphp
             <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3">
                 <svg class="w-5 h-5 text-blue-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 <div class="text-sm text-blue-800">
                     <p class="font-semibold mb-1">Preview Penomoran:</p>
                     <p class="font-mono text-xs opacity-90">
-                        {{ str_replace(['[Urutan]', '[KodeUnit]', '[BulanRomawi]', '[Tahun]'], ['001', 'IT-01', 'X', date('Y')], $typeNumbering) }}
+                        {{ str_replace(
+                            ['{NO}', '{KOSUR}', '{kosur}', '{DIV}', '{div}', '{DIR}', '{UNIT}', '{CLASS}', '{kodeklasi}', '{MM}', '{YYYY}', '[Urutan]', '[KodeUnit]', '[BulanRomawi]', '[Tahun]'],
+                            ['01', $typeCode ?: 'KOSUR', $typeCode ?: 'KOSUR', $sampleDiv, $sampleDiv, 'DIR-', 'IT', 'HM.00', 'HM.00', date('m'), date('Y'), '01', 'IT', date('m'), date('Y')],
+                            $typeNumbering
+                        ) }}
                     </p>
                 </div>
             </div>

@@ -6,6 +6,8 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\Classification;
 use App\Models\DocumentType;
+use Illuminate\Validation\Rule;
+use Illuminate\Database\UniqueConstraintViolationException;
 
 class ArchiveClassificationIndex extends Component
 {
@@ -25,9 +27,11 @@ class ArchiveClassificationIndex extends Component
     // Document Type Properties
     public $typeId;
     public $typeName;
+    public $typeCode;
     public $typeSifat = 'biasa';
     public $typeNumbering;
     public $typeStartingSequence = 0;
+    public $typeStartingSequenceDir = 0;
     public $typeStartingYear;
 
     public function setTab($tab)
@@ -61,25 +65,38 @@ class ArchiveClassificationIndex extends Component
     public function saveClassification()
     {
         $this->validate([
-            'classCode' => 'required|string|max:255|unique:classifications,code,' . $this->classId,
+            'classCode' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('classifications', 'code')->ignore($this->classId)->whereNull('deleted_at'),
+            ],
             'classSubject' => 'required|string|max:255',
             'parentClassId' => 'nullable|exists:classifications,id',
             'activeYears' => 'required|integer|min:0',
             'inactiveYears' => 'required|integer|min:0',
             'outcome' => 'required|in:musnah,permanen,dinilai_kembali',
+        ], [
+            'classCode.required' => 'Kode / Indeks Klasifikasi wajib diisi.',
+            'classCode.unique' => 'Kode / Indeks Klasifikasi sudah digunakan.',
         ]);
 
-        Classification::updateOrCreate(
-            ['id' => $this->classId],
-            [
-                'code' => $this->classCode,
-                'subject' => $this->classSubject,
-                'parent_id' => $this->parentClassId ?: null,
-                'active_years' => $this->activeYears,
-                'inactive_years' => $this->inactiveYears,
-                'outcome' => $this->outcome,
-            ]
-        );
+        try {
+            Classification::updateOrCreate(
+                ['id' => $this->classId],
+                [
+                    'code' => $this->classCode,
+                    'subject' => $this->classSubject,
+                    'parent_id' => $this->parentClassId ?: null,
+                    'active_years' => $this->activeYears,
+                    'inactive_years' => $this->inactiveYears,
+                    'outcome' => $this->outcome,
+                ]
+            );
+        } catch (UniqueConstraintViolationException $e) {
+            $this->addError('classCode', 'Kode / Indeks Klasifikasi sudah digunakan di database.');
+            return;
+        }
 
         $this->dispatch('close-modal', id: 'slide-classification');
         $this->resetClassificationForm();
@@ -104,6 +121,7 @@ class ArchiveClassificationIndex extends Component
     {
         $this->resetDocTypeForm();
         $this->typeStartingSequence = 0;
+        $this->typeStartingSequenceDir = 0;
         $this->typeStartingYear = (int) date('Y');
         $this->dispatch('open-modal', id: 'slide-doctype');
     }
@@ -114,9 +132,11 @@ class ArchiveClassificationIndex extends Component
         $docType = DocumentType::findOrFail($id);
         $this->typeId = $docType->id;
         $this->typeName = $docType->name;
+        $this->typeCode = $docType->code;
         $this->typeSifat = $docType->default_sifat;
         $this->typeNumbering = $docType->numbering_format;
         $this->typeStartingSequence = $docType->starting_sequence ?? 0;
+        $this->typeStartingSequenceDir = $docType->starting_sequence_dir ?? 0;
         $this->typeStartingYear = $docType->starting_sequence_year ?? (int) date('Y');
         $this->dispatch('open-modal', id: 'slide-doctype');
     }
@@ -124,23 +144,47 @@ class ArchiveClassificationIndex extends Component
     public function saveDocType()
     {
         $this->validate([
-            'typeName' => 'required|string|max:255',
+            'typeName' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('document_types', 'name')->ignore($this->typeId)->whereNull('deleted_at'),
+            ],
+            'typeCode' => [
+                'required',
+                'string',
+                'max:20',
+                Rule::unique('document_types', 'code')->ignore($this->typeId)->whereNull('deleted_at'),
+            ],
             'typeSifat' => 'required|in:biasa,penting,rahasia',
             'typeNumbering' => 'nullable|string|max:255',
             'typeStartingSequence' => 'nullable|integer|min:0',
+            'typeStartingSequenceDir' => 'nullable|integer|min:0',
             'typeStartingYear' => 'nullable|integer|min:2000|max:2100',
+        ], [
+            'typeName.required' => 'Nama Jenis Dokumen wajib diisi.',
+            'typeName.unique' => 'Nama Jenis Dokumen sudah digunakan oleh jenis naskah lain.',
+            'typeCode.required' => 'Kode Jenis Dokumen (KOSUR) wajib diisi.',
+            'typeCode.unique' => 'Kode Jenis Dokumen (KOSUR) sudah digunakan oleh jenis naskah lain.',
         ]);
 
-        DocumentType::updateOrCreate(
-            ['id' => $this->typeId],
-            [
-                'name' => $this->typeName,
-                'default_sifat' => $this->typeSifat,
-                'numbering_format' => $this->typeNumbering,
-                'starting_sequence' => $this->typeStartingSequence !== null && $this->typeStartingSequence !== '' ? (int) $this->typeStartingSequence : 0,
-                'starting_sequence_year' => $this->typeStartingYear ?: (int) date('Y'),
-            ]
-        );
+        try {
+            DocumentType::updateOrCreate(
+                ['id' => $this->typeId],
+                [
+                    'name' => $this->typeName,
+                    'code' => strtoupper(trim($this->typeCode)),
+                    'default_sifat' => $this->typeSifat,
+                    'numbering_format' => $this->typeNumbering,
+                    'starting_sequence' => $this->typeStartingSequence !== null && $this->typeStartingSequence !== '' ? (int) $this->typeStartingSequence : 0,
+                    'starting_sequence_dir' => $this->typeStartingSequenceDir !== null && $this->typeStartingSequenceDir !== '' ? (int) $this->typeStartingSequenceDir : 0,
+                    'starting_sequence_year' => $this->typeStartingYear ?: (int) date('Y'),
+                ]
+            );
+        } catch (UniqueConstraintViolationException $e) {
+            $this->addError('typeName', 'Nama atau Kode Jenis Dokumen ini sudah digunakan di database.');
+            return;
+        }
 
         $this->dispatch('close-modal', id: 'slide-doctype');
         $this->resetDocTypeForm();
@@ -153,9 +197,10 @@ class ArchiveClassificationIndex extends Component
 
     private function resetDocTypeForm()
     {
-        $this->reset(['typeId', 'typeName', 'typeSifat', 'typeNumbering', 'typeStartingSequence', 'typeStartingYear']);
+        $this->reset(['typeId', 'typeName', 'typeCode', 'typeSifat', 'typeNumbering', 'typeStartingSequence', 'typeStartingSequenceDir', 'typeStartingYear']);
         $this->typeSifat = 'biasa';
         $this->typeStartingSequence = 0;
+        $this->typeStartingSequenceDir = 0;
         $this->typeStartingYear = (int) date('Y');
     }
 

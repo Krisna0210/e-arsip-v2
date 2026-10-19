@@ -42,6 +42,20 @@ class DocumentLoanIndex extends Component
     {
         $this->borrowDate = date('Y-m-d');
         $this->expectedReturnDate = date('Y-m-d', strtotime('+7 days'));
+
+        // Tentukan tab awal adaptif berdasarkan hak akses
+        if ($this->canBorrow) {
+            $this->activeTab = 'catalog';
+        } elseif ($this->canManageCirculation) {
+            $this->activeTab = 'circulation';
+        }
+    }
+
+    public function getCanBorrowProperty(): bool
+    {
+        $user = Auth::user();
+        if (!$user) return false;
+        return $user->isSuperAdmin() || $user->hasModuleAccess('document_borrowing');
     }
 
     public function getCanManageCirculationProperty(): bool
@@ -63,8 +77,14 @@ class DocumentLoanIndex extends Component
 
     public function setTab($tab)
     {
+        // Proteksi tab Sirkulasi Tapersip
         if ($tab === 'circulation' && !$this->canManageCirculation) {
-            $tab = 'catalog';
+            $tab = $this->canBorrow ? 'catalog' : 'circulation';
+        }
+
+        // Proteksi tab Katalog & Pinjaman Saya
+        if (in_array($tab, ['catalog', 'my_loans']) && !$this->canBorrow) {
+            $tab = $this->canManageCirculation ? 'circulation' : 'catalog';
         }
 
         $this->activeTab = $tab;
@@ -88,6 +108,11 @@ class DocumentLoanIndex extends Component
 
     public function openLoanModal($documentId)
     {
+        if (!$this->canBorrow) {
+            $this->dispatch('notify', ['message' => 'Anda tidak memiliki hak akses untuk meminjam dokumen.', 'type' => 'error']);
+            return;
+        }
+
         $doc = Document::with(['folder', 'unit'])->findOrFail($documentId);
 
         if ($doc->status !== 'archived') {
@@ -111,6 +136,10 @@ class DocumentLoanIndex extends Component
 
     public function submitLoanRequest()
     {
+        if (!$this->canBorrow) {
+            abort(403, 'Akses ditolak: Anda tidak memiliki hak akses untuk meminjam dokumen.');
+        }
+
         $this->validate([
             'borrowDate' => 'required|date',
             'expectedReturnDate' => 'required|date|after_or_equal:borrowDate',
@@ -142,6 +171,17 @@ class DocumentLoanIndex extends Component
             'status' => 'requested',
         ]);
 
+        \App\Models\AuditLog::record(
+            action: "Pengajuan Pinjam Fisik: {$this->selectedDocument->number} (Tiket: {$loan->loan_code})",
+            documentId: $this->selectedDocument->id,
+            metadata: [
+                'loan_code' => $loan->loan_code,
+                'borrow_date' => $this->borrowDate,
+                'expected_return_date' => $this->expectedReturnDate,
+                'purpose' => $this->purpose,
+            ]
+        );
+
         $this->dispatch('close-modal', 'modal-loan-request');
 
         // Buka tiket untuk dicetak
@@ -159,17 +199,58 @@ class DocumentLoanIndex extends Component
         $this->dispatch('open-modal', 'modal-loan-ticket');
     }
 
+    public function cancelLoanRequest($loanId)
+    {
+        $loan = DocumentLoan::with('document')->findOrFail($loanId);
+
+        // Verifikasi kepemilikan atau Superadmin
+        if ($loan->user_id !== Auth::id() && !Auth::user()->isSuperAdmin()) {
+            abort(403, 'Akses ditolak: Anda hanya dapat membatalkan permohonan pinjam milik Anda sendiri.');
+        }
+
+        // Hanya permohonan yang masih berstatus requested yang dapat dibatalkan
+        if ($loan->status !== 'requested') {
+            $this->dispatch('notify', ['message' => 'Hanya permohonan yang masih berstatus menunggu yang dapat dibatalkan.', 'type' => 'error']);
+            return;
+        }
+
+        $loan->update([
+            'status' => 'cancelled',
+            'notes' => 'Dibatalkan oleh pemohon',
+        ]);
+
+        \App\Models\AuditLog::record(
+            action: "Pembatalan Pinjam Fisik: " . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})",
+            documentId: $loan->document_id,
+            metadata: [
+                'loan_code' => $loan->loan_code,
+                'user_id' => Auth::id(),
+            ]
+        );
+
+        $this->dispatch('notify', ['message' => "Permohonan pinjam tiket {$loan->loan_code} berhasil dibatalkan.", 'type' => 'success']);
+    }
+
     public function approveLoan($loanId)
     {
         if (!$this->canManageCirculation) {
             abort(403, 'Akses ditolak.');
         }
 
-        $loan = DocumentLoan::findOrFail($loanId);
+        $loan = DocumentLoan::with('document')->findOrFail($loanId);
         $loan->update([
             'status' => 'borrowed',
             'officer_id' => Auth::id(),
         ]);
+
+        \App\Models\AuditLog::record(
+            action: "Persetujuan Pinjam Berkas Fisik: " . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})",
+            documentId: $loan->document_id,
+            metadata: [
+                'loan_code' => $loan->loan_code,
+                'borrower_id' => $loan->user_id,
+            ]
+        );
 
         $this->dispatch('notify', ['message' => "Hardcopy berhasil diserahkan. Status diubah menjadi 'Sedang Dipinjam'.", 'type' => 'success']);
     }
@@ -191,13 +272,22 @@ class DocumentLoanIndex extends Component
             return;
         }
 
-        $loan = DocumentLoan::findOrFail($this->selectedLoanId);
+        $loan = DocumentLoan::with('document')->findOrFail($this->selectedLoanId);
         $loan->update([
             'status' => 'returned',
             'returned_date' => now(),
             'notes' => $this->returnNotes ?: null,
             'officer_id' => Auth::id(),
         ]);
+
+        \App\Models\AuditLog::record(
+            action: "Pengembalian Berkas Fisik: " . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})",
+            documentId: $loan->document_id,
+            metadata: [
+                'loan_code' => $loan->loan_code,
+                'notes' => $this->returnNotes,
+            ]
+        );
 
         $this->reset(['selectedLoanId', 'returnNotes']);
         $this->dispatch('close-modal', 'modal-loan-return');
@@ -210,11 +300,19 @@ class DocumentLoanIndex extends Component
             abort(403, 'Akses ditolak.');
         }
 
-        $loan = DocumentLoan::findOrFail($loanId);
+        $loan = DocumentLoan::with('document')->findOrFail($loanId);
         $loan->update([
             'status' => 'rejected',
             'officer_id' => Auth::id(),
         ]);
+
+        \App\Models\AuditLog::record(
+            action: "Penolakan Pinjam Berkas Fisik: " . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})",
+            documentId: $loan->document_id,
+            metadata: [
+                'loan_code' => $loan->loan_code,
+            ]
+        );
 
         $this->dispatch('notify', ['message' => "Permohonan pinjam telah ditolak.", 'type' => 'success']);
     }

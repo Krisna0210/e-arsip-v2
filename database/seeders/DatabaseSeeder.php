@@ -22,8 +22,8 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $superadminRole = Role::where('name', 'Superadmin')->first();
-        $itUnit = Unit::where('code', 'IT')->first();
-        $direkturPosition = Position::where('name', 'Direktur')->first();
+        $defaultUnit = Unit::where('code', 'TEK')->first() ?? Unit::first();
+        $direkturPosition = Position::where('name', 'Direktur')->first() ?? Position::first();
 
         // Use updateOrCreate so it doesn't fail on second run
         User::updateOrCreate(
@@ -32,9 +32,9 @@ class DatabaseSeeder extends Seeder
                 'name' => 'IT Superadmin',
                 'email' => 'superadmin@tapersip.local',
                 'password' => bcrypt('password'),
-                'role_id' => $superadminRole->id,
-                'unit_id' => $itUnit->id,
-                'position_id' => $direkturPosition->id,
+                'role_id' => $superadminRole?->id,
+                'unit_id' => $defaultUnit?->id,
+                'position_id' => $direkturPosition?->id,
                 'status' => 'active',
             ]
         );
