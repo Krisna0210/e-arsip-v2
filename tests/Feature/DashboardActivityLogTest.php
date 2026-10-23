@@ -264,4 +264,112 @@ class DashboardActivityLogTest extends TestCase
             ->assertSee('777/STG/X/2026')
             ->assertSee($docType->name);
     }
+
+    public function test_superadmin_sees_loan_circulation_stats_card_on_dashboard()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+        $roleUser = Role::where('name', 'User')->first();
+
+        $borrower = User::factory()->create([
+            'role_id' => $roleUser->id,
+            'unit_id' => $unit->id,
+        ]);
+
+        $document = Document::create([
+            'number' => '888/DASH/X/2026',
+            'subject' => 'Surat Uji Pinjam Dashboard',
+            'type' => 'outgoing',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        DocumentLoan::create([
+            'loan_code' => 'TIKET-202610-1025',
+            'document_id' => $document->id,
+            'user_id' => $borrower->id,
+            'borrow_date' => now()->subDays(10),
+            'expected_return_date' => now()->subDays(3),
+            'purpose' => 'Uji Statistik Dashboard',
+            'status' => 'borrowed',
+            'officer_id' => $superadmin->id,
+        ]);
+
+        Livewire::actingAs($superadmin)
+            ->test(Dashboard::class)
+            ->assertSee('Sirkulasi Berkas')
+            ->assertSee('1 Terlambat');
+    }
+
+    public function test_staff_sees_personal_loan_stats_card_on_dashboard()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+        $roleStaff = Role::create([
+            'name' => 'Staf Pengguna Pinjam',
+            'slug' => 'staf-pengguna-pinjam',
+            'module_visibility' => ['document_borrowing', 'dashboard'],
+        ]);
+
+        $staffUser = User::factory()->create([
+            'role_id' => $roleStaff->id,
+            'unit_id' => $unit->id,
+        ]);
+
+        $otherUser = User::factory()->create([
+            'role_id' => $roleStaff->id,
+            'unit_id' => $unit->id,
+        ]);
+
+        $documentA = Document::create([
+            'number' => '889/DASH/X/2026',
+            'subject' => 'Surat Pinjam Staff User',
+            'type' => 'outgoing',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        $documentB = Document::create([
+            'number' => '890/DASH/X/2026',
+            'subject' => 'Surat Pinjam Other User',
+            'type' => 'outgoing',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        // Pinjaman milik staffUser
+        DocumentLoan::create([
+            'loan_code' => 'TIKET-202610-1026',
+            'document_id' => $documentA->id,
+            'user_id' => $staffUser->id,
+            'borrow_date' => now(),
+            'expected_return_date' => now()->addDays(5),
+            'purpose' => 'Uji Pinjaman Personal',
+            'status' => 'borrowed',
+            'officer_id' => $superadmin->id,
+        ]);
+
+        // Pinjaman milik otherUser
+        DocumentLoan::create([
+            'loan_code' => 'TIKET-202610-1027',
+            'document_id' => $documentB->id,
+            'user_id' => $otherUser->id,
+            'borrow_date' => now(),
+            'expected_return_date' => now()->addDays(5),
+            'purpose' => 'Uji Pinjaman Orang Lain',
+            'status' => 'borrowed',
+            'officer_id' => $superadmin->id,
+        ]);
+
+        Livewire::actingAs($staffUser)
+            ->test(Dashboard::class)
+            ->assertSee('Pinjaman Saya')
+            ->assertDontSee('Sirkulasi Berkas');
+    }
 }

@@ -108,6 +108,7 @@ class Create extends Component
             ->where('type', 'outgoing')
             ->where('signer_type', $this->signer_type)
             ->whereYear('document_date', $year)
+            ->where('sequence_number', '<=', 99999)
             ->max('sequence_number') ?? 0;
 
         // 2. Ambil sequence awal manual dari master data yang sesuai pejabat penandatangan
@@ -197,9 +198,12 @@ class Create extends Component
         if (!empty(trim((string)$this->number))) {
             $this->number = trim((string)$this->number);
 
-            // Ekstrak angka urut dari teks nomor fisik jika diawali atau mengandung angka
+            // Ekstrak angka urut dari teks nomor fisik jika diawali atau mengandung angka wajar (<= 99999)
             if (preg_match('/^\D*(\d+)/', $this->number, $matches)) {
-                $assignedSequence = (int) $matches[1];
+                $parsedSequence = (int) $matches[1];
+                if ($parsedSequence <= 99999) {
+                    $assignedSequence = $parsedSequence;
+                }
             }
         } else {
             // Jika dikosongkan, terbitkan nomor resmi otomatis

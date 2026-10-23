@@ -5,6 +5,7 @@ namespace App\Livewire\Settings;
 use Livewire\Component;
 use App\Models\Role;
 use App\Models\Permission;
+use App\Models\AuditLog;
 use Illuminate\Support\Facades\DB;
 
 class RoleEditor extends Component
@@ -67,7 +68,9 @@ class RoleEditor extends Component
             'moduleVisibility' => 'nullable|array',
         ]);
 
-        if (!$this->role || !$this->role->exists) {
+        $isNew = !$this->role || !$this->role->exists;
+
+        if ($isNew) {
             $this->role = new Role();
         }
 
@@ -94,6 +97,20 @@ class RoleEditor extends Component
                 }
             }
         }
+
+        $action = $isNew ? "Pembuatan Role Baru: {$this->role->name}" : "Pembaruan Konfigurasi Role: {$this->role->name}";
+        AuditLog::record(
+            action: $action,
+            documentId: null,
+            metadata: [
+                'role_id' => $this->role->id,
+                'role_name' => $this->role->name,
+                'status' => $this->role->status,
+                'modules_count' => count($this->role->module_visibility ?? []),
+            ]
+        );
+
+        session()->flash('success', "Role '{$this->role->name}' berhasil disimpan.");
 
         return redirect()->route('settings.roles.index');
     }

@@ -29,4 +29,9 @@ class Classification extends Model
     {
         return $this->hasMany(Classification::class, 'parent_id');
     }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
 }

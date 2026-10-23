@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\Document;
+use App\Models\DocumentLoan;
 use App\Models\AuditLog;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -99,14 +100,29 @@ class Dashboard extends Component
         $canViewWaiting = $user ? $user->hasModuleAccess('card_waiting') : false;
         $canViewRetention = $user ? $user->hasModuleAccess('card_retention') : false;
 
-        $visibleCardsCount = (int)$canViewIncoming + (int)$canViewOutgoing + (int)$canViewInternal + (int)$canViewWaiting + (int)$canViewRetention;
+        $isTapersipOrSuper = $isSuperAdmin || ($user && $user->isTapersip());
+        $canViewLoan = $user ? ($user->hasModuleAccess('card_loans') || $user->hasModuleAccess('loan_circulation') || $user->hasModuleAccess('document_borrowing')) : false;
+
+        $countBorrowed = 0;
+        $countOverdue = 0;
+        if ($canViewLoan) {
+            $loanQuery = DocumentLoan::where('status', 'borrowed');
+            if (!$isTapersipOrSuper) {
+                $loanQuery->where('user_id', Auth::id());
+            }
+            $countBorrowed = (clone $loanQuery)->count();
+            $countOverdue = (clone $loanQuery)->whereDate('expected_return_date', '<', now()->toDateString())->count();
+        }
+
+        $visibleCardsCount = (int)$canViewIncoming + (int)$canViewOutgoing + (int)$canViewInternal + (int)$canViewWaiting + (int)$canViewRetention + (int)$canViewLoan;
 
         $gridColsClass = match($visibleCardsCount) {
             1 => 'grid-cols-1 max-w-sm',
             2 => 'grid-cols-1 sm:grid-cols-2',
             3 => 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
             4 => 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
-            default => 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5',
+            5 => 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5',
+            default => 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6',
         };
 
         return view('livewire.dashboard', [
@@ -115,15 +131,19 @@ class Dashboard extends Component
             'countInternal' => $countInternal,
             'countWaiting' => $countWaiting,
             'countRetention' => $countRetention,
+            'countBorrowed' => $countBorrowed,
+            'countOverdue' => $countOverdue,
             'monitoringDocuments' => $monitoringDocuments,
             'recentActivities' => $recentActivities,
             'isSuperAdmin' => $isSuperAdmin,
+            'isTapersipOrSuper' => $isTapersipOrSuper,
             'canViewAllActivities' => $canViewAllActivities,
             'canViewIncoming' => $canViewIncoming,
             'canViewOutgoing' => $canViewOutgoing,
             'canViewInternal' => $canViewInternal,
             'canViewWaiting' => $canViewWaiting,
             'canViewRetention' => $canViewRetention,
+            'canViewLoan' => $canViewLoan,
             'visibleCardsCount' => $visibleCardsCount,
             'gridColsClass' => $gridColsClass,
         ]);

@@ -6,6 +6,8 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\Unit;
 use App\Models\Position;
+use App\Models\AuditLog;
+use Illuminate\Support\Facades\Auth;
 
 class OrganizationIndex extends Component
 {
@@ -86,7 +88,8 @@ class OrganizationIndex extends Component
             'parentUnitId.required' => 'Divisi Induk wajib dipilih untuk unit bertipe Departemen.',
         ]);
 
-        Unit::updateOrCreate(
+        $isNew = !$this->unitId;
+        $unit = Unit::updateOrCreate(
             ['id' => $this->unitId],
             [
                 'code' => $this->unitCode,
@@ -97,7 +100,24 @@ class OrganizationIndex extends Component
             ]
         );
 
+        $typeLabel = $unit->type === 'division' ? 'Divisi' : 'Departemen';
+        $action = $isNew ? "Pembuatan Unit Kerja: {$unit->name} ({$typeLabel})" : "Pembaruan Unit Kerja: {$unit->name} ({$typeLabel})";
+
+        AuditLog::record(
+            action: $action,
+            documentId: null,
+            metadata: [
+                'unit_id' => $unit->id,
+                'code' => $unit->code,
+                'type' => $unit->type,
+                'parent_id' => $unit->parent_id,
+                'status' => $unit->status,
+            ]
+        );
+
+        $msg = $isNew ? "Unit kerja '{$unit->name}' berhasil ditambahkan." : "Data unit kerja '{$unit->name}' berhasil diperbarui.";
         $this->dispatch('close-modal', id: 'slide-unit');
+        $this->dispatch('notify', ['message' => $msg, 'type' => 'success']);
         $this->reset(['unitId', 'unitCode', 'unitName', 'parentUnitId']);
         $this->unitType = 'division';
         $this->unitStatus = 'active';
@@ -105,8 +125,46 @@ class OrganizationIndex extends Component
 
     public function deleteUnit($id)
     {
-        $unit = Unit::findOrFail($id);
+        $unit = Unit::withCount(['users', 'children', 'documents'])->findOrFail($id);
+
+        if ($unit->users_count > 0) {
+            $this->dispatch('notify', [
+                'message' => "Unit kerja '{$unit->name}' tidak dapat dihapus karena masih memiliki {$unit->users_count} pengguna aktif.",
+                'type' => 'error'
+            ]);
+            return;
+        }
+
+        if ($unit->children_count > 0) {
+            $this->dispatch('notify', [
+                'message' => "Divisi '{$unit->name}' tidak dapat dihapus karena masih membawahi {$unit->children_count} departemen.",
+                'type' => 'error'
+            ]);
+            return;
+        }
+
+        if ($unit->documents_count > 0) {
+            $this->dispatch('notify', [
+                'message' => "Unit kerja '{$unit->name}' tidak dapat dihapus karena masih terkait dengan {$unit->documents_count} dokumen arsip.",
+                'type' => 'error'
+            ]);
+            return;
+        }
+
+        $unitName = $unit->name;
+        $unitCode = $unit->code;
         $unit->delete();
+
+        AuditLog::record(
+            action: "Penghapusan Unit Kerja: {$unitName}",
+            documentId: null,
+            metadata: [
+                'deleted_unit_id' => $id,
+                'code' => $unitCode,
+            ]
+        );
+
+        $this->dispatch('notify', ['message' => "Unit kerja '{$unitName}' berhasil dihapus.", 'type' => 'success']);
     }
 
     // --- Position Methods ---
@@ -136,7 +194,8 @@ class OrganizationIndex extends Component
             'posAuthority' => 'nullable|string',
         ]);
 
-        Position::updateOrCreate(
+        $isNew = !$this->positionId;
+        $position = Position::updateOrCreate(
             ['id' => $this->positionId],
             [
                 'name' => $this->posName,
@@ -145,14 +204,48 @@ class OrganizationIndex extends Component
             ]
         );
 
+        $action = $isNew ? "Pembuatan Jabatan Baru: {$position->name}" : "Pembaruan Jabatan: {$position->name}";
+        AuditLog::record(
+            action: $action,
+            documentId: null,
+            metadata: [
+                'position_id' => $position->id,
+                'level' => $position->level,
+                'authority' => $position->authority_config,
+            ]
+        );
+
+        $msg = $isNew ? "Jabatan '{$position->name}' berhasil ditambahkan." : "Data jabatan '{$position->name}' berhasil diperbarui.";
         $this->dispatch('close-modal', id: 'slide-position');
+        $this->dispatch('notify', ['message' => $msg, 'type' => 'success']);
         $this->reset(['positionId', 'posName', 'posLevel', 'posAuthority']);
     }
 
     public function deletePosition($id)
     {
-        $position = Position::findOrFail($id);
+        $position = Position::withCount('users')->findOrFail($id);
+
+        if ($position->users_count > 0) {
+            $this->dispatch('notify', [
+                'message' => "Jabatan '{$position->name}' tidak dapat dihapus karena masih digunakan oleh {$position->users_count} pengguna aktif.",
+                'type' => 'error'
+            ]);
+            return;
+        }
+
+        $posName = $position->name;
         $position->delete();
+
+        AuditLog::record(
+            action: "Penghapusan Jabatan: {$posName}",
+            documentId: null,
+            metadata: [
+                'deleted_position_id' => $id,
+                'name' => $posName,
+            ]
+        );
+
+        $this->dispatch('notify', ['message' => "Jabatan '{$posName}' berhasil dihapus.", 'type' => 'success']);
     }
 
     public function render()

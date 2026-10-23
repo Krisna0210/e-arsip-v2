@@ -207,4 +207,40 @@ class NasStorageTest extends TestCase
             ->call('openUploadModal', $doc->id)
             ->assertSet('uploadDocType', $docType->name);
     }
+
+    public function test_scan_queue_smart_page_resolver_navigates_to_correct_page_for_highlight_parameter()
+    {
+        Storage::fake('nas');
+        $superadmin = User::where('username', 'superadmin')->first();
+
+        // 1. Buat 15 dokumen waiting_for_file (sehingga halaman terbagi menjadi 2 halaman, @10 data/halaman)
+        $targetDoc = null;
+        for ($i = 1; $i <= 15; $i++) {
+            $d = Document::create([
+                'number' => "DOC-QUEUE-{$i}/2026",
+                'subject' => "Dokumen Antrean Ke-{$i}",
+                'type' => 'outgoing',
+                'sifat' => 'biasa',
+                'status' => 'waiting_for_file',
+                'document_date' => now()->format('Y-m-d'),
+                'created_by' => $superadmin->id,
+            ]);
+
+            // Dokumen ke-13 berada di halaman ke-2 (karena urutan created_at asc)
+            if ($i === 13) {
+                $targetDoc = $d;
+            }
+        }
+
+        $this->assertNotNull($targetDoc);
+
+        // 2. Simulasi klik notifikasi dengan query param highlight=doc-{id}
+        // Smart Page Resolver harus otomatis menghitung targetPage = 2 dan menyajikan data halaman 2
+        Livewire::withQueryParams(['highlight' => "doc-{$targetDoc->id}"])
+            ->actingAs($superadmin)
+            ->test(ScanQueue::class)
+            ->assertSee($targetDoc->number)
+            ->assertSee($targetDoc->subject)
+            ->assertSee('id="doc-row-' . $targetDoc->id . '"', false);
+    }
 }

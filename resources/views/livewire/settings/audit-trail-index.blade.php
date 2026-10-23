@@ -18,15 +18,15 @@
                 </span>
                 <input type="text" wire:model.live="search" class="w-full bg-white border border-slate-200 text-sm rounded-lg pl-9 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="Cari aktivitas atau nama...">
             </div>
-            
+
             <!-- Filter -->
             <div class="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
-                <select wire:model.live="filterAction" class="w-full sm:w-auto bg-white border border-slate-200 text-sm text-slate-600 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
+                {{-- <select wire:model.live="filterAction" class="w-full sm:w-auto bg-white border border-slate-200 text-sm text-slate-600 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     <option value="">Semua Jenis Aktivitas</option>
                     @foreach($actions as $action)
                         <option value="{{ $action }}">{{ $action }}</option>
                     @endforeach
-                </select>
+                </select> --}}
                 <div class="flex items-center gap-2 w-full sm:w-auto">
                     <input type="date" wire:model.live="filterDateStart" class="w-full sm:w-auto bg-white border border-slate-200 text-sm text-slate-600 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500" placeholder="Mulai Tanggal">
                     <span class="text-slate-400 text-sm">-</span>
@@ -125,7 +125,7 @@
         </div>
         <!-- Pagination -->
         <div class="px-5 py-3 border-t border-[var(--color-border)] bg-white text-xs text-slate-500">
-            {{ $logs->links() }}
+            {{ $logs->links('vendor.pagination.custom') }}
         </div>
     </div>
 </div>

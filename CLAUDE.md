@@ -1182,6 +1182,790 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - Menambahkan pengujian `test_catalog_table_renders_custom_pagination_view` yang memvalidasi bahwa tampilan paginasi kustom (`vendor.pagination.custom`) ter-render dengan benar saat jumlah data melebihi batas per halaman.
   - Seluruh rangkaian test suite proyek (48 *test cases*, 219 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
 
+### 64. Notifikasi Email Otomatis Pengarsipan Berkas Fisik Kepada Staf Pembuat Naskah
+- **Kelas Notifikasi (`App\Notifications\DocumentArchivedNotification`)**:
+  - Menggunakan arsitektur `Notification` bawaan Laravel (`Illuminate\Notifications\Notification`).
+  - Menerima relasi naskah `$document`, petugas pengarsip `$officer`, dan versi berkas `$version`.
+  - Format subjek email: `"[E-Arsip] Dokumen {$document->number} Telah Selesai Diarsipkan"`.
+  - Menyediakan tautan langsung menuju pratinjau berkas digital PDF di sistem (`route('document.preview', $version->id)`).
+- **Desain Template Email HTML Responsif (`resources/views/emails/document-archived.blade.php`)**:
+  - Dirancang dengan standar *Enterprise Clean Layout* dengan aksen warna brand (`#059669` / emerald), kompatibel penuh dengan klien email modern dan Outlook (POP/SMTP/M365).
+  - Memuat:
+    - Header resmi repositori digital (*E-Arsip Repository*).
+    - Status hero badge centang hijau *"Selesai Diarsipkan"*.
+    - Sapaan personal kepada staf pendaftar (`$recipientName`).
+    - Kartu ringkasan naskah dinas: Nomor surat (font monospace), nama jenis dokumen riil (misal: *Surat Perintah*, *Memo Internal*, *Surat Keluar*), perihal, jalur loker penyimpanan fisik, tanggal naskah, nama petugas Tapersip, dan cap waktu arsip.
+    - Tombol aksi utama (*Call-to-Action*): *"Buka & Pratinjau Dokumen PDF"*.
+    - Footer berisi penafian kerahasiaan dan notifikasi otomatis.
+- **Penyelarasan Komponen Antrean Scan (`app/Livewire/Registry/ScanQueue.php`)**:
+  - Pada method `saveFinalFile()`, sistem secara otomatis mendeteksi akun staf pembuat naskah (`$document->createdBy`).
+  - **Aturan Bisnis Eksklusif**: Email **hanya** dikirimkan kepada user pemilik naskah yang bersangkutan (`$document->createdBy`), bukan staf lain.
+  - **Mekanisme Fail-Safe (Non-blocking)**: Pengiriman dibungkus dalam blok proteksi `try ... catch (\Throwable $e)` yang mencatat peringatan ke `Log::warning(...)` tanpa pernah membatalkan atau menggagalkan penyimpanan berkas fisik di NAS/database jika terjadi kendala pada server SMTP.
+  - Flash message sukses disempurnakan: *"File PDF Final berhasil diunggah dan diarsipkan. Notifikasi email telah dikirim ke [Nama Staf]."*
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentArchivedNotificationTest.php`)**:
+  - Menambahkan 3 test case lengkap:
+    1. `test_document_creator_receives_email_notification_when_tapersip_uploads_file`: Memvalidasi bahwa notifikasi `DocumentArchivedNotification` terkirim tepat ke staf pembuat naskah saat admin mengarsipkan.
+    2. `test_other_users_do_not_receive_email_notification`: Memvalidasi bahwa staf lain sama sekali tidak menerima notifikasi untuk naskah yang bukan miliknya.
+    3. `test_email_view_renders_correct_document_details`: Memvalidasi kelengkapan teks rendered HTML email (nomor surat, perihal, jenis dokumen, nama staf, loker, nama petugas, dan tautan pratinjau).
+  - Seluruh rangkaian test suite proyek (51 *test cases*, 234 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 65. Optimasi Performa Upload Berkas Scan Tapersip dengan Asynchronous Email Deferral
+- **Akar Masalah**:
+  - Saat Admin Tapersip menekan *"Simpan & Arsipkan Permanen"*, browser mengalami loading lama (4–10 detik) karena proses pengiriman email notifikasi via SMTP hosting dijalankan secara sinkron (*blocking*), sehingga browser harus menunggu proses handshake SSL/TLS dan respons server SMTP selesai sebelum modal tertutup.
+- **Implementasi Solusi (`app/Livewire/Registry/ScanQueue.php`)**:
+  - Mengintegrasikan fungsi modern Laravel 11 `defer(function () { ... })` pada method `saveFinalFile()`.
+  - Livewire menyelesaikan penyimpanan file ke NAS, update database, dan pencatatan audit log dalam hitungan milidetik, lalu langsung mengirimkan respons penutupan modal dan flash notifikasi ke layar Admin Tapersip secara **instan (< 0.5 detik)**.
+  - Proses pengiriman email notifikasi via SMTP dieksekusi secara asinkron di latar belakang (*background lifecycle*) setelah respons HTTP dikirim ke browser.
+  - Menjaga kompatibilitas lingkungan testing (`app()->runningUnitTests()`) agar pengujian otomatis tetap dapat memverifikasi pengiriman notifikasi tanpa kendala.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentArchivedNotificationTest.php`)**:
+  - Seluruh pengujian notifikasi email dan pengarsipan berkas lulus 100%.
+  - Seluruh rangkaian test suite proyek (51 *test cases*, 234 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 66. Resolusi Anomali Penomoran Surat Keluar & Pengamanan Urutan Sequence Otomatis
+- **Akar Masalah**:
+  - Saat digitalisasi dokumen lama melalui aksi *"Simpan & Arsipkan"*, input nomor manual (contoh: `123456789/pms/pms/2026`) diekstrak angka pertamanya oleh regex dan disimpan mentah ke dalam kolom integer `sequence_number = 123456789`.
+  - Ketika staf berikutnya mengklik *"Ambil Nomor Surat"*, kueri `MAX('sequence_number')` mendeteksi angka tersebut sebagai urutan tertinggi tahun ini, sehingga sistem otomatis menerbitkan nomor berikutnya yang melompat: `123456790` dan `123456791`.
+- **Implementasi Pengamanan Kode Backend (`Outgoing/Create.php` & `Internal/Create.php`)**:
+  - **Pencegahan Kontaminasi Sequence Manual**: Pada method `saveAndArchive()`, angka yang diekstrak dari nomor fisik manual diverifikasi agar tidak melebihi batas wajar urutan nomor kantor tahunan (`$parsedSequence <= 99999`). Jika berupa nomor barcode/dokumen luar yang panjang, kolom `sequence_number` disimpan sebagai `null` (teks nomor surat fisik tetap tersimpan utuh di kolom `number`).
+  - **Kueri Defensif Penomoran Otomatis**: Pada method `generateNumber()`, pencarian nilai maksimum dibatasi hanya pada nomor urut wajar (`->where('sequence_number', '<=', 99999)`), sehingga jika terdapat dokumen dengan nomor panjang di database, urutan penomoran otomatis kantor tetap berjalan normal dari nomor urut kantor yang sah.
+- **Pembersihan Data Anomali di Database**:
+  - Menyetel `sequence_number` pada dokumen ID 32 menjadi `null`.
+  - Mengembalikan nomor dan urutan dokumen ID 39 menjadi `24` (`24/OPS-PP.00/10/2026`).
+  - Mengembalikan nomor dan urutan dokumen ID 40 menjadi `25` (`25/OPS-PP.01/10/2026`).
+  - Pengambilan nomor berikutnya otomatis kembali normal melanjutkan nomor urut **`26`** (`26/OPS-.../10/2026`).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/SequenceNumberingTest.php`)**:
+  - Menambahkan test case `test_manual_large_document_number_does_not_pollute_auto_sequence_numbering` yang memvalidasi bahwa pengarsipan nomor manual panjang (> 99999) tidak mengotori `sequence_number` dan penerbitan nomor otomatis staf tetap melanjutkan urutan normal kantor.
+  - Seluruh rangkaian test suite proyek (52 *test cases*, 241 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 67. Penyesuaian Desain Minimalis & Subjek Email Notifikasi Pengarsipan Dokumen
+- **Penyesuaian Subjek Email (`App\Notifications\DocumentArchivedNotification`)**:
+  - Menghapus prefix tag `[E-Arsip]` pada subjek email pemberitahuan sehingga format subjek menjadi bersih, ringkas, dan profesional:
+    `"Dokumen {$this->document->number} Telah Selesai Diarsipkan"`.
+- **Penyederhanaan Template Email (`resources/views/emails/document-archived.blade.php`)**:
+  - **Penghapusan Baris Loker**: Menghapus baris detail *Loker Penyimpanan* dari kartu rincian naskah email agar staf pembuat fokus pada status resmi pengarsipan tanpa perlu mengetahui lokasi lemari penyimpanan fisik internal Tapersip.
+  - **Penghapusan Tombol Call-to-Action (CTA)**: Menghapus tombol *"Buka & Pratinjau Dokumen PDF"* (`.btn-container`) sehingga email murni berfungsi sebagai surat pemberitahuan resmi (*clean notification-only email*).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentArchivedNotificationTest.php`)**:
+  - Memperbarui `test_email_view_renders_correct_document_details` untuk memvalidasi:
+    - Subjek email bersih tanpa prefix tag `[E-Arsip]`.
+    - Tidak memuat baris teks *"Loker Penyimpanan"*.
+    - Tidak memuat tombol tautan pratinjau.
+  - Seluruh rangkaian test suite proyek (52 *test cases*, 242 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 68. Notifikasi Real-Time Web ke PC Desktop untuk Sirkulasi Peminjaman Berkas Fisik Tapersip
+- **Komponen Listener Cerdas (`App\Livewire\Components\TapersipNotificationListener`)**:
+  - Komponen latar belakang ringan yang khusus aktif untuk pengguna dengan hak akses Tapersip (`auth()->user()->isTapersip()`).
+  - Menjalankan smart polling interval 8 detik (`wire:poll.8s="checkLoanEvents"`) untuk mendeteksi:
+    1. **Pengajuan Pinjam Baru (`status = 'requested'`)**: Memeriksa tiket pinjaman baru berdasarkan selisih ID tertinggi (`lastKnownRequestId`).
+    2. **Pembatalan Pinjaman (`status = 'cancelled'`)**: Memeriksa tiket yang dibatalkan staf berdasarkan `updated_at >= lastCheckedAt`.
+  - Menerapkan mekanisme pelacakan ID dan timestamp terakhir yang telah diberitahukan guna mencegah peringatan berulang (*anti-duplicate alert logic*).
+  - Mengirimkan event browser `desktop-notify` yang memuat judul, ringkasan pemohon/naskah/kode tiket, dan URL navigasi menuju meja sirkulasi Tapersip.
+- **Antarmuka Pengguna & Integrasi Native Desktop PC (`app.blade.php` & `tapersip-notification-listener.blade.php`)**:
+  - **Native OS Web Notification**: Memanfaatkan HTML5 Web Notification API untuk memunculkan banner notifikasi Windows di sudut layar PC. Banner dapat diklik untuk langsung mengarahkan peramban ke halaman Sirkulasi Tapersip (`/borrowings`), bahkan saat browser sedang diminimalkan atau membuka aplikasi lain.
+  - **Audio Chime Mandiri**: Membunyikan suara bel lonceng lembut (*two-tone chime harmonic*) menggunakan Web Audio API murni secara instan tanpa membutuhkan file aset audio eksternal.
+  - **Tombol Izin di Navbar Header**:
+    - Menyediakan tombol saklar status di header navigasi: badge amber *"Aktifkan Notifikasi PC"* (jika izin browser belum aktif) yang otomatis berubah menjadi badge hijau *"Notifikasi PC Aktif"* dengan lampu indikator berdenyut (*pulsing green dot*).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/TapersipRealTimeNotificationTest.php`)**:
+  - Menambahkan 4 test case lengkap:
+    1. `test_listener_dispatches_desktop_notify_when_new_loan_is_requested` (memvalidasi trigger event saat staf mengajukan pinjam berkas).
+    2. `test_listener_dispatches_desktop_notify_when_loan_is_cancelled` (memvalidasi trigger event saat staf membatalkan pinjaman).
+    3. `test_non_tapersip_user_does_not_poll_or_dispatch_notifications` (memvalidasi proteksi otorisasi bagi staf biasa).
+    4. `test_listener_does_not_repeat_notifications_for_already_notified_loans` (memvalidasi pencegahan notifikasi duplikat).
+  - Seluruh rangkaian test suite proyek (56 *test cases*, 247 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 69. Penyempurnaan Notifikasi Real-Time: Icon Lonceng, Dropdown Panel, Floating Toast & Auto-Update Tabel Sirkulasi
+- **Penghapusan Dependensi Pop-Up Windows OS**:
+  - Menghapus ketergantungan pada Web Notification API browser (`new Notification(...)`) yang otomatis diblokir oleh peramban modern (Chrome, Brave) saat diakses via alamat IP jaringan lokal non-HTTPS (`http://192.168.x.x`).
+- **Antarmuka Header: Icon Lonceng & Dropdown Panel (`tapersip-notification-listener.blade.php`)**:
+  - Mengganti tombol teks *"Aktifkan Notifikasi PC"* dengan **Tombol Icon Lonceng Notifikasi** di navbar header.
+  - Dilengkapi badge counter merah beranimasi denyut (*pulsing red badge*) yang menampilkan jumlah permohonan pinjam yang sedang menunggu tindakan (`pendingCount`).
+  - Saat icon lonceng diklik, muncul dropdown interaktif berisikan daftar riwayat pengajuan pinjam baru dan pembatalan tiket terbaru, lengkap dengan nama staf, unit kerja, kode tiket, nomor dokumen, waktu relatif, dan tombol cepat *"Buka Meja Kerja Sirkulasi Tapersip &rarr;"*.
+- **Floating In-App Visual Toast (`tapersip-notification-listener.blade.php`)**:
+  - Saat ada staf mengajukan pinjam atau membatalkan pinjaman:
+    - Membunyikan suara bel harmoni lonceng dua nada (*two-tone audio chime*) via Web Audio API murni.
+    - Menampilkan kartu notifikasi melayang (*floating in-app toast*) di sudut kanan atas layar peramban (`fixed top-5 right-5 z-[9999]`) dengan animasi geser (*slide-in*), memuat judul, detail pemohon, kode tiket, tombol aksi *"Tinjau Meja Sirkulasi"*, dan tombol tutup mandiri (otomatis menghilang setelah 7 detik).
+- **Sinkronisasi Tabel Real-Time Tanpa Refresh (`DocumentLoanIndex.php` & `document-loan-index.blade.php`)**:
+  - Menambahkan pemancaran event global Livewire `$this->dispatch('loan-status-changed')` pada komponen listener saat ada transaksi baru atau pembatalan.
+  - Menghubungkan listener `#[On('loan-status-changed')]` pada komponen `DocumentLoanIndex` untuk me-render ulang tabel sirkulasi secara otomatis.
+  - Menambahkan pengaman `wire:poll.10s` pada kontainer meja kerja sirkulasi Tapersip sehingga tabel selalu ter-update secara otomatis saat petugas standby.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/TapersipRealTimeNotificationTest.php`)**:
+  - Menambahkan pengujian `test_document_loan_index_listens_to_loan_status_changed_event` dan `test_listener_renders_notification_bell_and_dropdown_items`.
+  - Seluruh rangkaian test suite proyek (58 *test cases*, 253 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 70. Redesain Minimalis & Pembersihan Tata Letak Dropdown Notifikasi Sirkulasi Tapersip
+- **Pembersihan Elemen Visual yang Bertumpuk & Terhimpit (`tapersip-notification-listener.blade.php`)**:
+  - Memperluas lebar kontainer dropdown menjadi `w-80 sm:w-[390px] md:w-[420px]` agar seluruh baris teks dan kode nomor tiket tidak lagi patah atau terpotong sempit.
+  - **Penyempurnaan Header Dropdown**:
+    - Judul panel dibuat ringkas dan proporsional dalam satu baris: `"Sirkulasi & Peminjaman Berkas"`.
+    - Merapikan badge antrean `{{ $pendingCount }} Menunggu` dengan pill warna kuning/amber rapi tanpa baris terputus.
+    - Menghilangkan teks dekoratif *"Live Sync"* yang sebelumnya membuat area header sesak.
+  - **Redesain Daftar Notifikasi**:
+    - Menghilangkan ikon lingkaran biru `+` besar yang tidak relevan.
+    - Baris 1: Menampilkan badge status minimalis (*Permohonan Baru* beraksen hijau / *Dibatalkan* beraksen merah lembut) bersanding dengan stempel waktu relatif.
+    - Baris 2: Menampilkan nama pemohon tebal (*bold*) beserta divisi/unit kerja dalam format yang rapi dan tidak tumpang tindih.
+    - Baris 3: Kode tiket resmi (`loan_code`) ditampilkan dengan font monospace tebal warna primer, dipisahkan oleh titik tengah (`•`) dengan nomor surat terkait tanpa ada patahan baris nomor.
+  - **Penyelarasan Icon Lonceng Header**:
+    - Menata posisi badge counter merah di sudut kanan atas icon lonceng (`-top-0.5 -right-0.5`) sehingga pas dan tidak bergeser aneh di navbar.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/TapersipRealTimeNotificationTest.php`)**:
+  - Seluruh pengujian komponen listener dan integrasi sirkulasi terkonfirmasi **lulus 100% (58 test cases, 253 assertions PASS)**.
+
+### 71. Penggabungan Notifikasi Multi-Kategori (Upload Scan & Pinjam Berkas), Unread Dismiss, & Efek Sorot "Iniloh Data yang Kamu Cari"
+- **Komponen Backend Terpadu (`App\Livewire\Components\TapersipNotificationListener`)**:
+  - **Penggabungan Multi-Kategori Tugas Kearsipan**:
+    1. *Antrean Upload Scan Fisik*: Memantau dokumen naskah yang baru diambil nomornya oleh staf dan berstatus `waiting_for_file` (menunggu scan).
+    2. *Sirkulasi Peminjaman Berkas*: Memantau pengajuan tiket pinjam baru (`requested`) dan pembatalan tiket (`cancelled`).
+  - **Mekanisme State Belum Dibaca / Unread Dismiss**:
+    - Riwayat item yang sudah diklik/dibaca disimpan dalam cache per user (`tapersip_read_notifs_{user_id}`) selama 30 hari.
+    - Menyediakan method `dismissAndRedirect($key, $targetUrl)`: Saat notifikasi diklik, item tersebut langsung hilang seketika dari daftar dropdown dan peramban diarahkan ke halaman tujuan.
+    - Menyediakan method `markAllAsRead()`: Membersihkan seluruh notifikasi aktif dalam 1 klik.
+  - **Penghitungan Badge Merah Akurat**:
+    - `$pendingCount` menghitung seluruh tugas aktif yang belum dibaca (`unread_scans + unread_loans`), sehingga badge merah pada icon lonceng selalu akurat dan menyala saat ada tugas tertunda.
+- **Antarmuka Header & Dropdown Notifikasi (`tapersip-notification-listener.blade.php`)**:
+  - **Penamaan Header**: Mengganti teks panjang lama menjadi judul ringkas dan tegas: **`Notifikasi`**.
+  - **Badge Counter Merah Mencolok**: Posisi koordinat badge merah dipasang presisi di dalam tombol lonceng (`top-1 right-1 z-10`) dengan efek ping denyut (*pulsing dot*) yang jelas dan tidak terpotong header navbar.
+  - **Penanda Belum Dilihat (*Unread Dot*)**: Menambahkan titik bulat biru menyala (`bg-blue-600`) di sebelah kiri setiap notifikasi yang belum diklik.
+  - **Pembedaan Kategori Tugas**:
+    - *Upload Scan*: Badge oranye/amber lembut + nomor dokumen + staf pendaftar.
+    - *Pinjam Fisik*: Badge biru/emerald + kode tiket + pemohon.
+    - *Batal Pinjam*: Badge merah/rose + tiket yang dibatalkan.
+  - **Tombol "Tandai Semua Dibaca ✓"**: Tersemat rapi di sudut kanan atas header dropdown.
+- **Fitur Spotlight Focus & Auto-Scroll ("📍 Iniloh Data Yang Kamu Cari")**:
+  - **Pada Halaman Antrean Scan (`resources/views/livewire/registry/scan-queue.blade.php`)**:
+    - Menggunakan parameter URL `?highlight=doc-{id}`.
+    - Saat halaman dimuat dari notifikasi, layar peramban otomatis bergulir halus (*smooth auto-scroll*) ke tengah baris dokumen yang dituju.
+    - Baris tabel otomatis bersorot dengan bingkai hijau berdenyut (`ring-2 ring-emerald-500 bg-emerald-50/90 shadow-md`) dan memunculkan badge animasi: **`📍 Iniloh Data Yang Kamu Cari`** selama 4.5 detik.
+  - **Pada Halaman Sirkulasi Peminjaman (`DocumentLoanIndex.php` & `document-loan-index.blade.php`)**:
+    - Mendukung query parameter `?tab=circulation&highlight=loan-{id}` sehingga otomatis membuka tab Persetujuan Tapersip.
+    - Baris tiket pinjaman yang dituju otomatis bergulir ke tengah layar dengan bingkai biru berdenyut (`ring-2 ring-blue-500 bg-blue-50/90 shadow-md`) dan badge animasi: **`📍 Iniloh Data Yang Kamu Cari`**.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/TapersipRealTimeNotificationTest.php` & `DocumentLoanTest.php`)**:
+  - Menambahkan pengujian untuk multi-kategori antrean scan, dismiss and redirect, unread counter reduction, serta aktivasi tab sirkulasi via query parameter.
+  - Seluruh rangkaian test suite proyek (61 *test cases*, 262 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 72. Penyederhanaan Efek Sorot Deep-Linking Ala Windows Explorer
+- **Penghapusan Badge Stiker Animasi**:
+  - Menghilangkan badge teks animasi `"📍 Iniloh Data Yang Kamu Cari"` pada tabel Antrean Scan (`scan-queue.blade.php`) dan tabel Meja Sirkulasi (`document-loan-index.blade.php`).
+- **Implementasi Seleksi Baris Minimalis & Bersih**:
+  - Mengadopsi gaya seleksi file pada Windows File Explorer:
+    - **Antrean Scan**: Baris dokumen yang dituju otomatis bergulir ke tengah layar (*smooth auto-scroll*) dengan gaya seleksi bersih: latar lembut `bg-emerald-50/80`, aksen border kiri tegas `border-l-4 border-l-emerald-600`, dan outline halus `ring-1 ring-emerald-200/80`.
+    - **Meja Sirkulasi Tapersip**: Baris tiket sirkulasi yang dituju otomatis bergulir ke tengah layar dengan gaya seleksi bersih: latar lembut `bg-blue-50/80`, aksen border kiri tegas `border-l-4 border-l-blue-600`, dan outline halus `ring-1 ring-blue-200/80`.
+  - Efek seleksi bertahan selama 5 detik untuk mengarahkan fokus pandangan pengguna, kemudian memudar kembali secara halus (*fade transition*) ke tampilan baris tabel normal.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite proyek (61 *test cases*, 262 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 73. Penetrasi Warna Solid Seleksi Kolom Spotlight Deep-Linking Ala Windows Explorer
+- **Akar Masalah Warna Tidak Terlihat**:
+  - Pada spesifikasi CSS Table Model (`display: table-row`), latar belakang yang dipasang pada tag baris `<tr>` berada di lapisan paling bawah dan tertutup oleh sel anak `<td>`.
+  - Tingkat warna sebelumnya (`emerald-50/80` dan `blue-50/80`) memiliki tingkat kecerahan 98% yang nyaris putih murni sehingga di atas tabel putih perbedaannya hanya ~1.5% dan tidak tertangkap mata, sehingga hanya garis aksen kiri solid saja yang terlihat.
+- **Implementasi Penetrasi Warna Kolom Menyeluruh (`scan-queue.blade.php` & `document-loan-index.blade.php`)**:
+  - Memanfaatkan selector Tailwind `[&>td]` dengan override warna tegas agar seluruh sel kolom tabel langsung terisi warna seleksi solid:
+    - **Antrean Scan**: `[&>td]:!bg-emerald-100 border-l-4 border-l-emerald-600 ring-1 ring-emerald-300 shadow-xs`.
+    - **Meja Sirkulasi Tapersip**: `[&>td]:!bg-sky-100 border-l-4 border-l-sky-600 ring-1 ring-sky-300 shadow-xs` (warna biru langit seleksi khas Windows File Explorer).
+  - Warna seleksi membentang jelas dan tegas dari kolom pertama hingga kolom aksi terakhir di semua jenis layar monitor.
+  - Mempertahankan durasi fokus selama 5 detik dengan transisi memudar halus (*smooth 1-second fade out*) kembali ke baris tabel normal.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite proyek (61 *test cases*, 262 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 74. Penyesuaian Spotlight Deep-Linking: Garis Abu-Abu Tipis & Latar Lembut Ala Windows Explorer
+- **Akar Masalah Garis Gelap Bawah**:
+  - Pada tabel HTML dengan arsitektur `border-collapse: collapse`, browser menggabungkan border tabel dan mengabaikan utility `ring`, sehingga menghasilkan garis gelap tebal pekat di bagian bawah baris yang merusak estetika antarmuka.
+- **Implementasi Garis Abu-Abu Tipis & Latar Lembut Presisi (`document-loan-index.blade.php` & `scan-queue.blade.php`)**:
+  - Mengganti border tebal/ring dengan properti outline presisi dan latar belakang abu-abu lembut:
+    `:style="isTarget ? 'background-color: #f1f5f9; outline: 1.5px solid #cbd5e1; outline-offset: -1px; transition: all 0.7s ease;' : 'transition: all 0.7s ease;'"`
+    beserta utility sel kolom: `[&>td]:!bg-[#f1f5f9]`.
+  - **Hasil Visual**:
+    - Membingkai baris yang dipilih dari seluruh sisi dengan garis abu-abu tipis rapi (`#cbd5e1` / Slate-300).
+    - Seluruh kolom (dari awal hingga akhir baris) merata terisi warna abu-abu muda lembut (`#f1f5f9` / Slate-100), memberikan kesan seleksi yang tenang, profesional, dan persis seperti file yang sedang terseleksi di Windows File Explorer.
+  - Mempertahankan auto-scroll halus ke tengah layar saat baris dituju dari notifikasi dan memudar perlahan setelah 5 detik kembali ke tampilan baris tabel normal.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite proyek (61 *test cases*, 262 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 75. Redesain Popover Notifikasi Bespoke Enterprise (Card-less Rows, Tanpa Footerbar, & Scroll 10+ Data)
+- **Penghapusan Total Footerbar (`tapersip-notification-listener.blade.php`)**:
+  - Menghilangkan bilah navigasi bawah yang membuat panel tampak seperti widget sesak. Ujung bawah popover kini melengkung bersih dan rapi (`rounded-b-2xl`).
+- **Pelegaan Kapasitas & Scrollbar Halus**:
+  - Mengatur kontainer popover dengan lebar proporsional (`w-80 sm:w-[420px] md:w-[460px]`) dan ketinggian scrollable `max-h-[460px] overflow-y-auto overscroll-contain`.
+  - Memasang scrollbar tipis modern (`[scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]`) sehingga pengguna dapat men-scroll hingga 10–20 data tanpa tampilan yang kaku.
+- **Tata Letak Baris Bersih & Bernapas (*Card-less Clean Rows*)**:
+  - Menghilangkan badge bertumpuk dan lingkaran biru besar yang mengganggu visual.
+  - **Indikator Unread Elegan**: Item belum dibaca ditandai dengan garis aksen vertikal kiri 3px (`border-l-[3px] border-l-[var(--color-primary)] bg-emerald-50/15`).
+  - **Struktur Baris Teratur**:
+    - Baris 1: Micro-badge kategori berikon ringkas (*Upload Scan*, *Pinjam Fisik*, *Batal Pinjam*) + waktu relatif monospace di kanan.
+    - Baris 2: Nomor surat / kode tiket resmi dengan font monospace tebal dan jelas.
+    - Baris 3: Nama pemohon, unit kerja, dan perihal dokumen ringkas dalam satu baris tenang tanpa ada pemenggalan canggung.
+- **Penyelarasan Backend Query (`TapersipNotificationListener.php`)**:
+  - Meningkatkan kuota kueri feed data scan naskah dan sirkulasi pinjam hingga masing-masing 15 item untuk menyuplai hingga 20 data unread dinamis.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite proyek (61 *test cases*, 262 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 76. Penguncian Lebar Paten 380px, Eliminasi Elemen Redundan & Penataan Empty State Popover Notifikasi
+- **Akar Masalah Kerusakan Layout Popover**:
+  - Aset CSS produksi (`public/build/assets/app-*.css`) sebelumnya belum terkompilasi ulang dengan utilitas arbitrary Tailwind baru, sehingga browser merender kontainer dengan `width: auto`.
+  - Saat ada notifikasi, dropdown menciut mengikuti teks sehingga teks *"Notifikasi"* dan pil counter *"1 baru"* bertabrakan (Gambar 1).
+  - Saat notifikasi kosong (0 data), dropdown menciut drastis ke ~140px sehingga teks *"Notifikasi"* dan *"Semua selesai"* saling tumpuk dan gepeng (Gambar 2).
+  - Elemen di dalam kartu notifikasi memiliki redundansi ganda (kotak hijau badge `[PINJAM FISIK]` bersanding dengan teks `Pengajuan Pinjam Fisik`).
+- **Implementasi Solusi UI Presisi (`tapersip-notification-listener.blade.php`)**:
+  - **Kunci Lebar Paten 380px**: Memasang lebar inline paten `style="width: 380px; max-width: calc(100vw - 2rem);"` pada kontainer popover. Ukuran dropdown kini **dijamin 100% konsisten (380px)** baik saat berisi data maupun saat kosong.
+  - **Eliminasi Elemen Redundan**:
+    - Menghapus badge kotak ganda yang memadati baris.
+    - Menata 3 baris bersih:
+      - *Baris 1*: Ikon aksi elegan + Judul tugas + Waktu relatif di kanan.
+      - *Baris 2*: Kode tiket / nomor naskah monospace tebal + titik pemisah + nama pemohon & unit kerja.
+      - *Baris 3*: Ringkasan perihal dokumen tenang satu baris.
+  - **Penyempurnaan Header & Empty State**:
+    - Header diberikan spasi lega (`gap-2`) sehingga judul, counter pil, dan tombol *"Tandai dibaca ✓"* tidak bertabrakan.
+    - Tampilan saat kosong (*empty state*) memiliki ruang simetris, lega, dan nyaman di tengah kontainer selebar 380px.
+- **Kompilasi Aset Frontend**:
+  - Menjalankan `npm run build` untuk mengompilasi ulang seluruh bundle CSS produksi terbaru.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite proyek (61 *test cases*, 262 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 77. Penataan Alur Cetak Tiket Kearsipan: Eksklusif untuk Petugas Tapersip & Paperless Request bagi Staf
+- **Penyederhanaan Alur Pengajuan Pinjam Staf (`app/Livewire/Registry/DocumentLoanIndex.php`)**:
+  - Saat staf atau user biasa mengajukan pinjam dokumen fisik, sistem langsung menutup modal permohonan dan secara otomatis mengalihkan tampilan ke tab *"Pinjaman Saya"* (`$this->activeTab = 'my_loans'`).
+  - Menghilangkan modal pop-up cetak tiket (`modal-loan-ticket`) bagi staf, digantikan dengan notifikasi sukses informatif: *"Permohonan pinjam berhasil diajukan dengan kode [TIKET-xxxx]. Petugas Tapersip sedang menyiapkan berkas fisik dan bukti peminjaman Anda."*
+- **Penghapusan Aksi Cetak Tiket pada Tampilan Staf (`document-loan-index.blade.php`)**:
+  - Menghilangkan tombol cetak ulang tiket (ikon printer) dari kolom aksi Tab 2 (*Pinjaman Saya*). Kolom aksi staf kini hanya menampilkan tombol *"Batal"* jika statusnya masih menunggu.
+  - Memperbarui teks petunjuk status dari *"Bawa tiket ke Tapersip"* menjadi **`Menunggu Penyiapan Berkas`**, menciptakan pengalaman *paperless request* yang tenang dan tidak merepotkan staf.
+- **Proteksi Otorisasi Cetak Tiket Eksklusif Tapersip**:
+  - Pada method `DocumentLoanIndex::openTicketModal($loanId)`, ditambahkan validasi otorisasi `$this->canManageCirculation`. Staf biasa yang mencoba mengakses modal cetak tiket akan ditolak dengan error 403 (*Unauthorized*).
+  - Aksi cetak tiket fisik hardcopy tetap tersedia eksklusif pada menu dropdown *"Pilihan Aksi"* di Tab 3 (*Persetujuan Tapersip*) bagi Petugas Tapersip yang bertugas mengambil berkas fisik dari lemari kearsipan dan menyematkan lembar kendali.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanTest.php`)**:
+  - Menambahkan pengujian `test_regular_user_cannot_open_ticket_modal_and_only_tapersip_can_print` (memvalidasi proteksi otorisasi 403 untuk staf biasa dan keberhasilan cetak untuk Tapersip).
+  - Memperbarui pengujian `test_user_can_submit_loan_request_and_ticket_is_generated` untuk memvalidasi alur tanpa pembukaan modal tiket staf dan pengalihan ke tab Pinjaman Saya.
+  - Seluruh rangkaian test suite proyek (62 *test cases*, 267 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 78. Lapisan Pengamanan Hak Akses Kerahasiaan (Sifat) & Batasan Divisi pada Katalog Pencarian Arsip
+- **Latar Belakang Tata Kelola & Keamanan Informasi**:
+  - Sebelum perbaikan, tabel katalog pencarian arsip (`DocumentLoanIndex`) menampilkan seluruh dokumen arsip kantor tanpa pembatasan hak akses, sehingga teks perihal dokumen sensitif (seperti sanksi SDM, gugatan hukum, atau audit keuangan) berpotensi terbaca oleh staf lintas divisi yang tidak berwenang.
+- **Implementasi Model Akses Berlapis (`app/Livewire/Registry/DocumentLoanIndex.php`)**:
+  - **Pengecualian Penuh (Superadmin & Tapersip)**: Akun Superadmin dan Petugas Tapersip memiliki hak akses pengawasan penuh (*full visibility*) terhadap seluruh dokumen tanpa batasan.
+  - **Dokumen Biasa**: Terbuka dan dapat dicari secara bebas oleh seluruh karyawan dari divisi mana pun untuk mendukung kelancaran operasional harian.
+  - **Dokumen Rahasia**: Disembunyikan sepenuhnya (*hidden*) dari katalog pencarian staf biasa, kecuali jika staf tersebut adalah pembuat naskah (`created_by === user->id`) atau memiliki izin eksplisit `hasDocumentPermission('view', 'rahasia')`.
+  - **Dokumen Penting**: Hanya ditampilkan kepada staf jika naskah berasal dari divisi/unit yang sama (`unit_id === user->getDivision()->id`), unit bawahan divisi, staf adalah pembuat naskah, atau jika divisi staf tercatat sebagai pihak penerima naskah dinas.
+- **Proteksi Otorisasi Server-Side (`canAccessDocument`)**:
+  - Memproteksi eksekusi method `openLoanModal($documentId)` dan `submitLoanRequest()` dengan validasi `canAccessDocument()`. Upaya peminjaman paksa terhadap naskah rahasia/penting divisi lain akan ditolak di tingkat server.
+- **Penyelarasan Antarmuka Dropdown Filter (`document-loan-index.blade.php`)**:
+  - Opsi filter "Rahasia" pada dropdown *Sifat Kerahasiaan* disembunyikan secara kondisional jika akun pengguna tidak berhak mengakses dokumen rahasia (`$canViewRahasia`).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanTest.php`)**:
+  - Menambahkan 4 pengujian otomatis:
+    1. `test_staff_cannot_see_confidential_rahasia_documents_in_catalog`
+    2. `test_staff_cannot_see_important_penting_documents_from_other_divisions`
+    3. `test_staff_can_see_ordinary_biasa_documents_across_all_divisions`
+    4. `test_superadmin_can_see_all_documents_including_rahasia_and_other_divisions_penting`
+  - Seluruh rangkaian test suite proyek (66 *test cases*, 278 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 79. Diferensiasi Batasan Hak Akses Dokumen Penting: Surat Keluar (Tingkat Divisi) vs Surat Khusus (Tingkat Departemen)
+- **Aturan Tata Kelola Baru untuk Dokumen Bersifat Penting (`sifat = 'penting'`)**:
+  - **Surat Keluar (`type = 'outgoing'`)**:
+    - Dibuat pada level Divisi. Dokumen penting kategori ini hanya ditampilkan kepada staf jika naskah berasal dari **DIVISI yang sama** (`user->getDivision()->id === doc->unit->getDivision()->id`).
+  - **Surat Khusus (`type = 'internal'`: Memo Internal, Surat Tugas, SK, dll.)**:
+    - Dibuat untuk komunikasi antar unit kerja pada level Departemen dengan privasi lebih ketat.
+    - Dokumen penting kategori ini **hanya ditampilkan jika berasal dari DEPARTEMEN yang sama persis** (`user->unit_id === doc->unit_id`).
+    - Staf di departemen lain (meskipun bernaung di bawah divisi induk yang sama) **tidak dapat melihat** dokumen tersebut di katalog dan ditolak jika mencoba meminjam.
+  - **Surat Masuk (`type = 'incoming'`)**: Ditampilkan jika naskah ditujukan ke departemen atau divisi akun staf.
+  - **Pengecualian Tetap Berlaku**: Pihak unit penerima naskah dinas (`recipients`), pembuat naskah (`created_by === user->id`), serta Superadmin & Admin Tapersip selalu memiliki akses penuh.
+- **Implementasi Komponen Backend (`app/Livewire/Registry/DocumentLoanIndex.php`)**:
+  - Memperbarui method otorisasi server-side `canAccessDocument()` untuk membedakan aturan pengecekan unit per tipe korespondensi (`outgoing` vs `internal`).
+  - Memperbarui sub-kueri katalog pada method `render()` sehingga kueri SQL otomatis memisahkan batasan divisi untuk Surat Keluar dan batasan departemen untuk Surat Khusus secara presisi.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanTest.php`)**:
+  - Menambahkan pengujian `test_staff_cannot_see_important_special_internal_documents_from_different_department_in_same_division`:
+    - Memvalidasi bahwa staf di *Departemen Infrastruktur Jaringan* tidak dapat melihat Memo Internal penting milik *Departemen Pengembangan Aplikasi*, meskipun keduanya di bawah *Divisi TI* yang sama.
+    - Memvalidasi bahwa staf sesama *Departemen Pengembangan Aplikasi* dapat melihat dan meminjam naskah tersebut.
+  - Seluruh rangkaian test suite proyek (67 *test cases*, 283 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 80. Penyeragaman Format Nomor Urut 2 Digit pada Formulir Registrasi Surat Khusus
+- **Latar Belakang**:
+  - Format nomor urut pada *Surat Keluar* sebelumnya telah dibakukan menggunakan padding 2 digit (`01`, `02`, `03`, dst.).
+  - Namun, pada generator nomor *Surat Khusus* (`app/Livewire/Registry/Internal/Create.php`), nomor urut masih menggunakan padding 3 digit (`001`, `002`), sehingga terjadi ketidaksinkronan format penomoran naskah dinas kantor.
+- **Penyelarasan Kode Generator (`app/Livewire/Registry/Internal/Create.php`)**:
+  - Mengubah fungsi padding pada baris 104 menjadi format 2 digit:
+    `$sequenceNo = str_pad($nextSequence, 2, '0', STR_PAD_LEFT);`
+  - Hasilnya, penerbitan nomor Surat Khusus (Memo Internal, Surat Tugas, Surat Perintah, Surat Keputusan, dll.) kini seragam menggunakan format 2 digit baku: `01/MI/TI-DEV/2026`, `02/SPRIN/OPS-LOG/2026`, dst.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/SpecialLetterTest.php`)**:
+  - Menambahkan pengujian `test_special_letter_numbering_uses_two_digit_format` yang memvalidasi bahwa nomor resmi Surat Khusus yang diterbitkan diawali format 2 digit angka (`^\d{2}\/`).
+  - Seluruh rangkaian test suite proyek (68 *test cases*, 286 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 81. Peningkatan Skalabilitas Sistem: Penambahan Database Indexing & Eliminasi Kueri N+1 Peminjaman Berkas
+- **Latar Belakang Skalabilitas & Performa**:
+  - Mengantisipasi volume data besar hingga 1.000 naskah surat per akun (puluhan ribu record dokumen di database).
+  - Mengeliminasi potensi *full table scan* dan kueri N+1 pada tabel katalog peminjaman berkas agar halaman tetap terbuka secepat kilat (< 0.3 detik).
+- **Penambahan Database Indexing (`database/migrations/2026_10_20_000001_add_performance_indexes_to_documents_table.php`)**:
+  - Menambahkan indeks tunggal dan komposit pada kolom-kolom tabel `documents` yang intensif digunakan dalam filter dan sorting:
+    - `idx_documents_number` pada kolom `number`.
+    - `idx_documents_document_date` pada kolom `document_date`.
+    - `idx_documents_status` pada kolom `status`.
+    - `idx_documents_sifat` pada kolom `sifat`.
+    - Indeks komposit `idx_documents_type_status` pada `['type', 'status']` (sangat optimal untuk dashboard & antrean scan Tapersip).
+    - Indeks komposit `idx_documents_status_date` pada `['status', 'document_date']` (sangat optimal untuk katalog pencarian arsip berkas).
+- **Eliminasi Kueri N+1 pada Tabel Katalog (`resources/views/livewire/registry/document-loan-index.blade.php`)**:
+  - Mengganti pemanggilan metode `$doc->isCurrentlyBorrowed()` dan `$doc->loans()->where(...)->exists()` yang sebelumnya memicu 20 kueri SQL tambahan per muat halaman menjadi evaluasi in-memory langsung dari relasi `$doc->activeLoan` yang sudah di-eager load:
+    `$isBorrowed = $activeLoan && $activeLoan->status === 'borrowed';`
+    `$isRequested = $activeLoan && $activeLoan->status === 'requested';`
+  - Mengurangi beban database hingga 0 kueri tambahan per baris data.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite proyek (68 *test cases*, 286 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 82. Notifikasi Otomatis Email Persetujuan Peminjaman Berkas Fisik (Loan Approval Email)
+- **Latar Belakang & Kebutuhan**:
+  - Ketika staf mengajukan peminjaman berkas fisik di menu Peminjaman Berkas dan disetujui oleh Admin Tapersip (`approveLoan`), peminjam perlu mendapatkan notifikasi konfirmasi resmi lewat email untuk segera mengambil berkas fisik di unit Tapersip.
+  - Tampilan email harus konsisten dan serasi dengan email pengarsipan dokumen (`document-archived.blade.php`), namun **tanpa footer sama sekali** sesuai instruksi.
+- **Implementasi Notifikasi (`app/Notifications/DocumentLoanApprovedNotification.php`)**:
+  - Dibuat kelas notifikasi dengan subjek: `Peminjaman Berkas Disetujui: {document_number}`.
+  - Me-load relasi `['document.documentType', 'user.unit']` untuk memastikan performa efisien tanpa kueri N+1 saat rendering.
+  - Menyediakan metadata lengkap: Nomor Berkas, Perihal, Jenis Dokumen, Tanggal Dokumen, Nama Peminjam, Unit Kerja, Tanggal Pinjam, Estimasi Jatuh Tempo, dan Lokasi Simpan Fisik (Rak / Box / Folder).
+- **Desain Template Email Tanpa Footer (`resources/views/emails/loan-approved.blade.php`)**:
+  - Mengadopsi visual layout modern khas e-arsip (header gradien elegan, kartu data rincian peminjaman berkas, badge status hijau disetujui, dan highlight lokasi fisik).
+  - Menghapus komponen markup footer seutuhnya sesuai preferensi.
+- **Pengiriman Asinkron Non-Blocking (`app/Livewire/Registry/DocumentLoanIndex.php`)**:
+  - Memanfaatkan fungsi `defer(...)` Laravel 11 dengan *try...catch fail-safe* (`Log::warning`) pada saat tombol persetujuan ditekan di tabel Sirkulasi Peminjaman.
+  - UI Tapersip tetap responsif instan (< 0.5 detik) tanpa terbebani latensi pengiriman SMTP.
+- **Pengujian Otomatis (`tests/Feature/DocumentLoanNotificationTest.php`)**:
+  - `test_borrower_receives_email_notification_when_loan_is_approved`: Memastikan peminjam menerima notifikasi saat permohonan disetujui.
+  - `test_other_users_do_not_receive_loan_approval_notification`: Memastikan email tidak bocor ke akun pengguna lain.
+  - `test_loan_approved_email_renders_correctly_without_footer`: Memverifikasi HTML email memuat seluruh rincian peminjaman dan tidak mengandung footer.
+  - Seluruh rangkaian test suite proyek (71 *test cases*, 300 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 83. Floating In-App Visual Toast Persetujuan Peminjaman Berkas Fisik & Indeks Komposit Skalabilitas `document_loans`
+- **Latar Belakang & Kebutuhan**:
+  - Ketika Admin Tapersip menyetujui peminjaman berkas fisik (`approveLoan`), kontainer melayang **Floating In-App Visual Toast** pada sudut layar (`tapersip-notification-listener.blade.php`) harus langsung muncul memberikan konfirmasi instan: apakah status persetujuan berhasil dan apakah email notifikasi berhasil/gagal dikirim ke staf peminjam.
+  - Memastikan performa kueri database pada tabel `document_loans` tetap optimal dan cepat seiring bertambahnya volume data sirkulasi peminjaman berkas kantor.
+- **Penambahan Database Indexing (`database/migrations/2026_10_21_000001_add_performance_indexes_to_document_loans_table.php`)**:
+  - `idx_document_loans_doc_status` pada `['document_id', 'status']` (sangat mempercepat kueri eager load relasi `activeLoan` di katalog pencarian berkas).
+  - `idx_document_loans_user_status` pada `['user_id', 'status']` (mempercepat kueri tab 'Pinjaman Saya' dan filter status pinjaman akun pemohon).
+  - `idx_document_loans_status_updated` pada `['status', 'updated_at']` (mempercepat kueri polling deteksi perubahan status real-time oleh listener).
+- **Eksekusi Email Fail-Safe & Pemicu Toast (`app/Livewire/Registry/DocumentLoanIndex.php`)**:
+  - Mengubah pengiriman email pada `approveLoan()` menjadi sinkron terproteksi blok `try { ... } catch (\Throwable $e) { ... }`:
+    - **Kasus Sukses Email**: Memicu event `desktop-notify` dengan tipe `loan_approved_success`. Judul: *"Peminjaman Disetujui & Email Terkirim"*, memuat rincian berkas, kode tiket, nama staf, dan alamat email tujuan.
+    - **Kasus Gagal Email**: Error koneksi SMTP ditangkap secara aman, status persetujuan berkas fisik di database **tetap sah dan aman** (tidak crash atau rollback), dan memicu event `desktop-notify` dengan tipe `loan_approved_mail_failed`. Judul: *"Peminjaman Disetujui (Email Gagal)"*, memuat instruksi kepada petugas untuk menghubungi pemohon secara manual.
+    - **Kasus Pemohon Tanpa Email Valid**: Memicu tipe `loan_approved_mail_failed` dengan pesan informatif bahwa akun pemohon belum mendaftarkan alamat email.
+  - Memancarkan event `loan-status-changed` untuk sinkronisasi otomatis seluruh tabel peminjaman.
+- **Desain UI Toast Khusus Enterprise Non-Generic (`resources/views/livewire/components/tapersip-notification-listener.blade.php`)**:
+  - Menghindari styling generic; menambahkan styling varian khusus yang elegan dan terintegrasi:
+    - `loan_approved_success`: Border halus `border-emerald-200 ring-2 ring-emerald-500/10`, badge ikon hijau berkas centang terverifikasi (`M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z`), judul emerald gelap `text-emerald-900`, dan tombol aksi cepat *"Periksa Meja &rarr;"*.
+    - `loan_approved_mail_failed`: Border amber peringatan `border-amber-200 ring-2 ring-amber-500/10`, badge ikon amber segitiga amplop peringatan, judul amber gelap `text-amber-900`, dan tombol aksi cepat *"Periksa Meja &rarr;"*.
+  - Dilengkapi animasi *slide-in*, suara lonceng lembut Web Audio API, dan *auto-dismiss* 7 detik.
+- **Penghapusan Total Footer Email (`resources/views/emails/loan-approved.blade.php`)**:
+  - Membersihkan seluruh elemen markup `<tr><td class="footer">` dan kelas CSS `.footer` agar email murni bersih tanpa footer sesuai preferensi pengguna.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanNotificationTest.php`)**:
+  - `test_approving_loan_dispatches_success_toast_notification`: Validasi dispatch event toast saat email sukses.
+  - `test_approving_loan_handles_email_failure_gracefully_and_dispatches_warning_toast`: Validasi status tetap tersimpan dan toast peringatan dipicu saat exception SMTP terjadi.
+  - `test_approving_loan_without_borrower_email_dispatches_mail_failed_toast`: Validasi toast penanganan pemohon tanpa email.
+  - `test_loan_approved_email_renders_correctly_without_footer`: Memverifikasi HTML email ter-render bersih tanpa elemen footer.
+  - Seluruh rangkaian test suite proyek (74 *test cases*, 308 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 84. Sinkronisasi Instan Badge Counter Notifikasi Tapersip via Event `loan-status-changed`
+- **Latar Belakang & Kebutuhan**:
+  - Saat petugas Tapersip menyetujui (`approveLoan`), menolak (`rejectLoan`), atau mengonfirmasi pengembalian berkas (`confirmReturn`), badge counter merah pada ikon lonceng notifikasi sebelumnya baru berkurang setelah interval polling 8 detik berjalan.
+  - Untuk pengalaman pengguna enterprise yang responsif, badge counter harus langsung berkurang seketika (*zero-latency reactive update*) begitu tindakan selesai dieksekusi di tabel sirkulasi.
+- **Implementasi Listener Reaktif (`app/Livewire/Components/TapersipNotificationListener.php`)**:
+  - Menambahkan atribut listener Livewire 3:
+    `#[On('loan-status-changed')] public function handleLoanStatusChanged(): void { $this->updatePendingCount(); }`
+  - Setiap kali ada mutasi status permohonan pinjam berkas, komponen listener langsung memperbarui nilai `$this->pendingCount` secara otomatis tanpa menunggu siklus polling.
+- **Penyempurnaan Aksi Sirkulasi (`app/Livewire/Registry/DocumentLoanIndex.php`)**:
+  - Menambahkan pemancaran event `$this->dispatch('loan-status-changed')` pada:
+    - `confirmReturn()`: Saat berkas fisik dikonfirmasi kembali ke loker.
+    - `rejectLoan()`: Saat permohonan peminjaman ditolak oleh petugas.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/TapersipRealTimeNotificationTest.php`)**:
+  - Menambahkan test case `test_listener_updates_pending_count_on_loan_status_changed_event` yang memvalidasi bahwa badge counter `pendingCount` langsung berkurang secara reaktif saat event `loan-status-changed` diterima tanpa pemanggilan method polling.
+  - Seluruh rangkaian test suite proyek (75 *test cases*, 310 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 85. Modal Dialog Penolakan Berkas Fisik, Notifikasi Email Penolakan & Floating In-App Visual Toast
+- **Latar Belakang & Kebutuhan**:
+  - Sebelumnya, aksi tolak (`rejectLoan`) pada tabel Sirkulasi Tapersip hanya menggunakan konfirmasi browser bawaan (`wire:confirm`) tanpa formulir pengisian alasan penolakan. Akibatnya, pemohon tidak mengetahui mengapa permohonan pinjam berkas fisiknya ditolak.
+  - Alur penolakan harus transparan, profesional, dan memberikan informasi lengkap: petugas menginput alasan penolakan via modal dialog resmi, pemohon menerima notifikasi email resmi dengan alasan penolakan (tanpa footer), dan layar Tapersip memunculkan konfirmasi Floating In-App Visual Toast rose/merah.
+- **Implementasi Kelas Notifikasi Email (`app/Notifications/DocumentLoanRejectedNotification.php`)**:
+  - Dibuat kelas notifikasi berbasis `toMail` dengan subjek: `Permohonan Pinjam Berkas Fisik {loan_code} Ditolak`.
+  - Memuat relasi naskah, pemohon, unit kerja, nama petugas Tapersip, dan alasan spesifik penolakan (`reason`).
+- **Template Email Penolakan Tanpa Footer (`resources/views/emails/loan-rejected.blade.php`)**:
+  - Dirancang dengan layout enterprise elegan bernuansa merah rose berwibawa (`header bg-[#be123c]`, kartu rincian dokumen, dan highlight *reason-box* bergaris tebal merah).
+  - Tanpa footer markup sama sekali sesuai preferensi pengguna.
+- **Modal Dialog Penolakan & Kontrol Logika (`app/Livewire/Registry/DocumentLoanIndex.php` & `document-loan-index.blade.php`)**:
+  - Menambahkan properti `$rejectNotes` dan `$selectedRejectLoan`.
+  - Menambahkan method `openRejectModal($loanId)` yang membuka modal dialog `modal-loan-reject`.
+  - Menambahkan method `confirmReject()` yang memvalidasi input alasan (minimal 3 karakter), mengupdate status permohonan ke `'rejected'`, menyimpan alasan di kolom `notes`, mencatat *Audit Log*, mengirimkan notifikasi email secara *fail-safe*, memancarkan event `loan-status-changed`, dan memicu *Floating Toast*.
+- **Desain Floating In-App Visual Toast Khusus (`resources/views/livewire/components/tapersip-notification-listener.blade.php`)**:
+  - Menambahkan varian tipe `loan_rejected_success`:
+    - Border rose lembut `border-rose-200 ring-2 ring-rose-500/10`.
+    - Badge ikon bulat tanda silang tegas (`M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z`).
+    - Judul rose gelap `text-rose-900` (*"Permohonan Ditolak & Email Terkirim"*).
+    - Tombol aksi *"Periksa Meja &rarr;"* dengan warna rose tegas (`bg-rose-600 hover:bg-rose-700`).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanNotificationTest.php`)**:
+  - `test_borrower_receives_rejection_email_and_toast_when_loan_is_rejected`: Memvalidasi pembukaan modal, pengisian alasan penolakan, mutasi database, pengiriman notifikasi email, dispatch toast event, dan sinkronisasi badge counter.
+  - `test_loan_rejected_email_renders_correctly_without_footer`: Memverifikasi HTML email memuat rincian naskah, alasan penolakan, dan bersih tanpa elemen footer.
+  - Seluruh rangkaian test suite proyek (77 *test cases*, 328 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 86. Notifikasi Otomatis Email Bukti Pengembalian Berkas Fisik (`DocumentLoanReturnedNotification`) & Floating In-App Visual Toast
+- **Latar Belakang & Tata Kelola Dokumen**:
+  - Saat staf peminjam mengembalikan berkas fisik ke loker Tapersip dan petugas mengonfirmasi pengembalian (`confirmReturn`), peminjam membutuhkan tanda terima digital resmi (*official digital return receipt*) yang membuktikan bahwa fisik naskah sudah aman kembali ke loker dan tanggungan pinjaman mereka telah lunas/selesai.
+  - Tapersip juga memerlukan umpan balik visual instan di layar berupa *Floating In-App Visual Toast* biru terverifikasi yang mengonfirmasi status berkas kembali dan status pengiriman email.
+- **Implementasi Notifikasi (`app/Notifications/DocumentLoanReturnedNotification.php`)**:
+  - Dibuat kelas notifikasi dengan subjek: `Pengembalian Berkas Fisik {loan_code} Berhasil Dikonfirmasi`.
+  - Me-load relasi `['document.documentType', 'user.unit']` untuk mencegah kueri N+1.
+  - Memuat rincian naskah: Nomor Berkas, Perihal, Jenis Dokumen, Tanggal Pinjam, Tanggal Kembali Riil, Petugas Penerima Tapersip, Waktu Konfirmasi, dan Catatan Kondisi Berkas Fisik.
+- **Template Email Bukti Pengembalian Tanpa Footer (`resources/views/emails/loan-returned.blade.php`)**:
+  - Desain layout modern bernuansa biru keandalan (`header bg-[#2563eb]`, kartu rincian dokumen, dan highlight *notes-box* kondisi berkas).
+  - Tanpa footer markup sama sekali sesuai preferensi pengguna.
+- **Eksekusi Fail-Safe & Pemicu Toast (`app/Livewire/Registry/DocumentLoanIndex.php`)**:
+  - Pada method `confirmReturn()`:
+    - Melakukan update status ke `'returned'`, menyimpan tanggal pengembalian riil (`returned_date`), mencatat catatan kondisi ke `notes`, dan mencatat Audit Log.
+    - Mengirimkan email tanda terima secara *fail-safe* menggunakan blok `try { ... } catch (\Throwable $e) { ... }`.
+    - Memicu event `desktop-notify` dengan tipe `loan_returned_success` (atau `loan_approved_mail_failed` jika email terkendala).
+    - Memancarkan event `loan-status-changed` untuk sinkronisasi tabel dan badge counter.
+- **Desain Floating In-App Visual Toast Khusus (`resources/views/livewire/components/tapersip-notification-listener.blade.php`)**:
+  - Menambahkan varian tipe `loan_returned_success`:
+    - Border biru lembut `border-blue-200 ring-2 ring-blue-500/10`.
+    - Badge ikon loker arsip terverifikasi (`M5 8h14M5 8a2 2...`).
+    - Judul biru gelap `text-blue-900` (*"Berkas Kembali & Email Terkirim"*).
+    - Tombol aksi *"Periksa Meja &rarr;"* dengan warna biru tegas (`bg-blue-600 hover:bg-blue-700`).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanNotificationTest.php`)**:
+  - `test_borrower_receives_return_confirmation_email_and_toast_when_loan_is_returned`: Memvalidasi pengembalian berkas, pembaruan database, pengiriman notifikasi email ke pemohon, dispatch event toast, dan sinkronisasi status.
+  - `test_loan_returned_email_renders_correctly_without_footer`: Memverifikasi HTML email memuat seluruh rincian dan bersih tanpa elemen footer.
+  - Seluruh rangkaian test suite proyek (79 *test cases*, 347 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 87. Peningkatan Visibilitas Catatan Penolakan & Kondisi Pengembalian Berkas pada Tabel Peminjaman
+- **Latar Belakang & Kebutuhan**:
+  - Pada tab "Pinjaman Saya", ketika permohonan pinjam berkas fisik ditolak atau telah dikembalikan, pemohon memerlukan visibilitas yang jelas dan kontras tentang alasan penolakan atau catatan kondisi berkas fisik yang dicatat oleh Tapersip.
+  - Begitu pula pada tab "Sirkulasi Tapersip", petugas Tapersip membutuhkan indikasi ringkas langsung di bawah badge status tanpa harus membuka detail kueri catatan secara terpisah.
+- **Penyempurnaan Tampilan Tab "Pinjaman Saya" (`resources/views/livewire/registry/document-loan-index.blade.php`)**:
+  - Menambahkan kartu ringkasan visual khusus:
+    - **Status Ditolak**: Menampilkan kartu bergaris lembut merah rose (`bg-rose-50 border-rose-200/80 text-rose-800 text-[11px]`) dengan label tebal `Alasan Penolakan:` beserta isi catatan penolakan dari Tapersip.
+    - **Status Kembali**: Menampilkan kartu bergaris lembut hijau emerald (`bg-emerald-50 border-emerald-200/80 text-emerald-800 text-[11px]`) dengan label tebal `Kondisi Pengembalian:` beserta isi catatan kondisi berkas.
+- **Penyempurnaan Tampilan Tab "Sirkulasi Tapersip" (`resources/views/livewire/registry/document-loan-index.blade.php`)**:
+  - Di bawah badge status, menambahkan teks ringkas terpotong otomatis (*truncate*) dengan tooltip lengkap:
+    - Teks rose untuk `Alasan: [Catatan]` pada baris berstatus Ditolak.
+    - Teks emerald untuk `Kondisi: [Catatan]` pada baris berstatus Sudah Kembali.
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite proyek (79 *test cases*, 347 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 88. Floating In-App Visual Toast Pengarsipan Scan PDF & Sinkronisasi Instan Antrean Scan via Event `loan-status-changed`
+- **Latar Belakang & Kebutuhan**:
+  - Saat petugas Tapersip menyelesaikan unggah file scan berkas fisik dan mengarsipkannya (`saveFinalFile` di `ScanQueue`), petugas memerlukan konfirmasi visual instan pada layar (*Floating In-App Visual Toast*) yang memberitahukan bahwa dokumen berhasil diarsipkan dan email notifikasi resmi telah terkirim ke staf pembuat dokumen.
+  - Selain itu, badge counter notifikasi lonceng Tapersip harus berkurang seketika (*zero latency*) tanpa harus menunggu interval polling 8 detik.
+- **Implementasi Event Reaktif & Pemicu Toast (`app/Livewire/Registry/ScanQueue.php`)**:
+  - Menambahkan pemancaran event `loan-status-changed` pada `saveFinalFile()` agar komponen `TapersipNotificationListener` langsung menghitung ulang `$pendingCount` antrean scan yang tersisa.
+  - Menambahkan pemancaran event `desktop-notify` dengan tipe `scan_archived_success`:
+    - Subjek: *"Dokumen Berhasil Diarsipkan"*
+    - Pesan: *"Naskah {document_number} resmi diarsipkan. Email notifikasi telah dikirim ke {creator_name} ({creator_email})."*
+    - URL: Langsung mengarah ke dokumen terkait di arsip keluar/khusus dengan parameter `highlight`.
+- **Desain UI Toast Khusus Enterprise (`resources/views/livewire/components/tapersip-notification-listener.blade.php`)**:
+  - Menambahkan varian tipe `scan_archived_success`:
+    - Border emerald lembut `border-emerald-200 ring-2 ring-emerald-500/10`.
+    - Badge ikon perisai arsip terverifikasi centang ganda (`M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z`).
+    - Judul emerald gelap `text-emerald-900`.
+    - Tombol aksi *"Buka Arsip &rarr;"* dengan warna `bg-[var(--color-primary)] hover:bg-emerald-800`.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentArchivedNotificationTest.php`)**:
+  - Menambahkan test case `test_tapersip_upload_dispatches_archive_toast_and_loan_status_changed_event` yang memvalidasi bahwa event `desktop-notify` dengan tipe `scan_archived_success` dan event `loan-status-changed` terpancar sempurna serta status dokumen berubah ke `archived`.
+  - Seluruh rangkaian test suite proyek (80 *test cases*, 352 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 89. Wadah Toast Notifikasi Banner Global Sistem (`notify` & Session Flash) di `app.blade.php`
+- **Latar Belakang & Kebutuhan**:
+  - Di seluruh modul aplikasi (Surat Masuk, Surat Keluar, Surat Khusus, Antrean Scan Tapersip, Peminjaman Berkas, dan Pemindahan Loker), terdapat lebih dari 30 pemanggilan `$this->dispatch('notify', ['message' => '...', 'type' => '...'])` dan `session()->flash('...')`.
+  - Sebelumnya belum tersedia penampung visual mengambang global (*global in-app toast notification banner*) di layout utama `app.blade.php` untuk menangkap event `notify` tersebut. Akibatnya, pada beberapa halaman aksi notifikasi tidak memunculkan umpan balik visual instan.
+- **Implementasi Wadah Notifikasi Global (`resources/views/components/layouts/app.blade.php`)**:
+  - Ditempatkan wadah Alpine.js di sudut kanan atas layar (`fixed top-5 right-5 z-[9990] flex flex-col gap-2.5`).
+  - Mendengarkan event JavaScript peramban `notify` secara global (`window.addEventListener('notify', ...)`).
+  - Mendengarkan flash session Laravel (`session('success')`, `session('error')`, `session('warning')`, `session('info')`).
+  - Dilengkapi fitur:
+    - 4 palet warna enterprise: `success` (emerald), `error` (rose), `warning` (amber), `info` (blue).
+    - Ikon khas sesuai tipe status.
+    - Animasi halus *slide-in* dan *fade-out*.
+    - Tombol tutup manual (*dismiss button*) dan *auto-dismiss* otomatis setelah 5 detik.
+    - Menumpuk rapi di bawah layer toast real-time Tapersip (`z-[9999]`) tanpa terjadi tumpang tindih layout.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/GlobalNotificationToastTest.php`)**:
+  - `test_global_layout_renders_toast_container_and_listens_to_notify_event`: Memvalidasi bahwa wadah HTML toast ter-render di layout dan mendengarkan event `notify`.
+  - `test_session_flash_message_is_rendered_in_global_toast`: Memvalidasi bahwa flash session `success` berhasil diinjeksikan ke dalam array toast Alpine.js.
+  - `test_session_error_message_is_rendered_in_global_toast`: Memvalidasi bahwa flash session `error` berhasil diinjeksikan ke dalam array toast Alpine.js.
+  - Seluruh rangkaian test suite proyek (83 *test cases*, 362 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 90. Sinkronisasi Instan Event `loan-status-changed` pada Pengajuan dan Pembatalan Peminjaman Berkas
+- **Latar Belakang & Kebutuhan**:
+  - Pada alur peminjaman berkas fisik, saat staf mengajukan pinjam berkas (`submitLoanRequest`) atau membatalkan permohonan pinjam (`cancelLoanRequest`), badge counter merah notifikasi Tapersip sebelumnya baru terupdate saat interval polling 8 detik berjalan.
+  - Untuk pengalaman pengguna multi-tab dan multi-user yang mulus dan bebas latensi, aksi pengajuan dan pembatalan peminjaman harus memancarkan event `loan-status-changed` secara real-time.
+- **Penyempurnaan Aksi (`app/Livewire/Registry/DocumentLoanIndex.php`)**:
+  - Menambahkan pemancaran event `$this->dispatch('loan-status-changed')` pada:
+    - `submitLoanRequest()`: Begitu tiket peminjaman dibuat di database dan modal permohonan ditutup.
+    - `cancelLoanRequest()`: Begitu status permohonan diubah ke `'cancelled'` dan audit log tercatat.
+  - Dengan pemancaran event ini, seluruh komponen terkait (tabel sirkulasi, tab pinjaman saya, dan ikon lonceng notifikasi Tapersip) langsung memperbarui status dan angka counter secara reaktif seketika.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanTest.php`)**:
+  - Memperbarui pengujian `test_user_can_submit_loan_request_and_ticket_is_generated` dan `test_user_can_cancel_their_own_pending_loan_request` untuk memvalidasi bahwa event `loan-status-changed` terpancar tepat waktu saat pengajuan dan pembatalan dilakukan.
+  - Seluruh rangkaian test suite proyek (83 *test cases*, 364 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 91. Filter Peminjaman Berkas Fisik Lewat Jatuh Tempo (`overdue`), Notifikasi Email Pengingat & Floating In-App Toast
+- **Latar Belakang & Tata Kelola Kearsipan**:
+  - Berkas fisik yang dipinjam staf berisiko terlambat dikembalikan melewati batas waktu (`expected_return_date`). Tapersip membutuhkan alat pemantau khusus untuk menyaring seluruh arsip yang sedang dipinjam namun telah lewat jatuh tempo, serta sarana untuk mengirimkan email pengingat (*Gentle Return Reminder Email*) resmi kepada pemohon.
+  - Petugas Tapersip juga memerlukan umpan balik visual instan di layar berupa *Floating In-App Visual Toast* warna amber yang mengonfirmasi bahwa email pengingat telah terkirim.
+- **Implementasi Filter Jatuh Tempo (`app/Livewire/Registry/DocumentLoanIndex.php` & `document-loan-index.blade.php`)**:
+  - Menambahkan opsi filter baru pada dropdown status sirkulasi: `<option value="overdue">⚠️ Lewat Jatuh Tempo (Terlambat)</option>`.
+  - Pada kueri sirkulasi method `render()`, menangani kondisi `$this->circulationStatus === 'overdue'` dengan menyaring `status = 'borrowed'` dan `expected_return_date < CURDATE()`.
+- **Implementasi Notifikasi Email Pengingat (`app/Notifications/DocumentLoanReminderNotification.php`)**:
+  - Dibuat kelas notifikasi berbasis `toMail` yang secara dinamis mendeteksi keterlambatan (`$isOverdue`):
+    - Jika lewat jatuh tempo: Subjek `Pemberitahuan Keterlambatan Pengembalian Berkas Fisik {loan_code}`.
+    - Jika sebelum jatuh tempo: Subjek `Pengingat Batas Pengembalian Berkas Fisik {loan_code}`.
+  - Memuat relasi naskah, pemohon, unit kerja, tanggal pinjam, batas kembali (dengan penanda tegas jika terlambat), dan petunjuk pengembalian resmi.
+- **Template Email Pengingat Tanpa Footer (`resources/views/emails/loan-reminder.blade.php`)**:
+  - Desain layout enterprise bernuansa amber tegas (`header bg-[#d97706]` atau `#b45309`, kartu rincian dokumen, dan highlight *notice-box* petunjuk pengembalian).
+  - Tanpa footer markup sama sekali sesuai preferensi pengguna.
+- **Aksi Kirim Pengingat & Floating Toast (`app/Livewire/Registry/DocumentLoanIndex.php` & `document-loan-index.blade.php`)**:
+  - Pada dropdown aksi baris sirkulasi berstatus `borrowed`, ditambahkan tombol `"Kirim Pengingat"`.
+  - Method `sendReminderEmail($loanId)` mengeksekusi pengiriman notifikasi email secara *fail-safe*, mencatat Audit Log, memicu event `desktop-notify` dengan tipe `loan_reminder_success`, dan memunculkan toast banner.
+- **Desain Floating In-App Visual Toast Khusus (`resources/views/livewire/components/tapersip-notification-listener.blade.php`)**:
+  - Menambahkan varian tipe `loan_reminder_success`:
+    - Border amber lembut `border-amber-200 ring-2 ring-amber-500/10`.
+    - Badge ikon jam/pengingat (`M12 8v4l3 3m6-3a9 9...`).
+    - Judul amber gelap `text-amber-900`.
+    - Tombol aksi *"Periksa Meja &rarr;"* dengan warna `bg-amber-600 hover:bg-amber-700`.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanNotificationTest.php`)**:
+  - `test_tapersip_can_filter_overdue_loans_in_circulation_table`: Memvalidasi keakuratan filter `overdue` menyaring hanya berkas yang lewat jatuh tempo.
+  - `test_tapersip_can_send_reminder_email_for_borrowed_loan`: Memvalidasi pengiriman notifikasi email pengingat ke staf pemohon dan pemancaran event floating toast.
+  - `test_loan_reminder_email_renders_correctly_without_footer`: Memverifikasi HTML email memuat seluruh rincian dan bersih tanpa elemen footer.
+  - Seluruh rangkaian test suite proyek (86 *test cases*, 377 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 92. Perintah Konsol Artisan Pengingat Keterlambatan Pengembalian Berkas Fisik (`loans:send-overdue-reminders`) & Penjadwalan Harian
+- **Latar Belakang & Kebutuhan**:
+  - Untuk memitigasi risiko berkas fisik hilang atau tidak kunjung dikembalikan oleh staf peminjam dalam jangka panjang (*long-term overdue physical archives*), sistem memerlukan mekanisme otomasi berkala yang dapat berjalan otomatis di server setiap hari.
+  - Perintah ini secara otomatis meninjau seluruh transaksi peminjaman berstatus `borrowed` yang telah melewati `expected_return_date`, lalu mengirimkan email pengingat resmi (*DocumentLoanReminderNotification*) kepada para peminjam.
+- **Implementasi Perintah Konsol Artisan (`app/Console/Commands/SendOverdueLoanReminders.php`)**:
+  - Signature perintah: `loans:send-overdue-reminders {--force : Abaikan rate-limiting 1 hari dan kirim ulang pengingat}`.
+  - Fitur perlindungan *Anti-Spam Rate-Limiting*:
+    - Menggunakan Cache kunci unik harian (`overdue_reminder_sent_{loan_id}_{Y-m-d}`) yang berlaku sampai akhir hari berjalan (`now()->endOfDay()`).
+    - Memastikan setiap staf peminjam hanya menerima maksimal 1 email pengingat keterlambatan per hari untuk mencegah spam di kotak masuk mereka, kecuali jika opsi `--force` disertakan oleh administrator.
+  - Mencatat *Audit Log* otomatis dengan detail transaksi dan tanggal jatuh tempo.
+  - Memberikan ringkasan statistik terperinci di konsol terminal (*X pengingat terkirim, Y dilewati*).
+- **Pendaftaran Penjadwalan Tugas Otomatis (`routes/console.php`)**:
+  - Menjadwalkan eksekusi otomatis setiap hari pada pukul 08:00 WIB:
+    `Schedule::command('loans:send-overdue-reminders')->dailyAt('08:00');`
+- **Verifikasi Pengujian Otomatis (`tests/Feature/OverdueLoanReminderCommandTest.php`)**:
+  - `test_command_sends_reminder_to_overdue_loans`: Memvalidasi bahwa perintah mengirimkan email pengingat hanya kepada peminjam yang berkasnya melewati batas tanggal dan mencatat audit log.
+  - `test_command_rate_limiting_prevents_duplicate_reminders_on_same_day`: Memvalidasi bahwa eksekusi kedua di hari yang sama dilewati (*rate-limited*), dan opsi `--force` berhasil mengabaikan pembatasan tersebut.
+  - `test_command_displays_no_loans_message_when_all_on_schedule`: Memvalidasi pesan informatif saat tidak ada pinjaman yang terlambat.
+  - Seluruh rangkaian test suite proyek (89 *test cases*, 385 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 93. Kartu Statistik Bento Grid Peminjaman / Sirkulasi Berkas Fisik pada Dashboard Utama
+- **Latar Belakang & Kebutuhan**:
+  - Di halaman utama *Dashboard Kearsipan*, sebelumnya statistik naskah hanya mencakup Surat Masuk, Surat Keluar, Surat Khusus, Antrean Upload Scan, dan Retensi JRA.
+  - Sirkulasi peminjaman berkas fisik kantor belum memiliki visualisasi metrik pada Bento Grid, sehingga petugas Tapersip maupun staf peminjam harus membuka menu peminjaman terlebih dahulu untuk mengetahui jumlah berkas fisik yang sedang aktif dipinjam atau berstatus terlambat.
+- **Implementasi Logika Perhitungan & Hak Akses (`app/Livewire/Dashboard.php`)**:
+  - Menghitung statistik peminjaman fisik secara efisien:
+    - **Petugas Tapersip & Superadmin**: Menghitung seluruh transaksi berkas fisik yang sedang dipinjam (`status = 'borrowed'`) dan jumlah yang telah melewati jatuh tempo (`expected_return_date < CURDATE()`).
+    - **Staf Pengguna**: Menghitung hanya naskah fisik yang sedang dipinjam oleh akun staf bersangkutan (`user_id = Auth::id()`).
+  - Menambahkan pengecekan hak akses kartu via Role Matrix (`card_loans`, `loan_circulation`, atau `document_borrowing`).
+  - Menyesuaikan kelas grid adaptif responsif (`xl:grid-cols-6`) agar tata letak 6 kartu bento tetap sejajar, proporsional, dan estetik.
+- **Desain Kartu Bento Grid Enterprise (`resources/views/livewire/dashboard.blade.php`)**:
+  - Mengadopsi palet warna indigo modern (`border border-slate-200/90 hover:border-indigo-300`, ikon dokumen arsip indigo, dan teks judul dinamis):
+    - Untuk Tapersip/Superadmin: Berjudul *"Sirkulasi Berkas"*, mengarah ke tab Sirkulasi (`/borrowings?tab=circulation`).
+    - Untuk Staf: Berjudul *"Pinjaman Saya"*, mengarah ke tab Pinjaman Saya (`/borrowings?tab=my_loans`).
+    - Jika terdapat berkas yang melewati batas pengembalian, kartu menampilkan badge penanda tegas merah rose (`[X] Terlambat`).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DashboardActivityLogTest.php`)**:
+  - `test_superadmin_sees_loan_circulation_stats_card_on_dashboard`: Memvalidasi bahwa Superadmin/Tapersip melihat kartu Sirkulasi Berkas beserta badge keterlambatan di dashboard.
+  - `test_staff_sees_personal_loan_stats_card_on_dashboard`: Memvalidasi bahwa staf biasa hanya melihat kartu Pinjaman Saya dengan angka personal mereka sendiri tanpa melihat data staf lain.
+  - Seluruh rangkaian test suite proyek (91 *test cases*, 389 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 94. Sinkronisasi Teks Petunjuk Alur & Tombol Modal Pengajuan Pinjam Berkas Fisik
+- **Latar Belakang & Kebutuhan**:
+  - Setelah penyederhanaan alur di Bagian 77 (di mana pencetakan tiket bukti peminjaman dialihkan eksklusif ke petugas Tapersip yang bertugas menyiapkan berkas), teks petunjuk alur di dalam modal pengajuan (`modal-loan-request`) sebelumnya masih menyebutkan: *"Setelah pengajuan disimpan, sistem akan langsung menerbitkan Tiket Peminjaman Hardcopy. Cetak tiket tersebut dan bawa ke meja Tapersip..."* serta label tombol submit masih bertuliskan *"Terbitkan Tiket Pinjam"*.
+  - Teks tersebut perlu disinkronkan agar selaras dengan alur kerja riil yang sudah disederhanakan: staf pemohon mengajukan pinjaman, Tapersip menerima notifikasi untuk menyiapkan berkas dan mencetak tiket, lalu staf menerima email konfirmasi resmi saat berkas siap diambil.
+- **Penyempurnaan UI Modal Dialog (`resources/views/livewire/registry/document-loan-index.blade.php`)**:
+  - Memperbarui teks petunjuk alur: *"Setelah permohonan dikirim, petugas Tapersip akan menerima notifikasi untuk menyiapkan berkas fisik dan mencetak bukti peminjaman. Anda akan menerima notifikasi email konfirmasi saat berkas siap diambil."*
+  - Mengubah label tombol submit formulir dari *"Terbitkan Tiket Pinjam"* menjadi *"Kirim Permohonan Pinjam"*.
+  - Merapikan sintaks CSS border pada kotak lokasi dokumen arsip di tiket cetak (`border-2 border-slate-800 border-dashed`).
+- **Verifikasi Pengujian Otomatis**:
+  - Seluruh rangkaian test suite proyek (91 *test cases*, 389 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 95. Integrasi Audit Log & Floating In-App Toast Notifikasi pada Modul Usul Pemusnahan Arsip (`DestructionIndex`)
+- **Latar Belakang & Kebutuhan Kepatuhan Kearsipan (JRA / ANRI)**:
+  - Pemusnahan arsip inaktif yang telah habis masa retensinya merupakan aktivitas krusial dalam tata kelola kearsipan resmi.
+  - Sebelumnya, aksi pengajuan usul (`submitProposal`), persetujuan (`approveProposal`), penolakan (`rejectProposal`), dan eksekusi pemusnahan (`executeDestruction`) di komponen Livewire `DestructionIndex` hanya memicu `session()->flash('...')` tanpa mencatat riwayat audit ke tabel `audit_logs`. Karena pemanggilan aksi Livewire berlangsung secara dinamis (AJAX), pesan flash sesi tidak memicu banner toast mengambang secara langsung.
+- **Implementasi Pencatatan Audit Trail (`app/Livewire/Archive/DestructionIndex.php`)**:
+  - `submitProposal()`: Mencatat `AuditLog::record('Pengajuan Usulan Pemusnahan Arsip: [Nomor Surat]', metadata: ['reason', 'proposer_id'])`.
+  - `approveProposal()`: Mencatat `AuditLog::record('Persetujuan Usulan Pemusnahan Arsip: [Nomor Surat]', metadata: ['record_id', 'approver_id'])`.
+  - `rejectProposal()`: Mencatat `AuditLog::record('Penolakan Usulan Pemusnahan Arsip: [Nomor Surat]', metadata: ['record_id', 'approver_id'])`.
+  - `executeDestruction()`: Mencatat `AuditLog::record('Eksekusi Pemusnahan Arsip & Upload Berita Acara: [Nomor Surat]', metadata: ['record_id', 'ba_file_path', 'executor_id', 'executed_at'])`.
+- **Integrasi Umpan Balik Visual Instan (Floating Toast)**:
+  - Mengirimkan event `$this->dispatch('notify', ['message' => '...', 'type' => '...'])` pada setiap aksi, sehingga kontainer banner toast global di `app.blade.php` langsung memunculkan kartu notifikasi elegan di sudut kanan atas layar peramban.
+  - Menambahkan eager loading `['documentType', 'classification', 'unit', 'folder']` pada kueri `expiredDocuments` dan `['document.documentType', 'proposer', 'approver', 'executor']` pada kueri `proposals` untuk meniadakan potensi kueri N+1.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/ArchiveDestructionTest.php`)**:
+  - `test_user_can_propose_document_destruction_with_audit_log_and_notify_toast`: Memvalidasi pengajuan usul pemusnahan arsip dan verifikasi pencatatan audit log serta event toast.
+  - `test_authorized_user_can_approve_proposal_with_audit_log_and_notify_toast`: Memvalidasi persetujuan usul pemusnahan arsip.
+  - `test_authorized_user_can_reject_proposal_with_audit_log_and_notify_toast`: Memvalidasi penolakan usul pemusnahan arsip.
+  - `test_authorized_user_can_execute_destruction_with_ba_file_and_audit_log`: Memvalidasi unggah file Berita Acara (BA), mutasi status dokumen ke `disposed`, dan pencatatan audit log eksekusi.
+  - Seluruh rangkaian test suite proyek (95 *test cases*, 413 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 96. Standardisasi Tampilan Paginasi Kustom pada Modul Usul Pemusnahan Arsip (`DestructionIndex`)
+- **Latar Belakang & Kebutuhan**:
+  - Pada modul Usul Pemusnahan Arsip (`resources/views/livewire/archive/destruction-index.blade.php`), tautan paginasi pada tab Dokumen Habis Retensi dan tab Usulan & Eksekusi sebelumnya masih memanggil default bawaan Laravel `links()` tanpa menentukan tema kustom.
+  - Untuk menjaga konsistensi visual di seluruh aplikasi agar seragam dengan modul Surat Masuk, Surat Keluar, Surat Khusus, Antrean Scan Tapersip, dan Peminjaman Berkas, paginasi distandardisasi menggunakan view kustom `vendor.pagination.custom`.
+- **Penyempurnaan Tampilan Blade (`resources/views/livewire/archive/destruction-index.blade.php`)**:
+  - Mengubah tautan paginasi tab berkas habis retensi menjadi: `{{ $expiredDocuments->links('vendor.pagination.custom') }}`.
+  - Mengubah tautan paginasi tab usulan & eksekusi menjadi: `{{ $proposals->links('vendor.pagination.custom') }}`.
+  - Memberikan visualisasi navigasi halaman berbahasa Indonesia (*"Menampilkan [X] – [Y] dari [Z] data"*, tombol *Prev/Next* yang rapi, dan indikator nomor halaman yang elegan).
+- **Verifikasi Pengujian Otomatis (`tests/Feature/ArchiveDestructionTest.php`)**:
+  - Menambahkan pengujian `test_destruction_index_renders_custom_pagination_view` yang membuat 12 berkas habis masa retensi (>10 data per halaman) dan memvalidasi bahwa tampilan paginasi kustom ter-render sempurna.
+  - Seluruh rangkaian test suite proyek (96 *test cases*, 417 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 97. Penyelarasan Menyeluruh (*100% Full Unification*) Paginasi Kustom di Seluruh Modul Pengaturan & Master Data
+- **Latar Belakang & Kebutuhan Konsistensi UI**:
+  - Setelah standardisasi paginasi kustom pada modul-modul registrasi berkas dan pemusnahan arsip, ditemukan beberapa view pengaturan yang masih memanggil default bawaan Laravel `links()` tanpa menentukan view kustom:
+    - Manajemen Pengguna (`user-index.blade.php`)
+    - Manajemen Role & Izin Akses (`role-index.blade.php`)
+    - Master Data Unit Kerja (`organization-index.blade.php` - tab Unit & tab Jabatan)
+    - Master Data Klasifikasi & Jenis Dokumen (`archive-classification-index.blade.php` - tab Klasifikasi & tab Jenis Dokumen)
+    - Audit Trail & Log Aktivitas Sistem (`audit-trail-index.blade.php`)
+  - Untuk menciptakan pengalaman visual enterprise yang 100% konsisten, seragam, dan profesional di setiap sudut antarmuka sistem e-arsip, seluruh tautan paginasi pada modul-modul tersebut distandardisasi menggunakan view kustom `vendor.pagination.custom`.
+- **Implementasi Penyelarasan**:
+  - `user-index.blade.php`: `{{ $users->links('vendor.pagination.custom') }}`
+  - `role-index.blade.php`: `{{ $roles->links('vendor.pagination.custom') }}`
+  - `organization-index.blade.php`: `{{ $units->links('vendor.pagination.custom') }}` dan `{{ $positions->links('vendor.pagination.custom') }}`
+  - `archive-classification-index.blade.php`: `{{ $classifications->links('vendor.pagination.custom') }}` dan `{{ $documentTypes->links('vendor.pagination.custom') }}`
+  - `audit-trail-index.blade.php`: `{{ $logs->links('vendor.pagination.custom') }}`
+- **Hasil & Verifikasi**:
+  - Seluruh modul pada sistem e-arsip kini 100% menggunakan view paginasi kustom yang rapi, responsif, berbahasa Indonesia, dan seragam.
+  - Seluruh rangkaian test suite proyek (96 *test cases*, 417 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 98. Pengamanan Integritas Akun/Role, Pencatatan Audit Log & Notifikasi Toast pada Manajemen Pengguna & Role
+- **Latar Belakang & Kebutuhan Keamanan Sistem**:
+  - Pada menu Pengaturan Pengguna (`UserIndex`) dan Role (`RoleIndex` & `RoleEditor`), aksi simpan dan hapus sebelumnya tidak memberikan umpan balik visual instan (toast notification) dan tidak mencatat riwayat ke tabel `audit_logs`.
+  - Selain itu, belum ada pengamanan protektif (*safety guards*) untuk mencegah administrator menghapus akunnya sendiri yang sedang aktif atau menghapus akun master Superadmin, serta belum ada validasi pencegahan penghapusan role yang masih terikat pada pengguna aktif.
+- **Implementasi Pengamanan & Audit Trail (`app/Livewire/Settings/UserIndex.php`)**:
+  - `save()`:
+    - Membedakan aksi pembuatan pengguna baru vs pembaruan data pengguna.
+    - Mencatat `AuditLog::record('Registrasi Pengguna Baru: [Nama]' / 'Pembaruan Data Pengguna: [Nama]', metadata: [...])`.
+    - Mengirimkan event `$this->dispatch('notify', ['message' => '...', 'type' => 'success'])` untuk memicu toast visual instan.
+  - `delete($id)`:
+    - *Safety Guard 1*: Mencegah user menghapus akunnya sendiri (`if ($id == Auth::id())`), memicu toast error.
+    - *Safety Guard 2*: Mencegah penghapusan akun Superadmin utama (`if ($user->username === 'superadmin')`), memicu toast error.
+    - Menghapus akun secara *soft delete*, mencatat `AuditLog::record("Penghapusan Pengguna: [Nama]", ...)`, dan memicu toast sukses.
+- **Implementasi Pengamanan & Audit Trail (`app/Livewire/Settings/RoleIndex.php` & `RoleEditor.php`)**:
+  - `deleteRole($id)`:
+    - *Safety Guard 1*: Mencegah penghapusan role Superadmin (`if ($role->slug === 'superadmin')`), memicu toast error.
+    - *Safety Guard 2*: Mencegah penghapusan role yang masih digunakan oleh pengguna aktif (`if ($role->users_count > 0)`), memicu toast error informatif memuat jumlah pengguna terkait.
+    - Menghapus role secara *soft delete*, mencatat `AuditLog::record("Penghapusan Role: [Nama]", ...)`, dan memicu toast sukses.
+  - `save()` pada `RoleEditor`:
+    - Mencatat `AuditLog::record('Pembuatan Role Baru: [Nama]' / 'Pembaruan Konfigurasi Role: [Nama]', metadata: [...])`.
+    - Mengatur session flash `success` yang otomatis ditangkap oleh global toast banner di `app.blade.php`.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/UserAndRoleManagementTest.php`)**:
+  - `test_admin_can_create_user_with_audit_log_and_notify_event`: Memvalidasi pendaftaran user dan pencatatan audit log.
+  - `test_admin_cannot_delete_own_account`: Memvalidasi penolakan penghapusan akun sendiri.
+  - `test_admin_cannot_delete_superadmin_user`: Memvalidasi penolakan penghapusan superadmin.
+  - `test_admin_can_delete_regular_user_with_audit_log_and_notify`: Memvalidasi soft delete user dan audit log.
+  - `test_admin_cannot_delete_role_in_use`: Memvalidasi proteksi role yang masih memiliki user.
+  - `test_admin_can_delete_unused_role_with_audit_log_and_notify`: Memvalidasi penghapusan role tak terpakai.
+  - `test_admin_can_save_role_in_editor_with_audit_log_and_flash_session`: Memvalidasi penyimpanan konfigurasi role via RoleEditor.
+  - Seluruh rangkaian test suite proyek (103 *test cases*, 439 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 99. Pengamanan Integritas Data Master, Relasi Model Eloquent & Pencatatan Audit Log pada Unit Kerja, Jabatan, Klasifikasi & Jenis Dokumen
+- **Latar Belakang & Kebutuhan Proteksi Data**:
+  - Pada master data organisasi (`OrganizationIndex`) dan klasifikasi kearsipan (`ArchiveClassificationIndex`), aksi simpan dan hapus sebelumnya belum mencatat riwayat ke tabel `audit_logs` dan belum memicu notifikasi toast global.
+  - Yang paling krusial, aksi hapus belum memiliki pengaman integritas data (*relational safety guards*), sehingga unit kerja yang masih memiliki staf/departemen bawahan/dokumen arsip, atau klasifikasi/jenis dokumen yang masih digunakan pada naskah arsip berisiko terhapus dan merusak integritas data sistem.
+- **Implementasi Relasi Eloquent Antar-Model (`Unit.php`, `Classification.php`, `DocumentType.php`)**:
+  - Menambahkan relasi `documents(): HasMany` pada model `Unit` (`hasMany(Document::class)`).
+  - Menambahkan relasi `documents(): HasMany` pada model `Classification` (`hasMany(Document::class)`).
+  - Menambahkan relasi `documents(): HasMany` pada model `DocumentType` (`hasMany(Document::class)`).
+- **Pengamanan & Audit Trail Master Data Organisasi (`app/Livewire/Settings/OrganizationIndex.php`)**:
+  - `saveUnit()`: Mencatat `AuditLog::record('Pembuatan Unit Kerja: ...' / 'Pembaruan Unit Kerja: ...')` dan memicu toast sukses.
+  - `deleteUnit($id)`:
+    - *Safety Guard 1*: Mencegah penghapusan unit kerja yang masih memiliki staf aktif (`users_count > 0`).
+    - *Safety Guard 2*: Mencegah penghapusan divisi yang masih membawahi departemen aktif (`children_count > 0`).
+    - *Safety Guard 3*: Mencegah penghapusan unit kerja yang masih terkait dengan arsip naskah (`documents_count > 0`).
+    - Melakukan soft delete, mencatat Audit Log, dan memicu toast sukses jika unit steril tanpa relasi aktif.
+  - `savePosition()`: Mencatat Audit Log dan memicu toast sukses.
+  - `deletePosition($id)`: Mencegah penghapusan jabatan yang masih digunakan staf aktif (`users_count > 0`), mencatat Audit Log, dan memicu toast sukses.
+- **Pengamanan & Audit Trail Klasifikasi & Jenis Dokumen (`app/Livewire/Settings/ArchiveClassificationIndex.php`)**:
+  - `saveClassification()`: Mencatat Audit Log pembuatan/pembaruan klasifikasi dan memicu toast sukses.
+  - `deleteClassification($id)`:
+    - *Safety Guard 1*: Mencegah penghapusan klasifikasi yang membawahi sub-klasifikasi (`children_count > 0`).
+    - *Safety Guard 2*: Mencegah penghapusan klasifikasi yang masih digunakan dokumen arsip (`documents_count > 0`).
+    - Melakukan soft delete, mencatat Audit Log, dan memicu toast sukses jika klasifikasi bersih.
+  - `saveDocType()`: Mencatat Audit Log pembuatan/pembaruan jenis dokumen dan memicu toast sukses.
+  - `deleteDocType($id)`: Mencegah penghapusan jenis dokumen yang masih digunakan oleh arsip naskah (`documents_count > 0`), mencatat Audit Log, dan memicu toast sukses.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/MasterDataManagementTest.php`)**:
+  - 9 test cases komprehensif menguji pembuatan unit, pencegahan hapus divisi ber-anak, pencegahan hapus unit ber-user, soft delete unit aman, pembuatan & penghapusan jabatan, pencegahan hapus klasifikasi ber-sub, penghapusan klasifikasi aman, pencegahan hapus jenis dokumen in-use, dan penghapusan jenis dokumen aman.
+  - Seluruh rangkaian test suite proyek (112 *test cases*, 467 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 100. Penyelarasan Hak Akses Hierarki Kearsipan: Isolasi Horizontal Departemen & Pewarisan Vertikal ke Atas (Upward Inheritance) pada Dokumen Penting
+- **Latar Belakang & Tata Kelola (*Enterprise Governance*)**:
+  - Berdasarkan prinsip *Need-to-Know* dan tata kelola kearsipan perusahaan, naskah dinas berderajat **Penting** (`sifat = 'penting'`) baik pada **Surat Keluar** maupun **Surat Khusus** membutuhkan isolasi kerahasiaan antar-departemen bawahan yang berada di bawah divisi yang sama.
+  - *Contoh Kasus*: Naskah penting yang dibuat oleh akun staf di *Departemen MGTTI* (di bawah *Divisi Operasional*) tidak boleh dapat dilihat atau dipinjam oleh staf dari *Departemen Logistik*, meskipun sama-sama bernaung di bawah *Divisi Operasional*.
+  - Namun, secara struktural (*chain of command*), akun pengguna yang melekat langsung pada unit induk bertipe **Divisi** (*Divisi Operasional*, seperti Kepala Divisi atau Sekretariat Divisi) wajib memiliki hak pemantauan penuh (*Upward Inheritance*) terhadap seluruh naskah yang diterbitkan oleh departemen-departemen di bawah naungannya.
+- **Implementasi Komponen Backend (`app/Livewire/Registry/DocumentLoanIndex.php`)**:
+  - **Resolusi Unit Naskah**:
+    - Departemen asal naskah (`docDepartmentId`) ditentukan dari `unit_id` naskah (jika departemen) atau dari unit kerja pembuat naskah (`createdBy.unit`).
+    - Divisi asal naskah (`docDivisionId`) ditentukan dari divisi dokumen atau divisi pembuat naskah (`unit.parent_id` / `getDivision()`).
+  - **Method `canAccessDocument()`**:
+    - *Aturan 1 (Pewarisan Vertikal)*: Akun level Divisi (`user->unit->type === 'division'`) dapat mengakses seluruh dokumen penting yang berasal dari divisinya dan departemen-departemen di bawahnya (`userDivisionId === docDivisionId`).
+    - *Aturan 2 (Isolasi Horizontal)*: Akun level Departemen hanya dapat mengakses naskah penting jika berasal dari departemen yang sama persis (`user->unit_id === docDepartmentId`). Staf dari departemen lain di divisi yang sama otomatis ditolak.
+    - *Aturan 3*: Pihak penerima (`recipients`), pembuat naskah (`created_by`), pemegang izin role `view penting`, serta Superadmin & Admin Tapersip tetap memiliki akses sah.
+  - **Penyelarasan Kueri Katalog `render()`**:
+    - Eager loading diperkaya dengan `['folder', 'unit.parent', 'documentType', 'activeLoan.user', 'createdBy.unit']`.
+    - Subkueri SQL untuk dokumen penting diselaraskan secara presisi sehingga tabel katalog di tab 1 secara otomatis menyaring naskah penting sesuai aturan hierarki di atas.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentLoanTest.php`)**:
+  - Menambahkan pengujian `test_hierarchical_department_isolation_and_division_upward_inheritance_for_important_documents`:
+    - Memvalidasi bahwa staf *Departemen Logistik* tidak dapat melihat Surat Keluar maupun Surat Khusus penting buatan staf *Departemen MGTTI* (meskipun keduanya di bawah *Divisi Operasional* yang sama).
+    - Memvalidasi bahwa upaya staf *Departemen Logistik* meminjam naskah tersebut diblokir oleh sistem (`403` / toast error).
+    - Memvalidasi bahwa rekan sesama *Departemen MGTTI* dapat melihat dan meminjam naskah tersebut.
+    - Memvalidasi bahwa akun pimpinan di level induk *Divisi Operasional* dapat melihat dan meminjam seluruh naskah dari departemen di bawahnya.
+  - Seluruh rangkaian test suite proyek (113 *test cases*, 481 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 101. Perataan Sumbu Vertikal Toast Notifikasi Global & Smart Page Resolver Spotlight Paginasi Antrean Scan & Sirkulasi
+- **Latar Belakang & Masalah**:
+  1. *Perataan Vertikal Toast Notifikasi*:
+     - Teks pesan notifikasi (`Status koneksi NAS telah diperbarui.`) terlihat kurang presisi secara vertikal terhadap ikon informasi lingkaran `(i)`. Hal ini disebabkan kontainer menggunakan perataan atas (`items-start`), perbedaan tinggi baris teks dengan tinggi kotak ikon (`h-7 w-7`), serta adanya kelas margin asimetris (`mt-0.5`).
+  2. *Anomali Spotlight pada Halaman Paginasi ke-2 ke atas*:
+     - Pada halaman Antrean Scan Tapersip (`ScanQueue`) dan Sirkulasi Peminjaman (`DocumentLoanIndex`), ketika data target notifikasi berada pada urutan ke-11 ke atas (halaman 2 atau seterusnya), URL `?highlight=doc-XX` atau `?highlight=loan-XX` hanya membuka Halaman 1. Akibatnya, elemen baris target tidak ada di DOM, sehingga efek *smooth scroll* dan *spotlight selection* gagal menyala dan pengguna mengira data tidak ditemukan.
+- **Penyempurnaan Perataan Toast Notifikasi (`resources/views/components/layouts/app.blade.php`)**:
+  - Mengubah perataan flex kontainer utama dari `items-start` menjadi `items-center`.
+  - Menghilangkan margin `mt-0.5` pada badge ikon dan tombol close agar seluruh elemen sejajar presisi di sumbu horizontal tengah (*100% vertically centered*).
+  - Mengubah sudut lengkung badge ikon menjadi lingkaran penuh (`rounded-full`) dan menyelaraskan baris teks dengan `leading-normal`.
+- **Implementasi Smart Page Resolver Backend**:
+  - **`app/Livewire/Registry/ScanQueue.php`**:
+    - Pada method `mount()`, sistem mengekstrak parameter `highlight=doc-{id}`.
+    - Menghitung posisi antrean dokumen target secara instan (< 1ms) berdasarkan urutan antrean FIFO (`created_at asc, id asc`):
+      $$\text{Target Page} = \lceil \text{Posisi} / 10 \rceil$$
+    - Jika target berada di halaman 2 atau seterusnya, Livewire langsung memanggil `$this->setPage($targetPage)` saat *lifecycle* `mount()`. Server menyajikan halaman terkait secara otomatis, elemen baris `#doc-row-{id}` langsung ada di DOM, dan skrip Alpine.js mengeksekusi *smooth scroll* serta spotlight seleksi abu-abu lembut selama 5 detik.
+    - Menyelaraskan kueri render dengan `orderBy('created_at', 'asc')->orderBy('id', 'asc')` untuk urutan yang deterministik.
+  - **`app/Livewire/Registry/DocumentLoanIndex.php`**:
+    - Menerapkan Smart Page Resolver pada method `mount()` untuk parameter `highlight=loan-{id}` pada tab Sirkulasi Tapersip (`circulationPage`).
+    - Menghitung posisi baris sirkulasi target berdasarkan urutan LIFO (`latest('created_at')->latest('id')`) dan otomatis mengeksekusi `$this->setPage($targetPage, 'circulationPage')`.
+- **Verifikasi Pengujian Otomatis**:
+  - `tests/Feature/NasStorageTest.php`: Menambahkan test case `test_scan_queue_smart_page_resolver_navigates_to_correct_page_for_highlight_parameter` yang membuat 15 dokumen antrean dan memvalidasi bahwa membuka dokumen urutan ke-13 langsung menyajikan halaman 2 dan merender baris `#doc-row-{id}`.
+  - `tests/Feature/DocumentLoanTest.php`: Menambahkan test case `test_circulation_smart_page_resolver_navigates_to_correct_page_for_highlight_parameter` yang membuat 15 data sirkulasi dan memvalidasi bahwa membuka tiket pinjaman urutan ke-15 langsung menyajikan halaman 2 tab sirkulasi dan merender baris `#loan-row-{id}`.
+  - Seluruh rangkaian test suite proyek (115 *test cases*, 489 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

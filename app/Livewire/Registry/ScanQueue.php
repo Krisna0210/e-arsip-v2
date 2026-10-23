@@ -4,7 +4,9 @@ namespace App\Livewire\Registry;
 
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Notifications\DocumentArchivedNotification;
 use App\Services\NasHealthService;
+use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\WithFileUploads;
@@ -31,6 +33,45 @@ class ScanQueue extends Component
         'search' => ['except' => ''],
         'filterType' => ['except' => 'all'],
     ];
+
+    public function mount()
+    {
+        $highlight = request()->query('highlight');
+        if ($highlight && preg_match('/^doc-(\d+)$/', $highlight, $matches)) {
+            $targetDocId = (int) $matches[1];
+            $targetDoc = Document::where('status', 'waiting_for_file')
+                ->whereIn('type', ['outgoing', 'internal'])
+                ->find($targetDocId);
+
+            if ($targetDoc) {
+                // Jika tipe dokumen spesifik tapi filterType tidak cocok, sesuaikan ke 'all'
+                if ($this->filterType !== 'all' && $this->filterType !== $targetDoc->type) {
+                    $this->filterType = 'all';
+                }
+
+                // Hitung posisi antrean dokumen target berdasarkan urutan render (created_at asc, id asc)
+                $rankQuery = Document::where('status', 'waiting_for_file')
+                    ->whereIn('type', ['outgoing', 'internal']);
+
+                if ($this->filterType !== 'all') {
+                    $rankQuery->where('type', $this->filterType);
+                }
+
+                $position = $rankQuery->where(function ($q) use ($targetDoc) {
+                    $q->where('created_at', '<', $targetDoc->created_at)
+                      ->orWhere(function ($q2) use ($targetDoc) {
+                          $q2->where('created_at', '=', $targetDoc->created_at)
+                             ->where('id', '<', $targetDoc->id);
+                      });
+                })->count() + 1;
+
+                $targetPage = (int) ceil($position / 10);
+                if ($targetPage > 1) {
+                    $this->setPage($targetPage);
+                }
+            }
+        }
+    }
 
     public function updatedSearch()
     {
@@ -151,9 +192,60 @@ class ScanQueue extends Component
             ]
         );
 
+        // Kirim notifikasi email eksklusif kepada staf pembuat naskah (asinkron via defer, non-blocking & fail-safe)
+        $document->loadMissing(['createdBy', 'documentType', 'folder.parent']);
+        $creator = $document->createdBy;
+        $officer = Auth::user();
+        $emailSentTo = null;
+
+        if ($creator && filter_var($creator->email, FILTER_VALIDATE_EMAIL)) {
+            $emailSentTo = $creator->name;
+            $sendNotification = function () use ($creator, $document, $officer, $version) {
+                try {
+                    $creator->notify(new DocumentArchivedNotification($document, $officer, $version));
+                } catch (\Throwable $e) {
+                    Log::warning('Gagal mengirim email notifikasi arsip: ' . $e->getMessage());
+                }
+            };
+
+            if (app()->runningUnitTests()) {
+                $sendNotification();
+            } else {
+                defer($sendNotification);
+            }
+        }
+
         $this->reset(['uploadDocId', 'finalFile', 'uploadDocNumber', 'uploadDocSubject', 'uploadDocDate', 'uploadDocType', 'uploadDocTypeRaw', 'uploadFolderId', 'uploadDocCreator']);
         $this->dispatch('close-modal', 'modal-upload-queue');
-        $this->dispatch('notify', ['message' => 'File PDF Final berhasil diunggah dan diarsipkan.', 'type' => 'success']);
+
+        $targetUrl = $document->type === 'internal'
+            ? route('registry.special.index', ['highlight' => "doc-{$document->id}"])
+            : route('registry.outgoing.index', ['highlight' => "doc-{$document->id}"]);
+
+        if ($emailSentTo) {
+            $this->dispatch('desktop-notify', [
+                'title' => 'Dokumen Berhasil Diarsipkan',
+                'body' => "Naskah {$document->number} resmi diarsipkan. Email notifikasi telah dikirim ke {$creator->name} ({$creator->email}).",
+                'url' => $targetUrl,
+                'type' => 'scan_archived_success',
+                'loan_code' => $document->number,
+            ]);
+        } else {
+            $this->dispatch('desktop-notify', [
+                'title' => 'Dokumen Berhasil Diarsipkan',
+                'body' => "Naskah {$document->number} resmi diarsipkan ke direktori penyimpanan NAS.",
+                'url' => $targetUrl,
+                'type' => 'scan_archived_success',
+                'loan_code' => $document->number,
+            ]);
+        }
+
+        $this->dispatch('loan-status-changed');
+
+        $successMsg = $emailSentTo
+            ? "File PDF Final berhasil diunggah dan diarsipkan. Notifikasi email telah dikirim ke {$emailSentTo}."
+            : "File PDF Final berhasil diunggah dan diarsipkan.";
+        $this->dispatch('notify', ['message' => $successMsg, 'type' => 'success']);
     }
 
     public function render()
@@ -181,7 +273,7 @@ class ScanQueue extends Component
             });
         }
 
-        $documents = $query->orderBy('created_at', 'asc')->paginate(10); // asc: yang paling lama antre didahulukan
+        $documents = $query->orderBy('created_at', 'asc')->orderBy('id', 'asc')->paginate(10); // asc: yang paling lama antre didahulukan
 
         $availableFolders = $this->uploadDocTypeRaw
             ? \App\Models\Folder::forType($this->uploadDocTypeRaw)->with('parent')->orderBy('name')->get()

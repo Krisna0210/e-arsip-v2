@@ -103,7 +103,18 @@
                 </thead>
                 <tbody class="divide-y divide-gray-200 bg-white">
                     @forelse($documents as $doc)
-                        <tr class="hover:bg-gray-50 transition-colors">
+                        <tr id="doc-row-{{ $doc->id }}"
+                            x-data="{
+                                isTarget: new URLSearchParams(window.location.search).get('highlight') === 'doc-{{ $doc->id }}',
+                                init() {
+                                    if (this.isTarget) {
+                                        this.$el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        setTimeout(() => { this.isTarget = false; }, 5000);
+                                    }
+                                }
+                            }"
+                            :class="{ 'hover:bg-gray-50 transition-colors': !isTarget, '[&>td]:!bg-[#f1f5f9]': isTarget }"
+                            :style="isTarget ? 'background-color: #f1f5f9; outline: 1.5px solid #cbd5e1; outline-offset: -1px; transition: all 0.7s ease;' : 'transition: all 0.7s ease;'">
                             <td class="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
                                 <div class="flex flex-col">
                                     <span class="text-gray-900 text-base">#{{ $loop->iteration + $documents->firstItem() - 1 }}</span>
@@ -116,7 +127,7 @@
                                 </div>
                                 <div class="mt-1">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium
-                                            {{ $doc->type === 'incoming' ? 'bg-blue-50 text-blue-700 border border-blue-200' : ($doc->type === 'outgoing' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-amber-50 text-amber-700 border border-amber-200') }}">
+                                            {{ $doc->type === 'incoming' ? 'bg-blue-50 text-blue-700 border border-blue-200' : ($doc->type === 'outgoing' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-eme-50 text-purple-700 border border-purple-200') }}">
                                             {{ $doc->type === 'incoming' ? 'Surat Masuk' : ($doc->type === 'outgoing' ? 'Surat Keluar' : ($doc->documentType?->name ?? 'Surat Khusus')) }}
                                     </span>
                                 </div>

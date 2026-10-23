@@ -76,7 +76,7 @@
             </div>
             @if($expiredDocuments->hasPages())
                 <div class="px-6 py-4 border-t border-slate-200">
-                    {{ $expiredDocuments->links() }}
+                    {{ $expiredDocuments->links('vendor.pagination.custom') }}
                 </div>
             @endif
         @elseif($activeTab === 'proposals')
@@ -161,7 +161,7 @@
             </div>
             @if($proposals->hasPages())
                 <div class="px-6 py-4 border-t border-slate-200">
-                    {{ $proposals->links() }}
+                    {{ $proposals->links('vendor.pagination.custom') }}
                 </div>
             @endif
         @endif

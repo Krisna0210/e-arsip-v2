@@ -9,7 +9,7 @@
                 E-ARSIP
             </h1>
             <p class="text-[var(--color-text-secondary)] text-[0.875rem] font-medium leading-relaxed">
-                Sistem Manajemen Arsip<br>Dokumen Perusahaan
+                Sistem Manajemen Kearsipan Digital<br>
             </p>
         </div>
 

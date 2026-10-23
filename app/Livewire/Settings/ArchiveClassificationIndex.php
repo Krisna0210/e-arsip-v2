@@ -6,6 +6,8 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\Classification;
 use App\Models\DocumentType;
+use App\Models\AuditLog;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\UniqueConstraintViolationException;
 
@@ -81,8 +83,9 @@ class ArchiveClassificationIndex extends Component
             'classCode.unique' => 'Kode / Indeks Klasifikasi sudah digunakan.',
         ]);
 
+        $isNew = !$this->classId;
         try {
-            Classification::updateOrCreate(
+            $class = Classification::updateOrCreate(
                 ['id' => $this->classId],
                 [
                     'code' => $this->classCode,
@@ -98,13 +101,61 @@ class ArchiveClassificationIndex extends Component
             return;
         }
 
+        $action = $isNew ? "Pembuatan Klasifikasi Baru: {$class->code} - {$class->subject}" : "Pembaruan Klasifikasi: {$class->code} - {$class->subject}";
+        AuditLog::record(
+            action: $action,
+            documentId: null,
+            metadata: [
+                'classification_id' => $class->id,
+                'code' => $class->code,
+                'subject' => $class->subject,
+                'parent_id' => $class->parent_id,
+                'active_years' => $class->active_years,
+                'inactive_years' => $class->inactive_years,
+                'outcome' => $class->outcome,
+            ]
+        );
+
+        $msg = $isNew ? "Klasifikasi '{$class->code}' berhasil ditambahkan." : "Klasifikasi '{$class->code}' berhasil diperbarui.";
         $this->dispatch('close-modal', id: 'slide-classification');
+        $this->dispatch('notify', ['message' => $msg, 'type' => 'success']);
         $this->resetClassificationForm();
     }
 
     public function deleteClassification($id)
     {
-        Classification::findOrFail($id)->delete();
+        $class = Classification::withCount(['children', 'documents'])->findOrFail($id);
+
+        if ($class->children_count > 0) {
+            $this->dispatch('notify', [
+                'message' => "Klasifikasi '{$class->code}' tidak dapat dihapus karena masih membawahi {$class->children_count} sub-klasifikasi.",
+                'type' => 'error'
+            ]);
+            return;
+        }
+
+        if ($class->documents_count > 0) {
+            $this->dispatch('notify', [
+                'message' => "Klasifikasi '{$class->code}' tidak dapat dihapus karena masih digunakan oleh {$class->documents_count} dokumen arsip.",
+                'type' => 'error'
+            ]);
+            return;
+        }
+
+        $classCode = $class->code;
+        $classSubject = $class->subject;
+        $class->delete();
+
+        AuditLog::record(
+            action: "Penghapusan Klasifikasi: {$classCode} - {$classSubject}",
+            documentId: null,
+            metadata: [
+                'deleted_classification_id' => $id,
+                'code' => $classCode,
+            ]
+        );
+
+        $this->dispatch('notify', ['message' => "Klasifikasi '{$classCode}' berhasil dihapus.", 'type' => 'success']);
     }
 
     private function resetClassificationForm()
@@ -168,8 +219,9 @@ class ArchiveClassificationIndex extends Component
             'typeCode.unique' => 'Kode Jenis Dokumen (KOSUR) sudah digunakan oleh jenis naskah lain.',
         ]);
 
+        $isNew = !$this->typeId;
         try {
-            DocumentType::updateOrCreate(
+            $docType = DocumentType::updateOrCreate(
                 ['id' => $this->typeId],
                 [
                     'name' => $this->typeName,
@@ -186,13 +238,52 @@ class ArchiveClassificationIndex extends Component
             return;
         }
 
+        $action = $isNew ? "Pembuatan Jenis Dokumen Baru: {$docType->name} ({$docType->code})" : "Pembaruan Jenis Dokumen: {$docType->name} ({$docType->code})";
+        AuditLog::record(
+            action: $action,
+            documentId: null,
+            metadata: [
+                'document_type_id' => $docType->id,
+                'name' => $docType->name,
+                'code' => $docType->code,
+                'default_sifat' => $docType->default_sifat,
+                'numbering_format' => $docType->numbering_format,
+            ]
+        );
+
+        $msg = $isNew ? "Jenis dokumen '{$docType->name}' berhasil ditambahkan." : "Jenis dokumen '{$docType->name}' berhasil diperbarui.";
         $this->dispatch('close-modal', id: 'slide-doctype');
+        $this->dispatch('notify', ['message' => $msg, 'type' => 'success']);
         $this->resetDocTypeForm();
     }
 
     public function deleteDocType($id)
     {
-        DocumentType::findOrFail($id)->delete();
+        $docType = DocumentType::withCount('documents')->findOrFail($id);
+
+        if ($docType->documents_count > 0) {
+            $this->dispatch('notify', [
+                'message' => "Jenis dokumen '{$docType->name}' tidak dapat dihapus karena masih digunakan oleh {$docType->documents_count} dokumen arsip.",
+                'type' => 'error'
+            ]);
+            return;
+        }
+
+        $typeName = $docType->name;
+        $typeCode = $docType->code;
+        $docType->delete();
+
+        AuditLog::record(
+            action: "Penghapusan Jenis Dokumen: {$typeName} ({$typeCode})",
+            documentId: null,
+            metadata: [
+                'deleted_document_type_id' => $id,
+                'name' => $typeName,
+                'code' => $typeCode,
+            ]
+        );
+
+        $this->dispatch('notify', ['message' => "Jenis dokumen '{$typeName}' berhasil dihapus.", 'type' => 'success']);
     }
 
     private function resetDocTypeForm()

@@ -5,6 +5,7 @@ namespace App\Livewire\Settings;
 use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\Role;
+use App\Models\AuditLog;
 
 class RoleIndex extends Component
 {
@@ -25,10 +26,34 @@ class RoleIndex extends Component
 
     public function deleteRole($id)
     {
-        $role = Role::findOrFail($id);
-        if ($role->users()->count() === 0) {
-            $role->delete();
+        $role = Role::withCount('users')->findOrFail($id);
+
+        if ($role->slug === 'superadmin' || strtolower($role->name) === 'superadmin') {
+            $this->dispatch('notify', ['message' => 'Role Superadmin sistem tidak dapat dihapus.', 'type' => 'error']);
+            return;
         }
+
+        if ($role->users_count > 0) {
+            $this->dispatch('notify', [
+                'message' => "Role '{$role->name}' tidak dapat dihapus karena masih digunakan oleh {$role->users_count} pengguna.",
+                'type' => 'error'
+            ]);
+            return;
+        }
+
+        $roleName = $role->name;
+        $role->delete();
+
+        AuditLog::record(
+            action: "Penghapusan Role: {$roleName}",
+            documentId: null,
+            metadata: [
+                'deleted_role_id' => $id,
+                'role_name' => $roleName,
+            ]
+        );
+
+        $this->dispatch('notify', ['message' => "Role '{$roleName}' berhasil dihapus.", 'type' => 'success']);
     }
 
     public function render()

@@ -124,7 +124,7 @@
             </table>
         </div>
         <div class="px-5 py-3 border-t border-[var(--color-border)] bg-slate-50">
-            {{ $units->links() }}
+            {{ $units->links('vendor.pagination.custom') }}
         </div>
     </div>
     @endif
@@ -184,7 +184,7 @@
             </table>
         </div>
         <div class="px-5 py-3 border-t border-[var(--color-border)] bg-slate-50">
-            {{ $positions->links() }}
+            {{ $positions->links('vendor.pagination.custom') }}
         </div>
     </div>
     @endif

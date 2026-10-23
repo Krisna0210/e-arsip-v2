@@ -327,4 +327,77 @@ class SequenceNumberingTest extends TestCase
         // Must contain /SK/{division_code}/{unit_code}/{YYYY}
         $this->assertStringContainsString("/SK/{$division->code}/{$division->code}/" . date('Y'), $generatedNumber);
     }
+
+    public function test_manual_large_document_number_does_not_pollute_auto_sequence_numbering()
+    {
+        Storage::fake('nas');
+        $superadmin = User::where('username', 'superadmin')->first();
+        $docType = DocumentType::where('name', 'like', '%Surat Keluar%')->first();
+        $unit = Unit::divisions()->first() ?? Unit::first();
+        $classification = Classification::whereNotNull('parent_id')->first() ?? Classification::first();
+
+        // 1. Tapersip mengarsipkan dokumen lama dengan nomor fisik panjang (> 99999)
+        $file = UploadedFile::fake()->create('legacy.pdf', 100, 'application/pdf');
+
+        Livewire::actingAs($superadmin)
+            ->test(OutgoingCreate::class)
+            ->set('document_type_id', $docType->id)
+            ->set('number', '123456789/PMS/PMS/2026')
+            ->set('unit_id', $unit->id)
+            ->set('signer_type', 'pimpinan_unit')
+            ->set('recipient_name', 'Rekanan Lama')
+            ->set('subject', 'Arsip Digital Dokumen Lama')
+            ->set('classification_id', $classification->id)
+            ->set('document_date', date('Y-m-d'))
+            ->set('sifat', 'biasa')
+            ->set('file', $file)
+            ->call('saveAndArchive')
+            ->assertHasNoErrors();
+
+        // Pastikan dokumen fisik tersimpan, tetapi sequence_number tidak terkontaminasi (harus null)
+        $legacyDoc = Document::where('number', '123456789/PMS/PMS/2026')->first();
+        $this->assertNotNull($legacyDoc);
+        $this->assertNull($legacyDoc->sequence_number);
+
+        // 2. Sekarang simulasikan jika ada dokumen lama di DB yang memiliki sequence_number sangat besar (> 99999)
+        Document::create([
+            'document_type_id' => $docType->id,
+            'type' => 'outgoing',
+            'signer_type' => 'pimpinan_unit',
+            'number' => '999999999/LEGACY/2026',
+            'sequence_number' => 999999999,
+            'subject' => 'Surat Anomali Manual',
+            'document_date' => date('Y-m-d'),
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'created_by' => $superadmin->id,
+        ]);
+
+        // 3. Staf biasa klik "Ambil Nomor Surat"
+        $staffUser = User::factory()->create([
+            'unit_id' => $unit->id,
+        ]);
+
+        $component = Livewire::actingAs($staffUser)
+            ->test(OutgoingCreate::class)
+            ->set('document_type_id', $docType->id)
+            ->set('unit_id', $unit->id)
+            ->set('signer_type', 'pimpinan_unit')
+            ->set('recipient_name', 'Kementerian BUMN')
+            ->set('subject', 'Pengajuan Normal Pasca Digitalisasi')
+            ->set('classification_id', $classification->id)
+            ->set('document_date', date('Y-m-d'))
+            ->set('sifat', 'biasa')
+            ->call('bookNumber')
+            ->assertHasNoErrors();
+
+        $generatedNumber = $component->get('number');
+
+        // Nomor yang diterbitkan TIDAK BOLEH melompat ke 999999999 atau 123456790
+        $this->assertStringNotContainsString('123456790', $generatedNumber);
+        $this->assertStringNotContainsString('1000000000', $generatedNumber);
+
+        // Nomor harus dimulai dari urutan normal (01)
+        $this->assertStringStartsWith('01/', $generatedNumber);
+    }
 }

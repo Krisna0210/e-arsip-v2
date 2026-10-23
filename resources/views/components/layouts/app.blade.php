@@ -199,6 +199,10 @@
                     <!-- Right Profile & Role Switcher -->
                     <div class="flex items-center gap-2 lg:gap-4 pl-2 shrink-0">
                         @auth
+                        @if(auth()->user()->isTapersip())
+                            <livewire:components.tapersip-notification-listener />
+                            <div class="h-6 w-px bg-slate-200 mx-1 hidden sm:block"></div>
+                        @endif
                         <div class="hidden md:flex flex-col items-end">
                             <span class="text-sm font-semibold text-slate-800 leading-tight">{{ auth()->user()->name }}</span>
                             <span class="text-xs text-slate-500 font-medium">{{ auth()->user()->role === 'superadmin' ? 'IT Superadmin' : (auth()->user()->role->name ?? 'User') }}</span>
@@ -229,6 +233,105 @@
                 </main>
             </div>
         </div>
+
+    <!-- ============================================================== -->
+    <!-- GLOBAL IN-APP TOAST BANNER CONTAINER                           -->
+    <!-- (Mendengarkan event 'notify' Livewire & Flash Session Laravel) -->
+    <!-- ============================================================== -->
+    <div x-data="{
+            toasts: [],
+            add(msg, type = 'success') {
+                const id = Date.now() + Math.random();
+                this.toasts.push({ id, message: msg, type });
+                setTimeout(() => this.remove(id), 5000);
+            },
+            remove(id) {
+                this.toasts = this.toasts.filter(t => t.id !== id);
+            }
+         }"
+         x-init="
+            window.addEventListener('notify', (e) => {
+                const data = Array.isArray(e.detail) ? e.detail[0] : e.detail;
+                if (typeof data === 'string') {
+                    add(data, 'success');
+                } else if (data && data.message) {
+                    add(data.message, data.type || 'success');
+                }
+            });
+            @if(session()->has('success'))
+                add(@js(session('success')), 'success');
+            @endif
+            @if(session()->has('error'))
+                add(@js(session('error')), 'error');
+            @endif
+            @if(session()->has('warning'))
+                add(@js(session('warning')), 'warning');
+            @endif
+            @if(session()->has('info'))
+                add(@js(session('info')), 'info');
+            @endif
+         "
+         class="fixed top-5 right-5 z-[9990] flex flex-col gap-2.5 pointer-events-none w-full max-w-sm sm:max-w-md">
+        <template x-for="t in toasts" :key="t.id">
+            <div x-transition:enter="transition ease-out duration-250"
+                 x-transition:enter-start="transform translate-y-[-10px] opacity-0 scale-95"
+                 x-transition:enter-end="transform translate-y-0 opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="transform translate-y-0 opacity-100 scale-100"
+                 x-transition:leave-end="transform translate-y-[-10px] opacity-0 scale-95"
+                 class="pointer-events-auto bg-white rounded-xl shadow-xl border px-4 py-3 flex items-center gap-3 transition-all duration-200"
+                 :class="{
+                     'border-emerald-200 ring-2 ring-emerald-500/10': t.type === 'success',
+                     'border-rose-200 ring-2 ring-rose-500/10': t.type === 'error',
+                     'border-amber-200 ring-2 ring-amber-500/10': t.type === 'warning',
+                     'border-blue-200 ring-2 ring-blue-500/10': t.type === 'info'
+                 }">
+                <!-- Icon Badge -->
+                <div class="h-7 w-7 rounded-full flex items-center justify-center shrink-0 shadow-2xs"
+                     :class="{
+                         'bg-emerald-50 text-emerald-600 border border-emerald-200': t.type === 'success',
+                         'bg-rose-50 text-rose-600 border border-rose-200': t.type === 'error',
+                         'bg-amber-50 text-amber-600 border border-amber-200': t.type === 'warning',
+                         'bg-blue-50 text-blue-600 border border-blue-200': t.type === 'info'
+                     }">
+                    <template x-if="t.type === 'success'">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </template>
+                    <template x-if="t.type === 'error'">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </template>
+                    <template x-if="t.type === 'warning'">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </template>
+                    <template x-if="t.type === 'info'">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </template>
+                </div>
+
+                <!-- Toast Text Content -->
+                <div class="flex-1 min-w-0 pr-1">
+                    <p class="text-xs font-medium text-slate-800 leading-normal break-words" x-text="t.message"></p>
+                </div>
+
+                <!-- Close Button -->
+                <button type="button"
+                        @click="remove(t.id)"
+                        class="text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer shrink-0">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </template>
+    </div>
 
     @livewireScripts
 </body>

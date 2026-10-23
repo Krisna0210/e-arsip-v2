@@ -118,6 +118,33 @@
             </div>
         </a>
         @endif
+
+        {{-- Card 6: Peminjaman / Sirkulasi Berkas Fisik --}}
+        @if($canViewLoan)
+        <a href="{{ $isTapersipOrSuper ? route('borrowings.index', ['tab' => 'circulation']) : route('borrowings.index', ['tab' => 'my_loans']) }}"
+           class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-indigo-300 hover:shadow-xs transition-all group flex justify-between items-start">
+            <div>
+                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">
+                    {{ $isTapersipOrSuper ? 'Sirkulasi Berkas' : 'Pinjaman Saya' }}
+                </p>
+                <div class="flex items-baseline gap-2 flex-wrap">
+                    <h3 class="text-2xl font-bold text-slate-800 tracking-tight group-hover:text-indigo-700 transition-colors">
+                        {{ $countBorrowed }} <span class="text-xs font-normal text-slate-400">Berkas</span>
+                    </h3>
+                    @if($countOverdue > 0)
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 font-mono">
+                            {{ $countOverdue }} Terlambat
+                        </span>
+                    @endif
+                </div>
+            </div>
+            <div class="p-2.5 bg-indigo-50 rounded-lg text-indigo-600 group-hover:bg-indigo-100 transition-colors shrink-0">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+            </div>
+        </a>
+        @endif
     </div>
     @endif
 
@@ -136,7 +163,7 @@
                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                         <!-- Input Pencarian Cepat -->
                         <div class="relative w-full sm:w-44">
-                            <span class="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-1 pointer-events-none">
                                 <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
                                     <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
                                 </svg>

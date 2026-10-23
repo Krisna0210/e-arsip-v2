@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Models\Unit;
 use App\Models\Position;
 use App\Models\Role;
+use App\Models\AuditLog;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
@@ -119,17 +121,59 @@ class UserIndex extends Component
         }
 
         $validatedData['status'] = $this->status ?: 'active';
+        $isNew = !$this->userId;
 
-        User::updateOrCreate(
+        $user = User::updateOrCreate(
             ['id' => $this->userId],
             $validatedData
         );
 
+        $action = $isNew ? "Registrasi Pengguna Baru: {$user->name}" : "Pembaruan Data Pengguna: {$user->name}";
+        AuditLog::record(
+            action: $action,
+            documentId: null,
+            metadata: [
+                'target_user_id' => $user->id,
+                'username' => $user->username,
+                'role_id' => $user->role_id,
+                'unit_id' => $user->unit_id,
+                'position_id' => $user->position_id,
+                'status' => $user->status,
+            ]
+        );
+
+        $msg = $isNew ? "Pengguna '{$user->name}' berhasil didaftarkan." : "Data pengguna '{$user->name}' berhasil diperbarui.";
         $this->dispatch('close-modal', id: 'slide-user');
+        $this->dispatch('notify', ['message' => $msg, 'type' => 'success']);
     }
 
     public function delete($id)
     {
-        User::findOrFail($id)->delete();
+        if ($id == Auth::id()) {
+            $this->dispatch('notify', ['message' => 'Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif.', 'type' => 'error']);
+            return;
+        }
+
+        $user = User::findOrFail($id);
+
+        if ($user->username === 'superadmin') {
+            $this->dispatch('notify', ['message' => 'Akun Superadmin utama tidak dapat dihapus.', 'type' => 'error']);
+            return;
+        }
+
+        $userName = $user->name;
+        $userUsername = $user->username;
+        $user->delete();
+
+        AuditLog::record(
+            action: "Penghapusan Pengguna: {$userName}",
+            documentId: null,
+            metadata: [
+                'deleted_user_id' => $id,
+                'username' => $userUsername,
+            ]
+        );
+
+        $this->dispatch('notify', ['message' => "Pengguna '{$userName}' berhasil dihapus.", 'type' => 'success']);
     }
 }

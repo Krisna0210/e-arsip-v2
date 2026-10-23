@@ -108,7 +108,7 @@
         </div>
         <!-- Pagination -->
         <div class="px-5 py-3 border-t border-[var(--color-border)] bg-white text-xs text-slate-500">
-            {{ $users->links() }}
+            {{ $users->links('vendor.pagination.custom') }}
         </div>
     </div>
 

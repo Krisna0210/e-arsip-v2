@@ -84,7 +84,7 @@
                     <tr>
                         <th scope="col" class="py-2.5 pl-4 pr-3 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider sm:pl-6 w-1/6">Nomor Surat</th>
                         <th scope="col" class="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-[35%]">Perihal Surat</th>
-                        <th scope="col" class="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tanggal Surat & Tujuan Surat</th>
+                        <th scope="col" class="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tanggal & Tujuan Surat</th>
                         <th scope="col" class="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sifat & Status</th>
                         <th scope="col" class="relative py-2.5 pl-3 pr-4 sm:pr-6 text-center text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-20">Aksi</th>
                     </tr>
@@ -278,7 +278,7 @@
                                         <div>
                                             <label for="folderName" class="block text-sm font-medium leading-6 text-slate-900 dark:text-slate-100">Nama Loker <span class="text-red-500">*</span></label>
                                             <div class="mt-2">
-                                                <input type="text" wire:model="folderName" id="folderName" class="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[var(--color-primary)] sm:text-sm sm:leading-6 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700" placeholder="Contoh: Tahun 2026">
+                                                <input type="text" wire:model="folderName" id="folderName" class="block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-[var(--color-primary)] sm:text-sm sm:leading-6 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700" placeholder="Contoh: Tahun 2026">
                                             </div>
                                             @error('folderName') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
                                         </div>
@@ -286,7 +286,7 @@
                                         <div>
                                             <label for="folderParentId" class="block text-sm font-medium leading-6 text-slate-900 dark:text-slate-100">Induk Loker</label>
                                             <div class="mt-2">
-                                                <select wire:model="folderParentId" id="folderParentId" class="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-[var(--color-primary)] sm:text-sm sm:leading-6 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700">
+                                                <select wire:model="folderParentId" id="folderParentId" class="block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-[var(--color-primary)] sm:text-sm sm:leading-6 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700">
                                                     <option value="">-- Root (Tidak ada induk) --</option>
                                                     @foreach($allFolders as $f)
                                                         <option value="{{ $f->id }}">{{ $f->name }}</option>

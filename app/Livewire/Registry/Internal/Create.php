@@ -89,6 +89,7 @@ class Create extends Component
         // 1. Ambil nomor urut tertinggi yang sudah ada di database tahun ini
         $maxInDb = \App\Models\Document::where('document_type_id', $this->document_type_id)
             ->whereYear('document_date', $year)
+            ->where('sequence_number', '<=', 99999)
             ->max('sequence_number') ?? 0;
 
         // 2. Ambil sequence awal manual dari master data (jika tahun berlaku cocok)
@@ -100,7 +101,8 @@ class Create extends Component
         $nextSequence = max($maxInDb, $startingSequence) + 1;
         $assignedSequence = $nextSequence;
 
-        $sequenceNo = str_pad($nextSequence, 3, '0', STR_PAD_LEFT);
+        // 4. Format 2 DIGIT (01, 02, dst.) seragam dengan Surat Keluar
+        $sequenceNo = str_pad($nextSequence, 2, '0', STR_PAD_LEFT);
         $classification = \App\Models\Classification::find($this->classification_id);
         $classCode = $classification ? $classification->code : 'UM';
         $unit = \App\Models\Unit::find($this->unit_id);
@@ -165,9 +167,12 @@ class Create extends Component
         if (!empty(trim((string)$this->number))) {
             $this->number = trim((string)$this->number);
 
-            // Ekstrak angka urut dari teks nomor fisik jika diawali atau mengandung angka
+            // Ekstrak angka urut dari teks nomor fisik jika diawali atau mengandung angka wajar (<= 99999)
             if (preg_match('/^\D*(\d+)/', $this->number, $matches)) {
-                $assignedSequence = (int) $matches[1];
+                $parsedSequence = (int) $matches[1];
+                if ($parsedSequence <= 99999) {
+                    $assignedSequence = $parsedSequence;
+                }
             }
         } else {
             // Jika dikosongkan, terbitkan nomor resmi otomatis

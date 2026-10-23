@@ -44,6 +44,11 @@ class Unit extends Model
         return $this->hasMany(User::class);
     }
 
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
+
     /**
      * Resolve the parent division for this unit (or self if already a division).
      */

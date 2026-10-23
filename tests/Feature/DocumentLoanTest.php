@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Document;
 use App\Models\DocumentLoan;
+use App\Models\DocumentType;
 use App\Models\Folder;
 use App\Models\Role;
+use App\Models\Unit;
 use App\Models\User;
 use App\Livewire\Registry\DocumentLoanIndex;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,7 +31,7 @@ class DocumentLoanTest extends TestCase
         $response = $this->actingAs($superadmin)->get(route('borrowings.index'));
 
         $response->assertStatus(200);
-        $response->assertSeeText('Cari & Pinjam Berkas Arsip Fisik');
+        $response->assertSeeText('Pinjam Berkas Arsip Fisik');
     }
 
     public function test_user_can_submit_loan_request_and_ticket_is_generated()
@@ -58,7 +60,11 @@ class DocumentLoanTest extends TestCase
             ->set('expectedReturnDate', now()->addDays(5)->format('Y-m-d'))
             ->set('purpose', 'Pemeriksaan audit KAP internal kantor')
             ->call('submitLoanRequest')
-            ->assertDispatched('open-modal', 'modal-loan-ticket');
+            ->assertDispatched('close-modal', 'modal-loan-request')
+            ->assertNotDispatched('open-modal', 'modal-loan-ticket')
+            ->assertSet('activeTab', 'my_loans')
+            ->assertDispatched('loan-status-changed')
+            ->assertDispatched('notify');
 
         $this->assertDatabaseHas('document_loans', [
             'document_id' => $document->id,
@@ -225,7 +231,7 @@ class DocumentLoanTest extends TestCase
             ->test(DocumentLoanIndex::class);
 
         $this->assertTrue($component->get('canManageCirculation'));
-        $component->assertSee('Sirkulasi & Persetujuan Tapersip', false)
+        $component->assertSee('Persetujuan Tapersip', false)
             ->call('setTab', 'circulation');
 
         $this->assertEquals('circulation', $component->get('activeTab'));
@@ -262,9 +268,9 @@ class DocumentLoanTest extends TestCase
         $this->assertTrue($component->get('canManageCirculation'));
 
         // Tab Katalog & Pinjaman Saya tidak muncul
-        $component->assertDontSee('Katalog & Cari Surat', false);
+        $component->assertDontSee('Cari Surat', false);
         $component->assertDontSee('Pinjaman Saya');
-        $component->assertSee('Sirkulasi & Persetujuan Tapersip', false);
+        $component->assertSee('Persetujuan Tapersip', false);
 
         // Tab aktif awal otomatis dialihkan ke 'circulation'
         $this->assertEquals('circulation', $component->get('activeTab'));
@@ -300,9 +306,9 @@ class DocumentLoanTest extends TestCase
         $this->assertTrue($component->get('canBorrow'));
         $this->assertFalse($component->get('canManageCirculation'));
 
-        $component->assertSee('Katalog & Cari Surat', false);
+        $component->assertSee('Cari Surat', false);
         $component->assertSee('Pinjaman Saya');
-        $component->assertDontSee('Sirkulasi & Persetujuan Tapersip', false);
+        $component->assertDontSee('Persetujuan Tapersip', false);
         $this->assertEquals('catalog', $component->get('activeTab'));
     }
 
@@ -362,6 +368,7 @@ class DocumentLoanTest extends TestCase
         Livewire::actingAs($borrower)
             ->test(DocumentLoanIndex::class)
             ->call('cancelLoanRequest', $loan->id)
+            ->assertDispatched('loan-status-changed')
             ->assertDispatched('notify');
 
         $loan->refresh();
@@ -421,5 +428,474 @@ class DocumentLoanTest extends TestCase
             ->assertSee('dari')
             ->assertSee('data')
             ->assertSee('Prev');
+    }
+
+    public function test_document_loan_index_mounts_circulation_tab_when_tab_query_param_is_provided()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+
+        $this->actingAs($superadmin);
+
+        // Akses dengan query string ?tab=circulation
+        $component = Livewire::withQueryParams(['tab' => 'circulation'])
+            ->test(DocumentLoanIndex::class);
+
+        $this->assertEquals('circulation', $component->get('activeTab'));
+    }
+
+    public function test_regular_user_cannot_open_ticket_modal_and_only_tapersip_can_print()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+
+        $role = Role::create([
+            'name' => 'Staf Peminjam Biasa',
+            'status' => 'active',
+            'module_visibility' => ['document_borrowing'], // Tidak punya loan_circulation
+        ]);
+
+        $borrower = User::create([
+            'name' => 'Staf Pemohon',
+            'username' => 'stafpemohon',
+            'email' => 'stafpemohon@arsip.com',
+            'password' => bcrypt('password'),
+            'role_id' => $role->id,
+            'status' => 'active',
+        ]);
+
+        $document = Document::create([
+            'number' => '099/DOC/TEST/2026',
+            'subject' => 'Surat Uji Proteksi Cetak Tiket',
+            'type' => 'incoming',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'document_date' => now(),
+            'created_by' => $borrower->id,
+        ]);
+
+        $loan = DocumentLoan::create([
+            'loan_code' => DocumentLoan::generateTicketCode(),
+            'document_id' => $document->id,
+            'user_id' => $borrower->id,
+            'borrow_date' => now(),
+            'expected_return_date' => now()->addDays(5),
+            'purpose' => 'Uji Otorisasi Cetak Tiket',
+            'status' => 'requested',
+        ]);
+
+        // 1. Staf biasa dilarang membuka modal cetak tiket (403)
+        Livewire::actingAs($borrower)
+            ->test(DocumentLoanIndex::class)
+            ->call('openTicketModal', $loan->id)
+            ->assertStatus(403);
+
+        // 2. Petugas Tapersip / Superadmin berhasil membuka modal cetak tiket
+        Livewire::actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->call('openTicketModal', $loan->id)
+            ->assertDispatched('open-modal', 'modal-loan-ticket');
+    }
+
+    public function test_staff_cannot_see_confidential_rahasia_documents_in_catalog()
+    {
+        $roleBorrower = Role::create([
+            'name' => 'Staf Peminjam Rahasia ' . uniqid(),
+            'status' => 'active',
+            'module_visibility' => ['document_borrowing'],
+        ]);
+        $unitA = Unit::first();
+
+        $staffUser = User::factory()->create([
+            'name' => 'Staf Operasional Biasa',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $unitA->id,
+        ]);
+
+        $otherUser = User::factory()->create([
+            'name' => 'Staf Pimpinan',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $unitA->id,
+        ]);
+
+        // Dokumen rahasia dibuat oleh orang lain
+        $docRahasia = Document::create([
+            'number' => '001/RAHASIA/SDM/2026',
+            'subject' => 'Laporan Khusus Sanksi Indisipliner Karyawan',
+            'type' => 'outgoing',
+            'sifat' => 'rahasia',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $otherUser->id,
+        ]);
+
+        // Staf biasa tidak boleh melihat dokumen rahasia di katalog
+        $component = Livewire::actingAs($staffUser)
+            ->test(DocumentLoanIndex::class);
+
+        $component->assertDontSee('001/RAHASIA/SDM/2026')
+            ->assertDontSee('Laporan Khusus Sanksi Indisipliner Karyawan');
+
+        // Jika mencoba meminjam via modal secara langsung, ditolak
+        $component->call('openLoanModal', $docRahasia->id)
+            ->assertDispatched('notify');
+    }
+
+    public function test_staff_cannot_see_important_penting_documents_from_other_divisions()
+    {
+        $roleBorrower = Role::create([
+            'name' => 'Staf Peminjam Penting ' . uniqid(),
+            'status' => 'active',
+            'module_visibility' => ['document_borrowing'],
+        ]);
+        $divisiOps = Unit::where('type', 'division')->first() ?? Unit::create(['name' => 'Divisi Operasional', 'code' => 'OPS', 'type' => 'division']);
+        $divisiKeu = Unit::where('type', 'division')->where('id', '!=', $divisiOps->id)->first() ?? Unit::create(['name' => 'Divisi Keuangan', 'code' => 'KEU', 'type' => 'division']);
+
+        $staffOps = User::factory()->create([
+            'name' => 'Budi Staf Ops',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $divisiOps->id,
+        ]);
+
+        $userKeu = User::factory()->create([
+            'name' => 'Andi Staf Keuangan',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $divisiKeu->id,
+        ]);
+
+        // Surat penting milik Divisi Keuangan
+        $docPentingKeu = Document::create([
+            'number' => '002/PENTING/KEU/2026',
+            'subject' => 'Audit Keuangan Internal Triwulan',
+            'type' => 'outgoing',
+            'unit_id' => $divisiKeu->id,
+            'sifat' => 'penting',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $userKeu->id,
+        ]);
+
+        // 1. Staf Operasional TIDAK BISA melihat surat penting Divisi Keuangan
+        Livewire::actingAs($staffOps)
+            ->test(DocumentLoanIndex::class)
+            ->assertDontSee('002/PENTING/KEU/2026')
+            ->assertDontSee('Audit Keuangan Internal Triwulan');
+
+        // 2. Staf Keuangan BISA melihat surat penting divisinya sendiri
+        Livewire::actingAs($userKeu)
+            ->test(DocumentLoanIndex::class)
+            ->assertSee('002/PENTING/KEU/2026')
+            ->assertSee('Audit Keuangan Internal Triwulan');
+    }
+
+    public function test_staff_can_see_ordinary_biasa_documents_across_all_divisions()
+    {
+        $roleBorrower = Role::create([
+            'name' => 'Staf Peminjam Biasa ' . uniqid(),
+            'status' => 'active',
+            'module_visibility' => ['document_borrowing'],
+        ]);
+        $divisiOps = Unit::where('type', 'division')->first();
+        $divisiKeu = Unit::where('type', 'division')->where('id', '!=', $divisiOps->id)->first() ?? Unit::first();
+
+        $staffOps = User::factory()->create([
+            'name' => 'Staf Operasional',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $divisiOps->id,
+        ]);
+
+        $userKeu = User::factory()->create([
+            'name' => 'User Keu',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $divisiKeu->id,
+        ]);
+
+        $docBiasaKeu = Document::create([
+            'number' => '003/BIASA/KEU/2026',
+            'subject' => 'Surat Edaran Jam Kerja Puasa',
+            'type' => 'outgoing',
+            'unit_id' => $divisiKeu->id,
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $userKeu->id,
+        ]);
+
+        // Staf divisi lain bebas melihat naskah biasa
+        Livewire::actingAs($staffOps)
+            ->test(DocumentLoanIndex::class)
+            ->assertSee('003/BIASA/KEU/2026')
+            ->assertSee('Surat Edaran Jam Kerja Puasa');
+    }
+
+    public function test_superadmin_can_see_all_documents_including_rahasia_and_other_divisions_penting()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+
+        $docRahasia = Document::create([
+            'number' => '999/RAHASIA/ALL/2026',
+            'subject' => 'Surat Rahasia Direksi Utama',
+            'type' => 'outgoing',
+            'unit_id' => $unit->id,
+            'sifat' => 'rahasia',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        Livewire::actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->assertSee('999/RAHASIA/ALL/2026')
+            ->assertSee('Surat Rahasia Direksi Utama');
+    }
+
+    public function test_staff_cannot_see_important_special_internal_documents_from_different_department_in_same_division()
+    {
+        $roleBorrower = Role::create([
+            'name' => 'Staf Peminjam Dept ' . uniqid(),
+            'status' => 'active',
+            'module_visibility' => ['document_borrowing'],
+        ]);
+
+        // 1. Buat Divisi Induk TI
+        $divisiTI = Unit::create([
+            'name' => 'Divisi Teknologi Informasi',
+            'code' => 'TI',
+            'type' => 'division',
+        ]);
+
+        // 2. Buat 2 Departemen di bawah Divisi TI yang sama
+        $deptDev = Unit::create([
+            'name' => 'Departemen Pengembangan Aplikasi',
+            'code' => 'TI-DEV',
+            'type' => 'department',
+            'parent_id' => $divisiTI->id,
+        ]);
+
+        $deptInf = Unit::create([
+            'name' => 'Departemen Infrastruktur Jaringan',
+            'code' => 'TI-INF',
+            'type' => 'department',
+            'parent_id' => $divisiTI->id,
+        ]);
+
+        // 3. User Programmer di Dept Dev & User Network di Dept Inf
+        $staffDev = User::factory()->create([
+            'name' => 'Fajar Programmer',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $deptDev->id,
+        ]);
+
+        $staffInf = User::factory()->create([
+            'name' => 'Rian Network Engineer',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $deptInf->id,
+        ]);
+
+        $docTypeMemo = DocumentType::where('name', 'like', '%Memo%')->first()
+            ?? DocumentType::firstOrCreate(['name' => 'Memo Internal', 'code' => 'MI', 'numbering_format' => '{NO}/MI/{UNIT}/{YYYY}']);
+
+        // 4. Memo Internal PENTING diterbitkan oleh Departemen Pengembangan Aplikasi
+        $memoPentingDev = Document::create([
+            'number' => '055/MI/TI-DEV/10/2026',
+            'subject' => 'Laporan Kerentanan Keamanan Source Code Aplikasi',
+            'type' => 'internal', // Surat Khusus
+            'document_type_id' => $docTypeMemo->id,
+            'unit_id' => $deptDev->id,
+            'sifat' => 'penting',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $staffDev->id,
+        ]);
+
+        // 5. Staf Departemen Infrastruktur (satu divisi TI tapi BEDA departemen) TIDAK BISA melihat
+        $componentInf = Livewire::actingAs($staffInf)
+            ->test(DocumentLoanIndex::class);
+
+        $componentInf->assertDontSee('055/MI/TI-DEV/10/2026')
+            ->assertDontSee('Laporan Kerentanan Keamanan Source Code Aplikasi');
+
+        // Upaya membuka modal peminjaman langsung ditolak
+        $componentInf->call('openLoanModal', $memoPentingDev->id)
+            ->assertDispatched('notify');
+
+        // 6. Staf sesama Departemen Pengembangan Aplikasi BISA melihat dan meminjam
+        $otherStaffDev = User::factory()->create([
+            'name' => 'Gita UI UX Designer',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $deptDev->id,
+        ]);
+
+        Livewire::actingAs($otherStaffDev)
+            ->test(DocumentLoanIndex::class)
+            ->assertSee('055/MI/TI-DEV/10/2026')
+            ->assertSee('Laporan Kerentanan Keamanan Source Code Aplikasi');
+    }
+
+    public function test_hierarchical_department_isolation_and_division_upward_inheritance_for_important_documents()
+    {
+        $roleBorrower = Role::create([
+            'name' => 'Role Peminjam ' . uniqid(),
+            'status' => 'active',
+            'module_visibility' => ['document_borrowing'],
+        ]);
+
+        // 1. Ambil Divisi Operasional dan Departemen MGTTI dari master data
+        $divisiOps = Unit::where('code', 'OPS')->first() ?? Unit::create([
+            'name' => 'Divisi Operasional',
+            'code' => 'OPS-TEST',
+            'type' => 'division',
+        ]);
+
+        $deptMgtti = Unit::where('code', 'MGTTI')->first() ?? Unit::create([
+            'name' => 'Departemen MGTTI',
+            'code' => 'MGTTI-TEST',
+            'type' => 'department',
+            'parent_id' => $divisiOps->id,
+        ]);
+
+        // 2. Buat Departemen Logistik di bawah Divisi Operasional yang sama
+        $deptLogistik = Unit::firstOrCreate(
+            ['code' => 'LOG-OPS'],
+            [
+                'name' => 'Departemen Logistik Operasional',
+                'type' => 'department',
+                'parent_id' => $divisiOps->id,
+                'status' => 'active',
+            ]
+        );
+
+        // 3. User pembuat surat: Krisna di Departemen MGTTI
+        $krisna = User::factory()->create([
+            'name' => 'Krisna MGTTI',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $deptMgtti->id,
+        ]);
+
+        // User sesama Departemen MGTTI
+        $fellowMgtti = User::factory()->create([
+            'name' => 'Rekan Krisna MGTTI',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $deptMgtti->id,
+        ]);
+
+        // User staf di Departemen Logistik (satu divisi Operasional tapi beda departemen)
+        $stafLogistik = User::factory()->create([
+            'name' => 'Staf Logistik Operasional',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $deptLogistik->id,
+        ]);
+
+        // User yang akunnya melekat langsung pada level Divisi Operasional (misal: Kepala Divisi / Sekretariat Divisi)
+        $kadivOps = User::factory()->create([
+            'name' => 'Kepala Divisi Operasional',
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $divisiOps->id,
+        ]);
+
+        // 4. Buat Surat Keluar PENTING dibuat oleh Krisna (Departemen MGTTI)
+        $suratKeluarPenting = Document::create([
+            'number' => '01/SK-OPS/X/2026',
+            'subject' => 'Surat Keluar Penting Pengadaan Lisensi MGTTI',
+            'type' => 'outgoing',
+            'unit_id' => $divisiOps->id,
+            'sifat' => 'penting',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $krisna->id,
+        ]);
+
+        // 5. Buat Surat Khusus PENTING dibuat oleh Krisna (Departemen MGTTI)
+        $suratKhususPenting = Document::create([
+            'number' => '01/MI/MGTTI/X/2026',
+            'subject' => 'Memo Khusus Internal Kerentanan Sistem MGTTI',
+            'type' => 'internal',
+            'unit_id' => $deptMgtti->id,
+            'sifat' => 'penting',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $krisna->id,
+        ]);
+
+        // UJI 1: Staf Departemen Logistik TIDAK DAPAT melihat Surat Keluar maupun Surat Khusus buatan Krisna MGTTI
+        $testLogistik = Livewire::actingAs($stafLogistik)->test(DocumentLoanIndex::class);
+        $testLogistik->assertDontSee('01/SK-OPS/X/2026')
+            ->assertDontSee('Surat Keluar Penting Pengadaan Lisensi MGTTI')
+            ->assertDontSee('01/MI/MGTTI/X/2026')
+            ->assertDontSee('Memo Khusus Internal Kerentanan Sistem MGTTI');
+
+        // Upaya staf Logistik meminjam naskah ditolak oleh sistem keamanan
+        $testLogistik->call('openLoanModal', $suratKeluarPenting->id)->assertDispatched('notify');
+        $testLogistik->call('openLoanModal', $suratKhususPenting->id)->assertDispatched('notify');
+
+        // UJI 2: Staf sesama Departemen MGTTI BISA melihat dan meminjam
+        $testFellow = Livewire::actingAs($fellowMgtti)->test(DocumentLoanIndex::class);
+        $testFellow->assertSee('01/SK-OPS/X/2026')
+            ->assertSee('Surat Keluar Penting Pengadaan Lisensi MGTTI')
+            ->assertSee('01/MI/MGTTI/X/2026')
+            ->assertSee('Memo Khusus Internal Kerentanan Sistem MGTTI');
+
+        // UJI 3: Akun level Divisi Operasional (Induk Divisi) BISA melihat dan meminjam seluruh naskah
+        $testDivisi = Livewire::actingAs($kadivOps)->test(DocumentLoanIndex::class);
+        $testDivisi->assertSee('01/SK-OPS/X/2026')
+            ->assertSee('Surat Keluar Penting Pengadaan Lisensi MGTTI')
+            ->assertSee('01/MI/MGTTI/X/2026')
+            ->assertSee('Memo Khusus Internal Kerentanan Sistem MGTTI');
+    }
+
+    public function test_circulation_smart_page_resolver_navigates_to_correct_page_for_highlight_parameter()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+        $roleBorrower = Role::where('name', 'User')->first();
+
+        $borrower = User::factory()->create([
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $unit->id,
+        ]);
+
+        $document = Document::create([
+            'number' => 'DOC-CIRC-PAGE/2026',
+            'subject' => 'Surat Pengujian Sirkulasi Multi Page',
+            'type' => 'outgoing',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        // Buat 15 loans dengan waktu berurutan
+        // Karena kueri sirkulasi menggunakan latest('created_at') (descending),
+        // loan pertama yang dibuat (paling lama) akan berada di halaman ke-2 (posisi ke-15)
+        $targetLoan = null;
+        for ($i = 1; $i <= 15; $i++) {
+            $loan = DocumentLoan::create([
+                'loan_code' => "TIKET-PAGE-{$i}",
+                'document_id' => $document->id,
+                'user_id' => $borrower->id,
+                'borrow_date' => now(),
+                'expected_return_date' => now()->addDays(5),
+                'purpose' => "Uji Sirkulasi Page {$i}",
+                'status' => 'requested',
+            ]);
+
+            DocumentLoan::where('id', $loan->id)->update([
+                'created_at' => now()->subMinutes(30 - $i),
+            ]);
+
+            if ($i === 1) {
+                $targetLoan = $loan->fresh();
+            }
+        }
+
+        $this->assertNotNull($targetLoan);
+
+        // Simulasi klik notifikasi dengan query param highlight=loan-{id}
+        // Smart Page Resolver harus otomatis membuka tab circulation dan menyajikan halaman 2
+        Livewire::withQueryParams(['tab' => 'circulation', 'highlight' => "loan-{$targetLoan->id}"])
+            ->actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->assertSet('activeTab', 'circulation')
+            ->assertSee($targetLoan->loan_code)
+            ->assertSee('id="loan-row-' . $targetLoan->id . '"', false);
     }
 }

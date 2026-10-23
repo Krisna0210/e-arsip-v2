@@ -104,7 +104,7 @@
             </table>
         </div>
         <div class="px-5 py-3 border-t border-[var(--color-border)]">
-            {{ $classifications->links() }}
+            {{ $classifications->links('vendor.pagination.custom') }}
         </div>
     </div>
     @endif
@@ -179,7 +179,7 @@
             </table>
         </div>
         <div class="px-5 py-3 border-t border-[var(--color-border)]">
-            {{ $documentTypes->links() }}
+            {{ $documentTypes->links('vendor.pagination.custom') }}
         </div>
     </div>
     @endif

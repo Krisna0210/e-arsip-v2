@@ -2,9 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\Registry\Internal\Create as InternalCreate;
+use App\Models\Classification;
 use App\Models\Document;
+use App\Models\DocumentType;
+use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class SpecialLetterTest extends TestCase
@@ -44,5 +49,37 @@ class SpecialLetterTest extends TestCase
     {
         $doc = new Document(['type' => 'internal']);
         $this->assertStringStartsWith('documents/Surat Khusus/', $doc->getStorageDirectoryPath());
+    }
+
+    public function test_special_letter_numbering_uses_two_digit_format()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $docType = DocumentType::where('name', 'like', '%Memo%')->first()
+            ?? DocumentType::firstOrCreate([
+                'name' => 'Memo Internal',
+                'code' => 'MI',
+                'numbering_format' => '{NO}/MI/{UNIT}/{YYYY}',
+            ]);
+        $department = Unit::departments()->first() ?? Unit::first();
+        $recipient = Unit::departments()->where('id', '!=', $department->id)->first() ?? $department;
+        $classification = Classification::whereNotNull('parent_id')->first() ?? Classification::first();
+
+        $component = Livewire::actingAs($superadmin)
+            ->test(InternalCreate::class)
+            ->set('document_type_id', $docType->id)
+            ->set('unit_id', $department->id)
+            ->set('recipient_id', $recipient->id)
+            ->set('subject', 'Uji Coba Penomoran Surat Khusus 2 Digit')
+            ->set('classification_id', $classification->id)
+            ->set('document_date', date('Y-m-d'))
+            ->set('sifat', 'biasa')
+            ->call('bookNumber')
+            ->assertHasNoErrors();
+
+        $generatedNumber = $component->get('number');
+
+        // Nomor yang diterbitkan harus menggunakan format 2 digit (misal: 01/, 02/) bukan 3 digit (001/)
+        $this->assertMatchesRegularExpression('/^\d{2}\//', $generatedNumber);
+        $this->assertDoesNotMatchRegularExpression('/^\d{3}\//', $generatedNumber);
     }
 }
