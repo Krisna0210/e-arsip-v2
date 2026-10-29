@@ -49,7 +49,7 @@ return [
 
         'nas' => [
             'driver' => 'local',
-            'root' => env('NAS_STORAGE_PATH') ?: storage_path('app/public'),
+            'root' => env('NAS_STORAGE_PATH') ?: storage_path('app/nas'),
             'throw' => false,
             'report' => false,
         ],

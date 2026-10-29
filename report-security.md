@@ -280,7 +280,7 @@ Setelah menyelesaikan perbaikan terhadap temuan utama, dilakukan audit komprehen
 
 1. **Protokol HTTPS & Secure Cookie**:
    Pastikan pada berkas `.env` server produksi disetel `SESSION_SECURE_COOKIE=true` agar cookie sesi hanya dikirimkan melalui enkripsi TLS/HTTPS.
-2. **Isolasi Storage Statis Web Server**:
-   Hindari menjalankan perintah `php artisan storage:link` jika penyimpanan NAS fallback menggunakan direktori `storage/app/public`, guna mencegah pengunduhan berkas arsip internal secara langsung melewati web server tanpa autentikasi.
+2. **Isolasi Storage Statis Web Server (Telah Diterapkan)**:
+   Aset statis UI (seperti logo `logo_cms_hd_png.svg`) telah dipindahkan langsung ke direktori publik murni (`public/assets/`), dan konfigurasi fallback disk NAS telah dialihkan ke direktori private `storage/app/nas`. Dengan arsitektur ini, logo selalu tampil tanpa memerlukan `php artisan storage:link`, dan dokumen arsip perusahaan tidak akan pernah bocor meskipun symlink publik dibuat.
 3. **Driver Cache untuk Rate Limiting**:
    Gunakan driver cache seperti `redis` atau database pada environment produksi agar kunci *rate limiting* login tidak hilang saat worker PHP-FPM di-restart.

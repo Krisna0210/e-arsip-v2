@@ -36,7 +36,7 @@ class NasHealthService
     protected static function performCheck(): array
     {
         $checkedAt = now()->format('H:i:s');
-        $rootPath = config('filesystems.disks.nas.root', storage_path('app/public'));
+        $rootPath = config('filesystems.disks.nas.root', storage_path('app/nas'));
 
         try {
             $disk = Storage::disk('nas');

@@ -3,7 +3,7 @@
         <!-- Logo & Header -->
         <div class="w-full text-center mb-8 flex flex-col items-center">
             <div class="w-40 h-25 flex items-center justify-center">
-                <img src="{{ asset('storage/assets/logo_cms_hd_png.svg') }}" alt="Logo Instansi" class="w-40 h-20 object-contain shrink-0">
+                <img src="{{ asset('assets/logo_cms_hd_png.svg') }}" alt="Logo Instansi" class="w-40 h-20 object-contain shrink-0">
             </div>
             <h1 class="text-[var(--color-text-primary)] text-[1.5rem] font-bold leading-[1.25] tracking-tight mb-2">
                 E-ARSIP

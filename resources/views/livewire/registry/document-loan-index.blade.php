@@ -1032,7 +1032,7 @@
                         <div class="flex items-center">
                             <!-- Logo Resmi dari Storage -->
                             <div class="w-20 h-20 flex items-center justify-center shrink-0">
-                                <img src="{{ asset('storage/assets/logo_cms_hd_png.svg') }}" alt="Logo Instansi" class="w-20 h-20 object-contain shrink-0">
+                                <img src="{{ asset('assets/logo_cms_hd_png.svg') }}" alt="Logo Instansi" class="w-20 h-20 object-contain shrink-0">
                             </div>
                             <!-- Garis Pemisah Vertikal -->
                             <div class="h-10 w-px bg-slate-300 mx-3.5 self-center"></div>

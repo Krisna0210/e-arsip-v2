@@ -108,7 +108,10 @@ Route::middleware('auth')->group(function () {
         $path = Storage::disk('nas')->path($version->file_path);
 
         if (!file_exists($path)) {
-            $fallbackPath = storage_path('app/public/' . $version->file_path);
+            $fallbackPath = storage_path('app/nas/' . $version->file_path);
+            if (!file_exists($fallbackPath)) {
+                $fallbackPath = storage_path('app/public/' . $version->file_path);
+            }
             if (file_exists($fallbackPath)) {
                 $path = $fallbackPath;
             } else {
