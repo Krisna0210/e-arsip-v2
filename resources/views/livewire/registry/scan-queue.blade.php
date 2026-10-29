@@ -359,7 +359,7 @@
                                         <input type="file" wire:model="finalFile" accept="application/pdf" class="sr-only" x-bind:disabled="uploading" x-ref="pdfInput" x-on:change="pdfUrl = $refs.pdfInput.files.length > 0 ? URL.createObjectURL($refs.pdfInput.files[0]) : null">
                                     </label>
                                 </div>
-                                <p class="text-xs text-gray-500 mt-2">Maksimal ukuran: 10MB</p>
+                                <p class="text-xs text-gray-500 mt-2">Maksimal ukuran: 25MB</p>
                             </div>
                             @error('finalFile') <span class="text-red-500 text-xs mt-2 block font-medium flex items-center gap-1"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>{{ $message }}</span> @enderror
                         </div>
