@@ -176,13 +176,44 @@
                                     </div>
                                     <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium
-                                            {{ $doc->type === 'incoming' ? 'bg-blue-50 text-blue-700 border border-blue-200' : ($doc->type === 'outgoing' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-eme-50 text-purple-700 border border-purple-200') }}">
+                                            {{ $doc->type === 'incoming' ? 'bg-blue-50 text-blue-700 border border-blue-200' : ($doc->type === 'outgoing' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-purple-50 text-purple-700 border border-purple-200') }}">
                                             {{ $doc->type === 'incoming' ? 'Surat Masuk' : ($doc->type === 'outgoing' ? 'Surat Keluar' : ($doc->documentType?->name ?? 'Surat Khusus')) }}
                                         </span>
                                         <span class="text-xs text-slate-400">
                                             {{ $doc->document_date ? \Carbon\Carbon::parse($doc->document_date)->translatedFormat('d M Y') : '-' }}
                                         </span>
                                     </div>
+                                    @if($doc->type === 'internal')
+                                        @php
+                                            $originUnit = $doc->unit->name ?? 'Internal';
+                                            $targetUnit = $doc->recipients->first()?->recipient?->name ?? ($doc->recipient_name ?? '-');
+                                        @endphp
+                                        <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                            <span class="font-medium text-slate-700" title="{{ $originUnit }}">{{ $originUnit }}</span>
+                                            <span class="text-slate-400 font-semibold">&rarr;</span>
+                                            <span class="font-medium text-purple-700" title="{{ $targetUnit }}">{{ $targetUnit }}</span>
+                                        </div>
+                                    @elseif($doc->type === 'outgoing')
+                                        @php
+                                            $originUnit = $doc->unit->name ?? 'Internal';
+                                            $targetName = $doc->recipient_name ?? '-';
+                                        @endphp
+                                        <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                            <span class="font-medium text-slate-700" title="{{ $originUnit }}">{{ $originUnit }}</span>
+                                            <span class="text-slate-400 font-semibold">&rarr;</span>
+                                            <span class="font-medium text-emerald-700" title="{{ $targetName }}">{{ $targetName }}</span>
+                                        </div>
+                                    @elseif($doc->type === 'incoming')
+                                        @php
+                                            $senderName = $doc->sender ?? '-';
+                                            $targetUnit = $doc->unit->name ?? '-';
+                                        @endphp
+                                        <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                            <span class="font-medium text-slate-700" title="{{ $senderName }}">{{ $senderName }}</span>
+                                            <span class="text-slate-400 font-semibold">&rarr;</span>
+                                            <span class="font-medium text-blue-700" title="{{ $targetUnit }}">{{ $targetUnit }}</span>
+                                        </div>
+                                    @endif
                                 </td>
 
                                 <!-- Perihal & Distribusi -->
@@ -366,6 +397,40 @@
                                             </button>
                                         @endif
                                     </div>
+                                    @if($loan->document)
+                                        @php $loanDoc = $loan->document; @endphp
+                                        @if($loanDoc->type === 'internal')
+                                            @php
+                                                $originUnit = $loanDoc->unit->name ?? 'Internal';
+                                                $targetUnit = $loanDoc->recipients->first()?->recipient?->name ?? ($loanDoc->recipient_name ?? '-');
+                                            @endphp
+                                            <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                                <span class="font-medium text-slate-700" title="{{ $originUnit }}">{{ $originUnit }}</span>
+                                                <span class="text-slate-400 font-semibold">&rarr;</span>
+                                                <span class="font-medium text-purple-700" title="{{ $targetUnit }}">{{ $targetUnit }}</span>
+                                            </div>
+                                        @elseif($loanDoc->type === 'outgoing')
+                                            @php
+                                                $originUnit = $loanDoc->unit->name ?? 'Internal';
+                                                $targetName = $loanDoc->recipient_name ?? '-';
+                                            @endphp
+                                            <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                                <span class="font-medium text-slate-700" title="{{ $originUnit }}">{{ $originUnit }}</span>
+                                                <span class="text-slate-400 font-semibold">&rarr;</span>
+                                                <span class="font-medium text-emerald-700" title="{{ $targetName }}">{{ $targetName }}</span>
+                                            </div>
+                                        @elseif($loanDoc->type === 'incoming')
+                                            @php
+                                                $senderName = $loanDoc->sender ?? '-';
+                                                $targetUnit = $loanDoc->unit->name ?? '-';
+                                            @endphp
+                                            <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                                <span class="font-medium text-slate-700" title="{{ $senderName }}">{{ $senderName }}</span>
+                                                <span class="text-slate-400 font-semibold">&rarr;</span>
+                                                <span class="font-medium text-blue-700" title="{{ $targetUnit }}">{{ $targetUnit }}</span>
+                                            </div>
+                                        @endif
+                                    @endif
                                     {{-- @if($loan->document && $loan->document->folder)
                                         <div class="mt-1.5">
                                             <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
@@ -575,6 +640,40 @@
                                             </button>
                                         @endif
                                     </div>
+                                    @if($loan->document)
+                                        @php $loanDoc = $loan->document; @endphp
+                                        @if($loanDoc->type === 'internal')
+                                            @php
+                                                $originUnit = $loanDoc->unit->name ?? 'Internal';
+                                                $targetUnit = $loanDoc->recipients->first()?->recipient?->name ?? ($loanDoc->recipient_name ?? '-');
+                                            @endphp
+                                            <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                                <span class="font-medium text-slate-700" title="{{ $originUnit }}">{{ $originUnit }}</span>
+                                                <span class="text-slate-400 font-semibold">&rarr;</span>
+                                                <span class="font-medium text-purple-700" title="{{ $targetUnit }}">{{ $targetUnit }}</span>
+                                            </div>
+                                        @elseif($loanDoc->type === 'outgoing')
+                                            @php
+                                                $originUnit = $loanDoc->unit->name ?? 'Internal';
+                                                $targetName = $loanDoc->recipient_name ?? '-';
+                                            @endphp
+                                            <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                                <span class="font-medium text-slate-700" title="{{ $originUnit }}">{{ $originUnit }}</span>
+                                                <span class="text-slate-400 font-semibold">&rarr;</span>
+                                                <span class="font-medium text-emerald-700" title="{{ $targetName }}">{{ $targetName }}</span>
+                                            </div>
+                                        @elseif($loanDoc->type === 'incoming')
+                                            @php
+                                                $senderName = $loanDoc->sender ?? '-';
+                                                $targetUnit = $loanDoc->unit->name ?? '-';
+                                            @endphp
+                                            <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                                <span class="font-medium text-slate-700" title="{{ $senderName }}">{{ $senderName }}</span>
+                                                <span class="text-slate-400 font-semibold">&rarr;</span>
+                                                <span class="font-medium text-blue-700" title="{{ $targetUnit }}">{{ $targetUnit }}</span>
+                                            </div>
+                                        @endif
+                                    @endif
                                     <div class="mt-2">
                                         @if($loan->document && $loan->document->folder)
                                             <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">

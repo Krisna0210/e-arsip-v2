@@ -6,6 +6,7 @@ use Livewire\Component;
 use App\Models\Role;
 use App\Models\Permission;
 use App\Models\AuditLog;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class RoleEditor extends Component
@@ -17,6 +18,14 @@ class RoleEditor extends Component
     public $roleStatus = 'active';
     public $permissionMatrix = [];
     public $moduleVisibility = [];
+
+    public function boot()
+    {
+        $user = Auth::user();
+        if (!$user?->isSuperAdmin() && !$user?->hasModuleAccess('roles') && $user?->role?->name !== 'Admin') {
+            abort(403, 'Akses ditolak.');
+        }
+    }
 
     public function mount(?Role $role = null)
     {

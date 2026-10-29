@@ -26,8 +26,12 @@ class Document extends Model
         'recipient_name',
         'signer_id',
         'signer_type',
-        'subject',
-        'unit_id',
+            'subject',
+            'notes',
+            'cancellation_requested_at',
+            'cancelled_by',
+            'cancellation_rejection_notes',
+            'unit_id',
         'classification_id',
         'sifat',
         'status',
@@ -41,6 +45,7 @@ class Document extends Model
     protected $casts = [
         'document_date' => 'date',
         'received_date' => 'date',
+        'cancellation_requested_at' => 'datetime',
         'retention_start_date' => 'date',
         'retention_end_date' => 'date',
     ];
@@ -68,6 +73,11 @@ class Document extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function versions(): HasMany

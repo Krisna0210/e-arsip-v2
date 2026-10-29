@@ -36,6 +36,13 @@ class ArchiveClassificationIndex extends Component
     public $typeStartingSequenceDir = 0;
     public $typeStartingYear;
 
+    public function boot()
+    {
+        if (!Auth::user()?->isSuperAdmin() && !Auth::user()?->hasModuleAccess('classification')) {
+            abort(403, 'Akses ditolak.');
+        }
+    }
+
     public function setTab($tab)
     {
         $this->activeTab = $tab;

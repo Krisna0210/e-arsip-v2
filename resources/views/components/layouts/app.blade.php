@@ -73,7 +73,7 @@
                     @endif
 
                     <!-- Kategori: Kearsipan -->
-                    @if(auth()->user()->hasModuleAccess('in_out_mail') || auth()->user()->hasModuleAccess('internal_memo') || auth()->user()->hasModuleAccess('archive_queue') || auth()->user()->hasModuleAccess('document_borrowing') || auth()->user()->hasModuleAccess('loan_circulation'))
+                    @if(auth()->user()->hasModuleAccess('in_out_mail') || auth()->user()->hasModuleAccess('internal_memo') || auth()->user()->hasModuleAccess('archive_queue') || auth()->user()->hasModuleAccess('document_borrowing') || auth()->user()->hasModuleAccess('loan_circulation') || auth()->user()->hasModuleAccess('cancelled_documents'))
                     <div>
                         <h3 class="px-3 text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2 mt-4">Kearsipan</h3>
                         <nav class="space-y-1">
@@ -91,6 +91,14 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                 </svg>
                                 <span class="text-sm">Antrean Scan Tapersip</span>
+                            </a>
+                            @endif
+                            @if(auth()->user()->hasModuleAccess('cancelled_documents'))
+                            <a href="{{ route('registry.cancelled.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg relative {{ request()->routeIs('registry.cancelled.*') ? 'bg-white/10 text-white font-medium before:absolute before:right-0 before:top-2 before:bottom-2 before:w-1 before:bg-emerald-400 before:rounded-l' : 'hover:bg-[var(--color-surface-sidebar-hover)] hover:text-white transition-colors' }}">
+                                <svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                </svg>
+                                <span class="text-sm">Pembatalan Dok</span>
                             </a>
                             @endif
                             @if(auth()->user()->hasModuleAccess('in_out_mail'))
@@ -170,7 +178,7 @@
             <!-- Main Content Area -->
             <div class="flex-1 flex flex-col min-w-0">
                 <!-- Top Navigation Bar -->
-                <header class="bg-white border-b border-[var(--color-border)] h-16 flex items-center justify-between px-4 lg:px-6 flex-shrink-0 shadow-sm z-10 w-full">
+                <header class="bg-white border-b border-[var(--color-border)] h-16 flex items-center justify-between px-4 lg:px-6 flex-shrink-0 shadow-sm z-30 w-full">
 
                     <div class="flex items-center flex-1 gap-2 lg:gap-0">
                         <!-- Mobile Hamburguer Menu -->

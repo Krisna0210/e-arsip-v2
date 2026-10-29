@@ -108,7 +108,7 @@
                                 <x-ui.badge status="rejected">Nonaktif</x-ui.badge>
                             @endif
                         </td>
-                        <td class="px-5 py-4 text-right">
+                        <td class="px-5 py-4 text-right space-x-1">
                             <x-ui.button wire:click="editUnit({{ $unit->id }})" variant="subtle" class="!px-2 !py-1 text-xs">Edit</x-ui.button>
                             <x-ui.button wire:click="deleteUnit({{ $unit->id }})" wire:confirm="Apakah Anda yakin ingin menghapus unit kerja ini?" variant="subtle" class="!px-2 !py-1 text-xs !text-red-600 hover:!bg-red-50">Hapus</x-ui.button>
                         </td>
@@ -243,7 +243,7 @@
                 @error('unitStatus') <span class="text-xs text-red-500 mt-1 block">{{ $message }}</span> @enderror
             </div>
         </form>
-        
+
         <x-slot:footer>
             <x-ui.button variant="secondary" type="button" @click="$dispatch('close-modal', { id: 'slide-unit' })">Batal</x-ui.button>
             <x-ui.button variant="primary" type="submit" form="form-unit">Simpan Unit</x-ui.button>
@@ -276,7 +276,7 @@
                 @error('posAuthority') <span class="text-xs text-red-500 mt-1 block">{{ $message }}</span> @enderror
             </div>
         </form>
-        
+
         <x-slot:footer>
             <x-ui.button variant="secondary" type="button" @click="$dispatch('close-modal', { id: 'slide-position' })">Batal</x-ui.button>
             <x-ui.button variant="primary" type="submit" form="form-position">Simpan Jabatan</x-ui.button>

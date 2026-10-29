@@ -1,4 +1,4 @@
-<div class="space-y-6">
+<div class="space-y-6" @if(!$editDocId && !$voidDocId) wire:poll.visible.10s="checkStatusUpdates" @endif>
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -16,7 +16,7 @@
             @endif
 
             @if(auth()->user()->hasModuleAccess('input_outgoing'))
-            <a href="{{ route('registry.outgoing.create') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white transition-colors shadow-2xs">
+            <a href="{{ route('registry.outgoing.create') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-2xs">
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                 <span>No. Surat Keluar</span>
             </a>
@@ -204,9 +204,10 @@
                         <thead class="text-[11px] font-bold text-slate-500 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
                             <tr>
                                 <th scope="col" class="py-2.5 pl-5 pr-3 w-1/4">Nomor & Jenis Dokumen</th>
-                                <th scope="col" class="px-3 py-2.5 w-[40%]">Perihal & Tujuan</th>
+                                <th scope="col" class="px-3 py-2.5 w-[35%]">Perihal & Tujuan</th>
                                 <th scope="col" class="px-3 py-2.5 text-center">Tanggal Nomor Surat</th>
-                                <th scope="col" class="px-4 py-2.5 text-center">Status Monitoring</th>
+                                <th scope="col" class="px-3 py-2.5 text-center">Status Monitoring</th>
+                                <th scope="col" class="py-2.5 pr-5 text-right w-24">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -243,10 +244,35 @@
                                             </button>
                                         @endif
                                     </div>
-                                    @if($doc->recipient_name)
-                                        <div class="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                                            <span class="text-slate-400">Kepada:</span>
-                                            <span class="font-medium text-slate-700">{{ $doc->recipient_name }}</span>
+                                    @if($doc->type === 'internal')
+                                        @php
+                                            $originUnit = $doc->unit->name ?? 'Internal';
+                                            $targetUnit = $doc->recipients->first()?->recipient?->name ?? ($doc->recipient_name ?? '-');
+                                        @endphp
+                                        <div class="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                                            <span class="font-medium text-slate-700" title="{{ $originUnit }}">{{ $originUnit }}</span>
+                                            <span class="text-slate-400 font-semibold">&rarr;</span>
+                                            <span class="font-medium text-purple-700" title="{{ $targetUnit }}">{{ $targetUnit }}</span>
+                                        </div>
+                                    @elseif($doc->type === 'outgoing')
+                                        @php
+                                            $originUnit = $doc->unit->name ?? 'Internal';
+                                            $targetName = $doc->recipient_name ?? '-';
+                                        @endphp
+                                        <div class="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                                            <span class="font-medium text-slate-700" title="{{ $originUnit }}">{{ $originUnit }}</span>
+                                            <span class="text-slate-400 font-semibold">&rarr;</span>
+                                            <span class="font-medium text-emerald-700" title="{{ $targetName }}">{{ $targetName }}</span>
+                                        </div>
+                                    @elseif($doc->type === 'incoming')
+                                        @php
+                                            $senderName = $doc->sender ?? '-';
+                                            $targetUnit = $doc->unit->name ?? '-';
+                                        @endphp
+                                        <div class="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                                            <span class="font-medium text-slate-700" title="{{ $senderName }}">{{ $senderName }}</span>
+                                            <span class="text-slate-400 font-semibold">&rarr;</span>
+                                            <span class="font-medium text-blue-700" title="{{ $targetUnit }}">{{ $targetUnit }}</span>
                                         </div>
                                     @endif
                                 </td>
@@ -254,10 +280,14 @@
                                     <div class="text-xs font-semibold text-slate-700">{{ $doc->created_at->format('d M Y') }}</div>
                                     <div class="text-[11px] text-slate-400 mt-0.5">{{ $doc->created_at->diffForHumans() }}</div>
                                 </td>
-                                <td class="px-4 py-3.5 align-top text-center">
+                                <td class="px-3 py-3.5 align-top text-center">
                                     @if($doc->status === 'waiting_for_file')
                                         <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs" title="Fisik surat belum di-upload Tapersip">
                                         Menunggu Upload
+                                        </span>
+                                    @elseif($doc->status === 'cancellation_requested')
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs" title="Permohonan pembatalan diajukan ke Tapersip">
+                                            Permohonan Batal
                                         </span>
                                     @elseif($doc->status === 'archived')
                                         <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-600 text-white shadow-2xs" title="Fisik surat sudah di-scan dan diarsipkan">
@@ -269,10 +299,36 @@
                                         </span>
                                     @endif
                                 </td>
+                                <td class="py-3.5 pr-5 align-top text-right whitespace-nowrap">
+                                    @if($doc->status === 'waiting_for_file' && (auth()->user()->isSuperAdmin() || auth()->user()->isTapersip() || $doc->created_by === auth()->id()))
+                                        <div class="flex items-center justify-end gap-1">
+                                            <button type="button"
+                                                    wire:click="openEditDraftModal({{ $doc->id }})"
+                                                    title="Koreksi Data Naskah"
+                                                    class="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-emerald-700 transition-colors shadow-2xs cursor-pointer">
+                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                </svg>
+                                            </button>
+                                            <button type="button"
+                                                    wire:click="openVoidDraftModal({{ $doc->id }})"
+                                                    title="Batalkan Nomor (Void)"
+                                                    class="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-colors shadow-2xs cursor-pointer">
+                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    @elseif($doc->status === 'cancellation_requested')
+                                        <span class="text-[11px] text-amber-700 font-medium">Menunggu Tapersip</span>
+                                    @else
+                                        <span class="text-slate-300 font-mono text-xs pr-2 select-none">-</span>
+                                    @endif
+                                </td>
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="4" class="px-5 py-12 text-center text-slate-500">
+                                <td colspan="5" class="px-5 py-12 text-center text-slate-500">
                                     <svg class="mx-auto h-10 w-10 text-slate-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                     <p class="text-sm font-medium text-slate-700">Belum ada naskah surat yang Anda daftarkan.</p>
                                     <p class="text-xs text-slate-400 mt-1">Registrasikan surat baru melalui menu Input Surat untuk mulai memantau status fisik arsip.</p>
@@ -356,4 +412,207 @@
         </div>
 
     </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: KOREKSI METADATA DRAFT (modal-dashboard-edit-draft)     -->
+    <!-- ============================================================== -->
+    <x-ui.modal name="modal-dashboard-edit-draft" width="max-w-2xl" title="Koreksi Metadata Draft Naskah">
+        <form wire:submit.prevent="saveEditedDraft" class="space-y-4">
+            <!-- Header Ringkas Identitas -->
+            <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 flex items-center justify-between text-xs">
+                <div>
+                    <span class="text-slate-500 font-medium">Nomor Surat:</span>
+                    <span class="font-mono font-bold text-[var(--color-primary)] ml-1">{{ $editDocNumber }}</span>
+                </div>
+                <div>
+                    <span class="text-slate-500 font-medium">Jenis:</span>
+                    <span class="font-semibold text-slate-800 ml-1">{{ $editDocType }}</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Tanggal Dokumen -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Tanggal Dokumen <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="date" wire:model.live="editDocumentDate" max="{{ date('Y-m-d') }}"
+                           class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                    @error('editDocumentDate') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <!-- Sifat Dokumen -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Sifat Dokumen <span class="text-rose-500">*</span>
+                    </label>
+                    <select wire:model="editSifat"
+                            class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                        <option value="biasa">Biasa (Terbuka)</option>
+                        <option value="penting">Penting (Internal Unit/Divisi)</option>
+                        <option value="rahasia">Rahasia (Terbatas)</option>
+                    </select>
+                    @error('editSifat') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+            </div>
+
+            <!-- Perihal -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Perihal Dokumen <span class="text-rose-500">*</span>
+                </label>
+                <textarea wire:model="editSubject" rows="2"
+                          placeholder="Masukkan perihal dokumen..."
+                          class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"></textarea>
+                @error('editSubject') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+            </div>
+
+            <!-- Tujuan Penerima Dokumen -->
+            @if($editDocTypeRaw === 'outgoing')
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Tujuan / Penerima Surat Keluar <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" wire:model="editRecipientName" placeholder="Contoh: Kementerian BUMN, PT Telkom Indonesia..."
+                           class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                    @error('editRecipientName') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+            @elseif($editDocTypeRaw === 'internal')
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Departemen / Unit Penerima Surat Khusus <span class="text-rose-500">*</span>
+                    </label>
+                    <select wire:model="editRecipientId"
+                            class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                        <option value="">-- Pilih Unit Penerima --</option>
+                        @foreach($availableUnits as $unit)
+                            <option value="{{ $unit->id }}">{{ $unit->name }} ({{ $unit->code }})</option>
+                        @endforeach
+                    </select>
+                    @error('editRecipientId') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+            @endif
+
+            <!-- Klasifikasi Dokumen -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Klasifikasi Arsip <span class="text-rose-500">*</span>
+                </label>
+                <select wire:model.live="editClassificationId"
+                        class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                    <option value="">-- Pilih Kode Klasifikasi --</option>
+                    @foreach($classifications as $c)
+                        <option value="{{ $c->id }}">{{ $c->code }} - {{ $c->subject }}</option>
+                    @endforeach
+                </select>
+                @error('editClassificationId') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+
+                @if($newDocNumberPreview && $newDocNumberPreview !== $editDocNumber)
+                    <div class="mt-2.5 p-3 bg-amber-50/80 border border-amber-200 rounded-lg space-y-2">
+                        <label class="flex items-start gap-2.5 cursor-pointer">
+                            <input type="checkbox" wire:model.live="syncDocNumberWithClassification"
+                                   class="mt-0.5 rounded border-amber-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]">
+                            <div class="text-xs">
+                                <span class="font-semibold text-amber-900">Perbarui nomor naskah sesuai klasifikasi & tanggal baru</span>
+                                <p class="text-[11px] text-amber-700 mt-0.5">Centang jika fisik surat belum dicetak atau belum ditandatangani.</p>
+                            </div>
+                        </label>
+                        @if($syncDocNumberWithClassification)
+                            <div class="text-[11px] font-mono bg-white p-2 rounded border border-amber-200 text-slate-700 flex items-center gap-1.5 flex-wrap">
+                                <span class="text-slate-400 line-through">{{ $editDocNumber }}</span>
+                                <span class="text-amber-600 font-bold">&rarr;</span>
+                                <span class="text-emerald-700 font-bold">{{ $newDocNumberPreview }}</span>
+                            </div>
+                        @endif
+                    </div>
+                @endif
+
+                @if($yearChangeWarning)
+                    <div class="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] flex items-start gap-2">
+                        <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span>{{ $yearChangeWarning }}</span>
+                    </div>
+                @endif
+            </div>
+
+            <!-- Alasan Koreksi (Wajib untuk audit trail) -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Alasan Koreksi Metadata <span class="text-rose-500">*</span>
+                </label>
+                <textarea wire:model="editReason" rows="2"
+                          placeholder="Contoh: Ralat pengetikan nama instansi penerima sesuai instruksi staf pembuat..."
+                          class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"></textarea>
+                @error('editReason') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button type="button"
+                        @click="$dispatch('close-modal', 'modal-dashboard-edit-draft')"
+                        class="px-4 py-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
+                    Batal
+                </button>
+                <button type="submit"
+                        wire:loading.attr="disabled"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[var(--color-primary)] hover:bg-emerald-800 rounded-lg transition-colors shadow-2xs cursor-pointer disabled:opacity-50">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Simpan Koreksi Metadata
+                </button>
+            </div>
+        </form>
+    </x-ui.modal>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: PEMBATALAN NOMOR SURAT RESMI (modal-dashboard-void-draft)-->
+    <!-- ============================================================== -->
+    <x-ui.modal name="modal-dashboard-void-draft" width="max-w-md" title="Batalkan Nomor Surat Resmi (Void)">
+        <form wire:submit.prevent="confirmVoidDraft" class="space-y-4">
+            <!-- Box Informasi Surat -->
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-500 font-medium">Nomor Surat:</span>
+                    <span class="font-mono font-bold text-rose-600">{{ $voidDocNumber }}</span>
+                </div>
+            </div>
+
+            <!-- Banner Penjelasan Integritas Kearsipan -->
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 leading-relaxed flex items-start gap-2.5">
+                <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <p>Nomor surat ini akan ditandai <strong>BATAL (Void)</strong> di sistem dan <strong>tidak dihapus</strong> dari database agar urutan buku agenda penomoran kantor tetap utuh tanpa lompatan nomor dalam audit kearsipan.</p>
+            </div>
+
+            <!-- Alasan Pembatalan -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Alasan Pembatalan Nomor <span class="text-rose-500">*</span>
+                </label>
+                <textarea wire:model="voidReason" rows="3"
+                          placeholder="Contoh: Pembatalan penerbitan surat tugas atas instruksi Direksi, salah memilih jenis format surat..."
+                          class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-rose-500"></textarea>
+                @error('voidReason') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button type="button"
+                        @click="$dispatch('close-modal', 'modal-dashboard-void-draft')"
+                        class="px-4 py-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
+                    Batal
+                </button>
+                <button type="submit"
+                        wire:loading.attr="disabled"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors shadow-2xs cursor-pointer disabled:opacity-50">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Konfirmasi Batal Nomor (Void)
+                </button>
+            </div>
+        </form>
+    </x-ui.modal>
 </div>

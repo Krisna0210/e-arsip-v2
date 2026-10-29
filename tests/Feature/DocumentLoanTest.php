@@ -898,4 +898,51 @@ class DocumentLoanTest extends TestCase
             ->assertSee($targetLoan->loan_code)
             ->assertSee('id="loan-row-' . $targetLoan->id . '"', false);
     }
+
+    public function test_document_loan_catalog_and_my_loans_render_distribution_flow()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $units = Unit::take(2)->get();
+        $unitOrigin = $units[0];
+        $unitDestination = $units[1];
+
+        // 1. Surat Khusus di Katalog: Unit Asal -> Unit Tujuan
+        $specialDoc = Document::create([
+            'number' => '301/SP-CATALOG/X/2026',
+            'subject' => 'Memo Internal Katalog Pinjam',
+            'type' => 'internal',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'unit_id' => $unitOrigin->id,
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+        $specialDoc->recipients()->create([
+            'recipient_id' => $unitDestination->id,
+            'recipient_type' => Unit::class,
+            'receipt_status' => 'unread',
+        ]);
+
+        // 2. Surat Keluar di Katalog: Unit Asal -> Pihak Luar
+        $outgoingDoc = Document::create([
+            'number' => '302/OUT-CATALOG/X/2026',
+            'subject' => 'Surat Keluar Katalog Pinjam',
+            'type' => 'outgoing',
+            'recipient_name' => 'PT Mitra Logistik Nusantara',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'unit_id' => $unitOrigin->id,
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        Livewire::actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->assertSet('activeTab', 'catalog')
+            ->assertSee($specialDoc->number)
+            ->assertSee($unitOrigin->name)
+            ->assertSee($unitDestination->name)
+            ->assertSee($outgoingDoc->number)
+            ->assertSee('PT Mitra Logistik Nusantara');
+    }
 }

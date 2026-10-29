@@ -48,9 +48,9 @@
                 </select>
 
                 <div class="flex items-center gap-1.5">
-                    <input wire:model.live="filterDateStart" type="date" class="block rounded-md border-0 py-1.5 text-slate-900 ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-[var(--color-primary)] sm:text-sm sm:leading-6 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700">
+                    <input wire:model.live="filterDateStart" type="date" class="block rounded-md border-0 pl-2 py-1.5 text-slate-900 ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-[var(--color-primary)] sm:text-sm sm:leading-6 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700">
                     <span class="text-slate-500">-</span>
-                    <input wire:model.live="filterDateEnd" type="date" class="block rounded-md border-0 py-1.5 text-slate-900 ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-[var(--color-primary)] sm:text-sm sm:leading-6 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700">
+                    <input wire:model.live="filterDateEnd" type="date" class="block rounded-md border-0 pl-2 py-1.5 text-slate-900 ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-[var(--color-primary)] sm:text-sm sm:leading-6 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700">
                 </div>
             </div>
         </div>
@@ -134,13 +134,28 @@
                                         {{ $sifatLabel }}
                                     </span>
 
-                                    <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border bg-emerald-600 text-white border-slate-400 shadow-sm">
-                                        Diarsipkan
+                                    @php
+                                        if ($doc->archive_status === 'disposed') {
+                                            $statusClass = 'bg-rose-50 text-rose-700 border-rose-200 font-bold';
+                                            $statusLabel = 'Dimusnahkan';
+                                        } elseif ($doc->status === 'cancelled') {
+                                            $statusClass = 'bg-rose-50 text-rose-700 border-rose-200 font-semibold';
+                                            $statusLabel = 'Batal (Void)';
+                                        } elseif ($doc->status === 'cancellation_requested') {
+                                            $statusClass = 'bg-rose-50 text-rose-700 border-rose-200 font-semibold';
+                                            $statusLabel = 'Permohonan Batal';
+                                        } else {
+                                            $statusClass = 'bg-emerald-600 text-white border-slate-400 shadow-sm';
+                                            $statusLabel = 'Diarsipkan';
+                                        }
+                                    @endphp
+                                    <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border {{ $statusClass }}">
+                                        {{ $statusLabel }}
                                     </span>
                                 </div>
                             </td>
-                            <td class="relative py-3 pl-3 pr-4 text-center text-sm font-medium sm:pr-6 align-top">
-                                <div class="flex items-center justify-center gap-1.5">
+                            <td class="relative py-3 pl-3 pr-4 text-center text-sm font-medium sm:pr-6 align-top whitespace-nowrap">
+                                <div class="flex items-center justify-center gap-1.5" x-data="{ openMenu: false }">
                                     @if($doc->currentVersion && $doc->currentVersion->file_path)
                                         @if(Auth::user()->hasDocumentPermission('view', $doc->sifat))
                                             <a href="{{ route('document.preview', $doc->currentVersion->id) }}" target="_blank" class="inline-flex items-center justify-center text-blue-600 hover:text-blue-900 bg-blue-50 dark:bg-blue-900/30 p-1.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors" title="Lihat Dokumen">
@@ -155,16 +170,54 @@
                                         <span class="text-slate-400 dark:text-slate-600 font-mono text-sm inline-block select-none">-</span>
                                     @endif
 
-                                    @if(Auth::user()->hasDocumentPermission('archive', $doc->sifat))
+                                    @if(Auth::user()->hasDocumentPermission('archive', $doc->sifat) && $doc->archive_status !== 'disposed' && !in_array($doc->status, ['cancelled', 'cancellation_requested']))
                                         <button
                                             type="button"
                                             wire:click="openMoveModal({{ $doc->id }})"
-                                            class="inline-flex items-center justify-center text-amber-600 hover:text-amber-800 bg-amber-50 dark:bg-amber-900/30 p-1.5 rounded-md hover:bg-amber-100 dark:hover:bg-amber-800/50 transition-colors"
+                                            class="inline-flex items-center justify-center text-amber-600 hover:text-amber-800 bg-amber-50 dark:bg-amber-900/30 p-1.5 rounded-md hover:bg-amber-100 dark:hover:bg-amber-800/50 transition-colors cursor-pointer"
                                             title="Pindahkan Lokasi / Loker Berkas">
                                             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                                             </svg>
                                         </button>
+
+                                        <div class="relative inline-block text-left">
+                                            <button type="button" @click="openMenu = !openMenu" class="p-1.5 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-2xs cursor-pointer focus:outline-none" title="Pilihan Lainnya">
+                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                                                </svg>
+                                            </button>
+
+                                            <div x-show="openMenu"
+                                                 @click.outside="openMenu = false"
+                                                 x-transition:enter="transition ease-out duration-100"
+                                                 x-transition:enter-start="transform opacity-0 scale-95"
+                                                 x-transition:enter-end="transform opacity-100 scale-100"
+                                                 x-transition:leave="transition ease-in duration-75"
+                                                 x-transition:leave-start="transform opacity-100 scale-100"
+                                                 x-transition:leave-end="transform opacity-0 scale-95"
+                                                 class="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-white shadow-xl border border-slate-200 py-1 z-30 divide-y divide-slate-100 focus:outline-none text-left"
+                                                 style="display: none;">
+                                                <div class="py-1">
+                                                    <button type="button"
+                                                            wire:click="openEditMetadataModal({{ $doc->id }})"
+                                                            @click="openMenu = false"
+                                                            class="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer">
+                                                        Koreksi Metadata
+                                                    </button>
+                                                </div>
+                                                @if($doc->archive_status !== 'disposed' && (Auth::user()->isTapersip() || Auth::user()->isSuperAdmin()))
+                                                    <div class="py-1">
+                                                        <button type="button"
+                                                                wire:click="openRevisionModal({{ $doc->id }})"
+                                                                @click="openMenu = false"
+                                                                class="w-full text-left px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer">
+                                                            Unggah Berkas Revisi
+                                                        </button>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        </div>
                                     @endif
                                 </div>
                             </td>
@@ -316,6 +369,222 @@
                 <button type="submit" class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[var(--color-primary)] rounded-lg hover:bg-[var(--color-primary-hover)] transition-colors shadow-2xs" wire:loading.attr="disabled">
                     <span wire:loading.remove wire:target="executeMoveDocument">Pindahkan Berkas</span>
                     <span wire:loading wire:target="executeMoveDocument">Memindahkan...</span>
+                </button>
+            </div>
+        </form>
+    </x-ui.modal>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: KOREKSI METADATA SURAT MASUK                            -->
+    <!-- ============================================================== -->
+    <x-ui.modal name="modal-edit-archived-metadata" width="max-w-2xl" title="Koreksi Metadata Surat Masuk">
+        <form wire:submit.prevent="saveEditedMetadata" class="space-y-4">
+            <!-- Box Identitas Arsip -->
+            <div class="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 flex items-center justify-between text-xs">
+                <div>
+                    <span class="text-slate-500 font-medium">Jenis:</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-800 border border-blue-200 ml-1">
+                        Surat Masuk
+                    </span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Nomor Surat Pengirim -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Nomor Surat Pengirim <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" wire:model="editDocNumber" placeholder="Contoh: 005/EXT/DIR/X/2026..."
+                           class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] font-mono">
+                    @error('editDocNumber') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <!-- Asal Pengirim / Instansi -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Asal Pengirim / Instansi <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="text" wire:model="editSender" placeholder="Contoh: Kementerian Keuangan, PT PLN..."
+                           class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                    @error('editSender') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Tanggal Dokumen / Surat -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Tanggal Surat <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="date" wire:model="editDocumentDate" max="{{ date('Y-m-d') }}"
+                           class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                    @error('editDocumentDate') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <!-- Tanggal Terima Surat -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Tanggal Diterima <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="date" wire:model="editReceivedDate" max="{{ date('Y-m-d') }}"
+                           class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                    @error('editReceivedDate') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Sifat Dokumen -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Sifat Dokumen <span class="text-rose-500">*</span>
+                    </label>
+                    <select wire:model="editSifat"
+                            class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                        <option value="biasa">Biasa (Terbuka)</option>
+                        <option value="penting">Penting (Internal Unit/Divisi)</option>
+                        <option value="rahasia">Rahasia (Terbatas)</option>
+                    </select>
+                    @error('editSifat') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+
+                <!-- Unit Kerja Penerima Internal -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Ditujukan Kepada (Unit Internal) <span class="text-rose-500">*</span>
+                    </label>
+                    <select wire:model="editUnitId"
+                            class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                        <option value="">-- Pilih Unit Internal --</option>
+                        @foreach($availableUnits as $unit)
+                            <option value="{{ $unit->id }}">{{ $unit->name }} ({{ $unit->code }})</option>
+                        @endforeach
+                    </select>
+                    @error('editUnitId') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+                </div>
+            </div>
+
+            <!-- Perihal -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Perihal Dokumen <span class="text-rose-500">*</span>
+                </label>
+                <textarea wire:model="editSubject" rows="2"
+                          placeholder="Masukkan perihal dokumen surat masuk..."
+                          class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"></textarea>
+                @error('editSubject') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+            </div>
+
+            <!-- Klasifikasi Dokumen (Opsional) -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Klasifikasi Arsip (Opsional)
+                </label>
+                <select wire:model="editClassificationId"
+                        class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                    <option value="">-- Tanpa Klasifikasi Khusus --</option>
+                    @foreach($classifications as $c)
+                        <option value="{{ $c->id }}">{{ $c->code }} - {{ $c->subject }}</option>
+                    @endforeach
+                </select>
+                @error('editClassificationId') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+            </div>
+
+            <!-- Alasan Koreksi (Wajib untuk audit trail) -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Alasan Koreksi Metadata Surat Masuk <span class="text-rose-500">*</span>
+                </label>
+                <textarea wire:model="editReason" rows="2"
+                          placeholder="Contoh: Ralat pengetikan nomor surat dari instansi pengirim sesuai dokumen fisik asli..."
+                          class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"></textarea>
+                @error('editReason') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button type="button"
+                        @click="$dispatch('close-modal', 'modal-edit-archived-metadata')"
+                        class="px-4 py-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
+                    Batal
+                </button>
+                <button type="submit"
+                        wire:loading.attr="disabled"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[var(--color-primary)] hover:bg-emerald-800 rounded-lg transition-colors shadow-2xs cursor-pointer disabled:opacity-50">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Simpan Koreksi Metadata
+                </button>
+            </div>
+        </form>
+    </x-ui.modal>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: UNGGAH BERKAS REVISI (modal-revision-upload)           -->
+    <!-- ============================================================== -->
+    <x-ui.modal name="modal-revision-upload" width="max-w-xl" title="Unggah Berkas Scan Revisi (Versi Baru)">
+        <form wire:submit.prevent="saveRevisionFile" class="space-y-4">
+            <!-- Box Identitas & Versi -->
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-500 font-medium">Nomor Surat:</span>
+                    <span class="font-mono font-bold text-[var(--color-primary)]">{{ $revisionDocNumber }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-500 font-medium">Versi Saat Ini:</span>
+                    <span class="font-mono font-semibold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">v{{ $revisionCurrentVersion }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-500 font-medium">Versi Baru yang Akan Diterbitkan:</span>
+                    <span class="font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">v{{ $revisionNextVersion }}</span>
+                </div>
+            </div>
+
+            <!-- Banner Penjelasan Versi -->
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 leading-relaxed flex items-start gap-2.5">
+                <svg class="w-4 h-4 text-blue-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p>Berkas versi lama (v{{ $revisionCurrentVersion }}) akan tetap diarsipkan sebagai riwayat (superseded) di NAS storage, dan berkas baru akan menjadi versi utama aktif (v{{ $revisionNextVersion }}).</p>
+            </div>
+
+            <!-- File Upload Input -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Pilih File PDF Scan Revisi <span class="text-rose-500">*</span>
+                </label>
+                <input type="file" wire:model="revisionFile" accept="application/pdf"
+                       class="w-full text-xs text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 border border-slate-200 rounded-lg bg-slate-50 cursor-pointer">
+                <div wire:loading wire:target="revisionFile" class="text-xs text-slate-500 mt-1 italic">
+                    Mengunggah pratinjau file revisi...
+                </div>
+                @error('revisionFile') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+            </div>
+
+            <!-- Alasan Revisi -->
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Alasan Revisi Berkas <span class="text-rose-500">*</span>
+                </label>
+                <textarea wire:model="revisionReason" rows="2"
+                          placeholder="Contoh: Scan ulang surat masuk karena halaman lampiran 2 sebelumnya buram..."
+                          class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"></textarea>
+                @error('revisionReason') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button type="button"
+                        @click="$dispatch('close-modal', 'modal-revision-upload')"
+                        class="px-4 py-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
+                    Batal
+                </button>
+                <button type="submit"
+                        wire:loading.attr="disabled"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[var(--color-primary)] hover:bg-emerald-800 rounded-lg transition-colors shadow-2xs cursor-pointer disabled:opacity-50">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Simpan & Arsipkan Versi v{{ $revisionNextVersion }}
                 </button>
             </div>
         </form>

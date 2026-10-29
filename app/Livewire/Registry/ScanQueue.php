@@ -4,6 +4,9 @@ namespace App\Livewire\Registry;
 
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Models\Classification;
+use App\Models\Unit;
+use App\Models\AuditLog;
 use App\Notifications\DocumentArchivedNotification;
 use App\Services\NasHealthService;
 use Illuminate\Support\Facades\Log;
@@ -11,6 +14,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 
 class ScanQueue extends Component
 {
@@ -29,10 +33,39 @@ class ScanQueue extends Component
     public $uploadDocTypeRaw = '';
     public $finalFile = null;
 
+    // State Koreksi Metadata Draft (waiting_for_file)
+    public $editDocId = null;
+    public $editDocNumber = '';
+    public $editDocType = '';
+    public $editDocTypeRaw = '';
+    public $editSubject = '';
+    public $editDocumentDate = '';
+    public $editRecipientName = '';
+    public $editRecipientId = null;
+    public $editSifat = 'biasa';
+    public $editClassificationId = null;
+    public $originalClassificationId = null;
+    public $originalDocumentDate = '';
+    public $yearChangeWarning = '';
+    public $syncDocNumberWithClassification = false;
+    public $newDocNumberPreview = '';
+    public $editReason = '';
+
+    // State Pembatalan Nomor Surat Resmi (Void)
+    public $voidDocId = null;
+    public $voidDocNumber = '';
+    public $voidReason = '';
+
     protected $queryString = [
         'search' => ['except' => ''],
         'filterType' => ['except' => 'all'],
     ];
+
+    #[On('loan-status-changed')]
+    public function handleStatusChanged(): void
+    {
+        // Re-render antrean scan saat ada pembaruan dokumen
+    }
 
     public function mount()
     {
@@ -248,6 +281,299 @@ class ScanQueue extends Component
         $this->dispatch('notify', ['message' => $successMsg, 'type' => 'success']);
     }
 
+    public function openEditMetadataModal($id)
+    {
+        $doc = Document::with(['createdBy', 'documentType', 'recipients'])->findOrFail($id);
+
+        if ($doc->status !== 'waiting_for_file') {
+            $this->dispatch('notify', ['message' => 'Hanya dokumen yang berstatus Menunggu Upload yang dapat dikoreksi di antrean scan.', 'type' => 'error']);
+            return;
+        }
+
+        if (!Auth::user()->isTapersip() && !Auth::user()->isSuperAdmin() && $doc->created_by !== Auth::id()) {
+            $this->dispatch('notify', ['message' => 'Anda tidak memiliki hak akses untuk mengoreksi dokumen ini.', 'type' => 'error']);
+            return;
+        }
+
+        $this->editDocId = $doc->id;
+        $this->editDocNumber = $doc->number ?: 'Tanpa Nomor';
+        $this->editDocType = $doc->type === 'outgoing' ? 'Surat Keluar' : ($doc->documentType?->name ?? 'Surat Khusus');
+        $this->editDocTypeRaw = $doc->type;
+        $this->editSubject = $doc->subject;
+        $this->editDocumentDate = $doc->document_date ? $doc->document_date->format('Y-m-d') : date('Y-m-d');
+        $this->originalDocumentDate = $this->editDocumentDate;
+        $this->editRecipientName = $doc->recipient_name ?? '';
+        $this->editRecipientId = $doc->recipients()->first()?->recipient_id;
+        $this->editSifat = $doc->sifat ?? 'biasa';
+        $this->editClassificationId = $doc->classification_id;
+        $this->originalClassificationId = $doc->classification_id;
+        $this->syncDocNumberWithClassification = false;
+        $this->newDocNumberPreview = '';
+        $this->yearChangeWarning = '';
+        $this->editReason = '';
+        $this->resetErrorBag();
+
+        $this->dispatch('open-modal', 'modal-edit-queue-metadata');
+    }
+
+    public function updatedEditClassificationId()
+    {
+        $this->calculateNewNumberPreview();
+    }
+
+    public function updatedEditDocumentDate()
+    {
+        $this->calculateNewNumberPreview();
+    }
+
+    protected function calculateNewNumberPreview()
+    {
+        $this->newDocNumberPreview = '';
+        $this->syncDocNumberWithClassification = false;
+        $this->yearChangeWarning = '';
+
+        if (!$this->editDocId || !$this->editDocNumber || $this->editDocNumber === 'Tanpa Nomor') {
+            return;
+        }
+
+        $candidateNumber = $this->editDocNumber;
+        $hasChanges = false;
+
+        // 1. Cek perubahan klasifikasi jika ada
+        if ($this->editClassificationId && $this->originalClassificationId && $this->editClassificationId != $this->originalClassificationId) {
+            $origClass = Classification::find($this->originalClassificationId);
+            $newClass = Classification::find($this->editClassificationId);
+
+            if ($origClass?->code && $newClass?->code && str_contains($candidateNumber, $origClass->code)) {
+                $candidateNumber = str_replace($origClass->code, $newClass->code, $candidateNumber);
+                $hasChanges = true;
+            }
+        }
+
+        // 2. Cek perubahan tanggal dokumen (Bulan & Tahun)
+        if ($this->originalDocumentDate && $this->editDocumentDate) {
+            $origYear = date('Y', strtotime($this->originalDocumentDate));
+            $newYear = date('Y', strtotime($this->editDocumentDate));
+            $origMonth = date('m', strtotime($this->originalDocumentDate));
+            $newMonth = date('m', strtotime($this->editDocumentDate));
+
+            if ($origYear !== $newYear) {
+                $this->yearChangeWarning = "Perubahan tahun ({$origYear} ke {$newYear}) tidak mengubah segmen tahun pada nomor surat demi menjaga integritas buku agenda tahunan. Jika salah tahun penerbitan, gunakan fitur Pembatalan Nomor (Void).";
+            }
+
+            if ($origMonth !== $newMonth) {
+                if (str_contains($candidateNumber, '/' . $origMonth . '/')) {
+                    $candidateNumber = str_replace('/' . $origMonth . '/', '/' . $newMonth . '/', $candidateNumber);
+                    $hasChanges = true;
+                } elseif (str_contains($candidateNumber, '/' . $origMonth . '-')) {
+                    $candidateNumber = str_replace('/' . $origMonth . '-', '/' . $newMonth . '-', $candidateNumber);
+                    $hasChanges = true;
+                } elseif (str_contains($candidateNumber, '-' . $origMonth . '/')) {
+                    $candidateNumber = str_replace('-' . $origMonth . '/', '-' . $newMonth . '/', $candidateNumber);
+                    $hasChanges = true;
+                }
+            }
+        }
+
+        if ($hasChanges && $candidateNumber !== $this->editDocNumber) {
+            $this->newDocNumberPreview = $candidateNumber;
+            $this->syncDocNumberWithClassification = true;
+        }
+    }
+
+    public function saveEditedMetadata()
+    {
+        if (!$this->editDocId) return;
+
+        $document = Document::with('recipients')->findOrFail($this->editDocId);
+
+        if (!Auth::user()->isTapersip() && !Auth::user()->isSuperAdmin() && $document->created_by !== Auth::id()) {
+            abort(403, 'Akses ditolak.');
+        }
+
+        $rules = [
+            'editSubject' => 'required|string|max:255',
+            'editDocumentDate' => 'required|date|before_or_equal:today',
+            'editSifat' => 'required|in:biasa,penting,rahasia',
+            'editClassificationId' => 'required|exists:classifications,id',
+            'editReason' => 'required|string|min:3|max:500',
+        ];
+
+        if ($this->editDocTypeRaw === 'outgoing') {
+            $rules['editRecipientName'] = 'required|string|max:255';
+        } elseif ($this->editDocTypeRaw === 'internal') {
+            $rules['editRecipientId'] = 'required|exists:units,id';
+        }
+
+        $this->validate($rules, [
+            'editSubject.required' => 'Perihal dokumen wajib diisi.',
+            'editDocumentDate.required' => 'Tanggal dokumen wajib diisi.',
+            'editReason.required' => 'Mohon cantumkan alasan koreksi dokumen.',
+            'editReason.min' => 'Alasan koreksi minimal 3 karakter.',
+            'editRecipientName.required' => 'Tujuan penerima surat keluar wajib diisi.',
+            'editRecipientId.required' => 'Departemen penerima surat khusus wajib dipilih.',
+        ]);
+
+        $oldNumber = $document->number;
+        $newNumber = $oldNumber;
+
+        if ($this->syncDocNumberWithClassification && $this->newDocNumberPreview && $this->newDocNumberPreview !== $oldNumber) {
+            $newNumber = $this->newDocNumberPreview;
+            $document->number = $newNumber;
+        }
+
+        $before = [
+            'number' => $oldNumber,
+            'subject' => $document->subject,
+            'document_date' => $document->document_date?->format('Y-m-d'),
+            'sifat' => $document->sifat,
+            'classification_id' => $document->classification_id,
+            'recipient' => $this->editDocTypeRaw === 'outgoing' ? $document->recipient_name : ($document->recipients()->first()?->recipient_id),
+        ];
+
+        $document->subject = $this->editSubject;
+        $document->document_date = $this->editDocumentDate;
+        $document->sifat = $this->editSifat;
+        $document->classification_id = $this->editClassificationId;
+
+        if ($this->editDocTypeRaw === 'outgoing') {
+            $document->recipient_name = $this->editRecipientName;
+        } elseif ($this->editDocTypeRaw === 'internal') {
+            $document->recipients()->delete();
+            $document->recipients()->create([
+                'recipient_id' => $this->editRecipientId,
+                'recipient_type' => Unit::class,
+                'receipt_status' => 'unread',
+            ]);
+        }
+
+        $document->save();
+
+        $after = [
+            'number' => $newNumber,
+            'subject' => $document->subject,
+            'document_date' => $this->editDocumentDate,
+            'sifat' => $this->editSifat,
+            'classification_id' => $this->editClassificationId,
+            'recipient' => $this->editDocTypeRaw === 'outgoing' ? $this->editRecipientName : $this->editRecipientId,
+        ];
+
+        AuditLog::record(
+            action: 'Koreksi Metadata Draft Naskah: ' . ($document->number ?: $document->subject),
+            documentId: $document->id,
+            metadata: [
+                'reason' => $this->editReason,
+                'before' => $before,
+                'after' => $after,
+                'editor_id' => Auth::id(),
+            ]
+        );
+
+        $this->dispatch('close-modal', 'modal-edit-queue-metadata');
+        $this->dispatch('notify', [
+            'message' => "Metadata draft naskah {$document->number} berhasil dikoreksi.",
+            'type' => 'success'
+        ]);
+        $this->reset(['editDocId', 'editDocNumber', 'editSubject', 'editDocumentDate', 'editRecipientName', 'editRecipientId', 'editReason', 'originalClassificationId', 'originalDocumentDate', 'yearChangeWarning', 'syncDocNumberWithClassification', 'newDocNumberPreview']);
+    }
+
+    public function openVoidModal($id)
+    {
+        $doc = Document::findOrFail($id);
+        if ($doc->status !== 'waiting_for_file') {
+            $this->dispatch('notify', ['message' => 'Hanya dokumen yang berstatus Menunggu Upload yang dapat dibatalkan nomornya.', 'type' => 'error']);
+            return;
+        }
+
+        if (!Auth::user()->isTapersip() && !Auth::user()->isSuperAdmin() && $doc->created_by !== Auth::id()) {
+            $this->dispatch('notify', ['message' => 'Anda tidak memiliki hak akses untuk membatalkan nomor dokumen ini.', 'type' => 'error']);
+            return;
+        }
+
+        $this->voidDocId = $doc->id;
+        $this->voidDocNumber = $doc->number ?: 'Tanpa Nomor';
+        $this->voidReason = '';
+        $this->resetErrorBag('voidReason');
+
+        $this->dispatch('open-modal', 'modal-void-queue-document');
+    }
+
+    public function confirmVoidDocument()
+    {
+        if (!$this->voidDocId) return;
+
+        $document = Document::findOrFail($this->voidDocId);
+
+        if (!Auth::user()->isTapersip() && !Auth::user()->isSuperAdmin() && $document->created_by !== Auth::id()) {
+            abort(403, 'Akses ditolak.');
+        }
+
+        $this->validate([
+            'voidReason' => 'required|string|min:3|max:500',
+        ], [
+            'voidReason.required' => 'Mohon cantumkan alasan pembatalan nomor surat.',
+            'voidReason.min' => 'Alasan pembatalan minimal 3 karakter.',
+        ]);
+
+        $isTapersipOrSuper = Auth::user()->isSuperAdmin() || Auth::user()->isTapersip();
+
+        if ($isTapersipOrSuper) {
+            $document->update([
+                'status' => 'cancelled',
+                'notes' => $this->voidReason,
+                'cancelled_by' => Auth::id(),
+            ]);
+
+            AuditLog::record(
+                action: 'Pembatalan Nomor Naskah Resmi (Void): ' . ($document->number ?: $document->subject),
+                documentId: $document->id,
+                metadata: [
+                    'reason' => $this->voidReason,
+                    'cancelled_by' => Auth::id(),
+                ]
+            );
+
+            $msg = "Nomor naskah {$document->number} resmi dibatalkan (void). Urutan nomor tetap terjaga dalam audit trail.";
+            $msgType = 'warning';
+        } else {
+            $document->update([
+                'status' => 'cancellation_requested',
+                'notes' => $this->voidReason,
+                'cancellation_requested_at' => now(),
+            ]);
+
+            AuditLog::record(
+                action: 'Permohonan Pembatalan Nomor Naskah: ' . ($document->number ?: $document->subject),
+                documentId: $document->id,
+                metadata: [
+                    'reason' => $this->voidReason,
+                    'requested_by' => Auth::id(),
+                ]
+            );
+
+            $user = Auth::user();
+            $unitName = $user?->unit?->name ? " ({$user->unit->name})" : '';
+            $this->dispatch('desktop-notify', [
+                'title' => 'Permohonan Batal Nomor Naskah',
+                'body' => "{$user->name}{$unitName} mengajukan pembatalan naskah {$document->number}. Alasan: " . \Illuminate\Support\Str::limit($this->voidReason, 60),
+                'url' => route('registry.cancelled.index', ['tab' => 'requests', 'highlight' => "doc-{$document->id}"]),
+                'type' => 'cancellation_requested',
+                'loan_code' => $document->number,
+            ]);
+
+            $msg = "Permohonan pembatalan naskah {$document->number} telah diajukan ke Tapersip untuk diverifikasi.";
+            $msgType = 'info';
+        }
+
+        $this->dispatch('close-modal', 'modal-void-queue-document');
+        $this->dispatch('loan-status-changed');
+        $this->dispatch('notify', [
+            'message' => $msg,
+            'type' => $msgType
+        ]);
+        $this->reset(['voidDocId', 'voidDocNumber', 'voidReason']);
+    }
+
     public function render()
     {
         $baseCountQuery = Document::where('status', 'waiting_for_file')->whereIn('type', ['outgoing', 'internal']);
@@ -255,7 +581,7 @@ class ScanQueue extends Component
         $countOutgoing = (clone $baseCountQuery)->where('type', 'outgoing')->count();
         $countInternal = (clone $baseCountQuery)->where('type', 'internal')->count();
 
-        $query = Document::with(['documentType', 'classification', 'unit', 'createdBy'])
+        $query = Document::with(['documentType', 'classification', 'unit', 'createdBy', 'recipients.recipient'])
             ->where('status', 'waiting_for_file')
             ->whereIn('type', ['outgoing', 'internal']);
 
@@ -279,9 +605,14 @@ class ScanQueue extends Component
             ? \App\Models\Folder::forType($this->uploadDocTypeRaw)->with('parent')->orderBy('name')->get()
             : collect();
 
+        $classifications = Classification::whereNotNull('parent_id')->orderBy('code')->get();
+        $availableUnits = Unit::where('status', 'active')->orderBy('name')->get();
+
         return view('livewire.registry.scan-queue', [
             'documents' => $documents,
             'availableFolders' => $availableFolders,
+            'classifications' => $classifications,
+            'availableUnits' => $availableUnits,
             'countAll' => $countAll,
             'countOutgoing' => $countOutgoing,
             'countInternal' => $countInternal,

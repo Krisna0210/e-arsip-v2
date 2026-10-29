@@ -91,10 +91,10 @@
                                 {{ $user->role->name ?? '-' }}
                             </span>
                         </td>
-                        <td class="px-5 py-4 align-middle text-right">
+                        <td class="px-5 py-4 text-right space-x-1">
                             <div class="flex items-center justify-end gap-2">
-                                <x-ui.button wire:click="edit({{ $user->id }})" variant="subtle" class="!px-2 !py-1 text-xs">Edit Profil</x-ui.button>
-                                <x-ui.button wire:click="delete({{ $user->id }})" wire:confirm="Yakin ingin menghapus?" variant="subtle" class="!px-2 !py-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-700">Hapus</x-ui.button>
+                                <x-ui.button wire:click="edit({{ $user->id }})" variant="subtle" class="!px-2 !py-1 text-xs">Edit</x-ui.button>
+                                <x-ui.button wire:click="delete({{ $user->id }})" wire:confirm="Yakin ingin menghapus?" variant="danger" class="!px-2 !py-1 text-xs">Hapus</x-ui.button>
                             </div>
                         </td>
                     </tr>

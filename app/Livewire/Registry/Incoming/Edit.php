@@ -83,6 +83,10 @@ class Edit extends Component
 
     public function resubmit()
     {
+        if ($this->document->created_by !== Auth::id() || $this->document->status !== 'rejected') {
+            abort(403, 'Akses ditolak.');
+        }
+
         $this->validate();
 
         $this->document->update([

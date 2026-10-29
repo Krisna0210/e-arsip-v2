@@ -64,6 +64,7 @@ class RoleSeeder extends Seeder
                     'document_borrowing',
                     'classification',
                     'destruction',
+                    'approve_destruction',
                     'audit',
                 ],
                 'permissions' => [
@@ -100,6 +101,7 @@ class RoleSeeder extends Seeder
                     'internal_memo',
                     'classification',
                     'destruction',
+                    'approve_destruction',
                     'audit',
                     'archive_queue',
                     'input_incoming',

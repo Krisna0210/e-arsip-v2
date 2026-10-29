@@ -40,10 +40,10 @@
             <table class="w-full text-left border-collapse min-w-[1000px]">
                 <thead>
                     <tr class="bg-[var(--color-background)] border-b border-[var(--color-border)] text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-                        <th class="px-5 py-3 w-48">Waktu (Timestamp)</th>
-                        <th class="px-5 py-3 w-1/5">Pengguna</th>
-                        <th class="px-5 py-3 w-40">Aktivitas</th>
-                        <th class="px-5 py-3 w-1/4">Terkait Dokumen</th>
+                        <th class="px-5 py-3 w-44">Waktu (Timestamp)</th>
+                        <th class="px-5 py-3 w-56">Pengguna</th>
+                        <th class="px-5 py-3 w-72">Aktivitas</th>
+                        <th class="px-5 py-3 w-72">Identitas Dokumen</th>
                         <th class="px-5 py-3">Detail Referensi</th>
                     </tr>
                 </thead>
@@ -78,22 +78,132 @@
                             </div>
                         </td>
                         <td class="px-5 py-4 align-top">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-slate-50 text-slate-700 border-slate-200 whitespace-nowrap">
-                                {{ $log->action }}
+                            @php
+                                $actionParts = explode(':', $log->action, 2);
+                                $actionTitle = trim($actionParts[0]);
+                                $docIdentifier = isset($actionParts[1]) ? trim($actionParts[1]) : null;
+
+                                $badgeClass = match(true) {
+                                    str_contains($actionTitle, 'Koreksi') => 'bg-blue-50 text-blue-800 border-blue-200',
+                                    str_contains($actionTitle, 'Pembatalan') || str_contains($actionTitle, 'Void') => 'bg-rose-50 text-rose-800 border-rose-200',
+                                    str_contains($actionTitle, 'Revisi') => 'bg-purple-50 text-purple-800 border-purple-200',
+                                    str_contains($actionTitle, 'Pinjam') || str_contains($actionTitle, 'Sirkulasi') => 'bg-amber-50 text-amber-800 border-amber-200',
+                                    str_contains($actionTitle, 'Arsip') || str_contains($actionTitle, 'Final') => 'bg-emerald-50 text-emerald-800 border-emerald-200',
+                                    default => 'bg-slate-50 text-slate-700 border-slate-200',
+                                };
+
+                                $reason = $log->metadata['reason'] ?? null;
+                            @endphp
+
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border {{ $badgeClass }} whitespace-normal leading-relaxed">
+                                {{ $actionTitle }}
                             </span>
+
+                            {{-- @if($docIdentifier)
+                                <div class="font-mono text-xs font-semibold text-slate-700 mt-1.5 break-all">
+                                    {{ $docIdentifier }}
+                                </div>
+                            @endif --}}
+
+                            @if($reason)
+                                <div class="mt-2 p-2 bg-amber-50 border border-amber-200/80 rounded-md text-xs text-amber-900 leading-relaxed">
+                                    <span class="font-semibold text-amber-950">Alasan:</span> {{ $reason }}
+                                </div>
+                            @endif
                         </td>
                         <td class="px-5 py-4 align-top">
                             @if($log->document)
-                                <div class="font-medium text-emerald-700 line-clamp-1" title="{{ $log->document->subject }}">{{ $log->document->subject }}</div>
-                                <div class="text-xs text-slate-500 mt-0.5 font-mono">{{ $log->document->document_number ?? '-' }}</div>
+                                <div class="text-xs text-slate-500 mt-0.5 font-mono">{{ $log->document->number ?: '-' }}</div>
+                                <div class="font-medium text-emerald-700 line-clamp-2" title="{{ $log->document->subject }}">{{ $log->document->subject }}</div>
                             @else
                                 <span class="text-slate-400">-</span>
                             @endif
                         </td>
                         <td class="px-5 py-4 align-top">
-                            @if($log->metadata)
+                            @php
+                                $metadata = $log->metadata ?? [];
+                                $before = $metadata['before'] ?? [];
+                                $after = $metadata['after'] ?? [];
+                                $diffs = [];
+
+                                $fieldLabels = [
+                                    'number' => 'Nomor Naskah',
+                                    'classification_id' => 'Klasifikasi',
+                                    'document_date' => 'Tanggal Dokumen',
+                                    'received_date' => 'Tanggal Diterima',
+                                    'subject' => 'Perihal',
+                                    'sifat' => 'Sifat Dokumen',
+                                    'recipient' => 'Penerima',
+                                    'recipient_name' => 'Penerima',
+                                    'recipient_id' => 'Unit Penerima',
+                                    'unit_id' => 'Unit Penerima',
+                                    'sender' => 'Instansi Pengirim',
+                                ];
+
+                                if (is_array($before) && is_array($after) && !empty($after)) {
+                                    foreach ($after as $key => $newVal) {
+                                        $oldVal = $before[$key] ?? null;
+                                        if ($oldVal != $newVal) {
+                                            if ($key === 'classification_id') {
+                                                $oldDisplay = $classificationsMap[$oldVal] ?? ($oldVal ?: '-');
+                                                $newDisplay = $classificationsMap[$newVal] ?? ($newVal ?: '-');
+                                            } elseif (in_array($key, ['recipient_id', 'unit_id', 'recipient']) && is_numeric($oldVal) && is_numeric($newVal)) {
+                                                $oldDisplay = $unitsMap[$oldVal] ?? ($oldVal ?: '-');
+                                                $newDisplay = $unitsMap[$newVal] ?? ($newVal ?: '-');
+                                            } elseif ($key === 'document_date' || $key === 'received_date') {
+                                                $oldDisplay = $oldVal ? date('d/m/Y', strtotime($oldVal)) : '-';
+                                                $newDisplay = $newVal ? date('d/m/Y', strtotime($newVal)) : '-';
+                                            } elseif ($key === 'sifat') {
+                                                $oldDisplay = ucfirst($oldVal ?: '-');
+                                                $newDisplay = ucfirst($newVal ?: '-');
+                                            } else {
+                                                $oldDisplay = (string)($oldVal ?: '-');
+                                                $newDisplay = (string)($newVal ?: '-');
+                                            }
+
+                                            $diffs[] = [
+                                                'label' => $fieldLabels[$key] ?? ucfirst(str_replace('_', ' ', $key)),
+                                                'old' => $oldDisplay,
+                                                'new' => $newDisplay,
+                                            ];
+                                        }
+                                    }
+                                }
+                            @endphp
+
+                            @if(!empty($diffs))
+                                <div class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1.5 text-xs">
+                                    <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Perubahan Metadata:</div>
+                                    @foreach($diffs as $d)
+                                        <div class="border-b border-slate-200/60 pb-1 last:border-b-0 last:pb-0">
+                                            <span class="font-medium text-slate-600">{{ $d['label'] }}:</span>
+                                            <div class="font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                                <span class="text-slate-400 line-through">{{ Str::limit($d['old'], 40) }}</span>
+                                                <span class="text-slate-400">&rarr;</span>
+                                                <span class="text-emerald-700 font-semibold">{{ Str::limit($d['new'], 40) }}</span>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @elseif(isset($metadata['previous_version']) && isset($metadata['new_version']))
+                                <div class="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs space-y-1">
+                                    <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Revisi Berkas Scan:</div>
+                                    <div class="font-mono flex items-center gap-1.5">
+                                        <span class="text-slate-400">v{{ $metadata['previous_version'] }}</span>
+                                        <span class="text-slate-400">&rarr;</span>
+                                        <span class="text-emerald-700 font-bold">v{{ $metadata['new_version'] }}</span>
+                                    </div>
+                                    @if(isset($metadata['file_path']))
+                                        <div class="text-[11px] text-slate-500 font-mono mt-1 break-all">{{ basename($metadata['file_path']) }}</div>
+                                    @endif
+                                </div>
+                            @elseif(isset($metadata['cancelled_by']))
+                                <div class="bg-rose-50/70 border border-rose-200 rounded-lg p-2.5 text-xs">
+                                    <span class="font-semibold text-rose-800">Status Nomor:</span>
+                                    <span class="text-rose-700 font-mono font-bold ml-1">Dibatalkan (Void)</span>
+                                </div>
+                            @elseif(!empty($metadata))
                                 @php
-                                    $metadata = $log->metadata;
                                     if (is_array($metadata) && isset($metadata['type']) && $metadata['type'] === 'internal') {
                                         $metadata['type'] = $log->document?->documentType?->name ?? 'Surat Khusus';
                                     }

@@ -1929,6 +1929,366 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - `tests/Feature/DocumentLoanTest.php`: Menambahkan test case `test_circulation_smart_page_resolver_navigates_to_correct_page_for_highlight_parameter` yang membuat 15 data sirkulasi dan memvalidasi bahwa membuka tiket pinjaman urutan ke-15 langsung menyajikan halaman 2 tab sirkulasi dan merender baris `#loan-row-{id}`.
   - Seluruh rangkaian test suite proyek (115 *test cases*, 489 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
 
+### 102. Koreksi Metadata Dokumen, Pembatalan Nomor Naskah (Void) & Unggah Berkas Revisi (Versioning) di Seluruh Modul Arsip
+- **Latar Belakang & Kebutuhan**:
+  - Standar kearsipan ANRI/BPK mengharuskan nomor naskah resmi yang telah diterbitkan **tidak pernah dihapus** meskipun pembatalan terjadi — status diubah menjadi `cancelled` dengan alasan wajib disimpan pada kolom `notes`.
+  - Metadata dokumen yang telah diarsipkan harus tetap dapat dikoreksi oleh Tapersip/Superadmin dengan alasan wajib dicatat di audit log (before/after snapshot).
+  - Berkas scan arsip yang perlu diperbaiki (halaman buram, lampiran terlewat) harus dapat diunggah ulang sebagai versi baru tanpa menghapus versi lama.
+- **Migrasi Database (`2026_10_22_000001`)**:
+  - Menambahkan kolom `notes` (text, nullable) pada tabel `documents` untuk alasan pembatalan.
+  - Memperluas enum `status` pada `documents` dengan nilai `cancelled` untuk mendukung pembatalan nomor naskah resmi.
+- **Implementasi per Modul**:
+  - **Antrean Scan Tapersip (`ScanQueue.php`)**:
+    - `openEditMetadataModal()` / `saveEditedMetadata()`: Koreksi metadata draft (nomor, perihal, penerima, tanggal, sifat, klasifikasi) dengan validasi wajib alasan dan audit log before/after.
+    - `openVoidModal()` / `confirmVoidDocument()`: Pembatalan nomor naskah → status `cancelled`, alasan di `notes`, audit log, toast warning.
+    - Blade: Modal `modal-edit-queue-metadata` dan `modal-void-queue-document` dengan three-dot action dropdown per baris antrean.
+  - **Dashboard Staf (`Dashboard.php`)**:
+    - `openEditDraftModal()` / `saveEditedDraft()`: Staf mengoreksi metadata draft milik sendiri; Tapersip/Superadmin dapat mengoreksi semua.
+    - `openVoidDraftModal()` / `confirmVoidDraft()`: Staf membatalkan nomor draft milik sendiri; Tapersip/Superadmin dapat membatalkan semua.
+    - Blade: Modal `modal-dashboard-edit-draft` dan `modal-dashboard-void-draft` dengan kolom "Aksi" (ikon edit/void).
+  - **Arsip Surat Keluar (`Outgoing/Index.php`)**:
+    - `openEditMetadataModal()` / `saveEditedMetadata()`: Koreksi metadata arsip (nomor, perihal, penerima, tanggal, sifat, klasifikasi) — hanya Tapersip/Superadmin.
+    - `openRevisionModal()` / `saveRevisionFile()`: Unggah berkas PDF revisi → versi lama menjadi `obsolete`, versi baru menjadi `active`, `current_version_id` diperbarui. Termasuk pengecekan NAS health sebelum upload.
+    - Blade: Modal `modal-edit-archived-metadata` dan `modal-revision-upload` dengan three-dot action dropdown.
+  - **Arsip Surat Internal (`Internal/Index.php`)**:
+    - Implementasi identik dengan Outgoing, disesuaikan untuk field penerima internal (unit kerja via `recipients` relasi many-to-many).
+  - **Arsip Surat Masuk (`Incoming/Index.php`)**:
+    - `openEditMetadataModal()` / `saveEditedMetadata()`: Koreksi metadata surat masuk (nomor pengirim, asal instansi pengirim, perihal, tanggal surat, tanggal terima, sifat, unit penerima internal, klasifikasi).
+    - `openRevisionModal()` / `saveRevisionFile()`: Unggah berkas scan revisi dengan versioning identik.
+    - Blade: Modal `modal-edit-archived-metadata` dan `modal-revision-upload` dengan action dropdown.
+- **Audit Trail**:
+  - Setiap koreksi metadata mencatat `AuditLog::record()` dengan action deskriptif, `document_id`, metadata berisi `reason`, `before` (snapshot sebelum), `after` (snapshot sesudah), dan `editor_id`.
+  - Setiap pembatalan mencatat action "Pembatalan Nomor Naskah Resmi (Void)" dengan `reason` dan `cancelled_by`.
+  - Setiap unggah revisi mencatat action "Unggah Berkas Revisi Arsip (vX.0)" dengan `previous_version`, `new_version`, `reason`, `file_path`, dan `uploaded_by`.
+- **Perbaikan Bug**:
+  - **`Dashboard.php`**: Menghapus duplikat closing brace (`}`) yang menyebabkan syntax error "Unmatched `}`".
+  - **Status `superseded` → `obsolete`**: Menyesuaikan kode di Outgoing, Internal, dan Incoming Index yang menggunakan `superseded` padahal enum `document_versions.status` hanya mengizinkan `['active', 'obsolete']`.
+  - **Penempatan Tombol Submit Modal (Inline Form Action Buttons)**: Memperbaiki kendala tombol submit (seperti *"Konfirmasi Batal Nomor (Void)"*, *"Simpan Koreksi Metadata"*, dan *"Simpan & Arsipkan Versi Baru"*) yang tidak merespons klik. Hal ini disebabkan komponen `<x-ui.modal>` mengekstrak `<x-slot:footer>` ke luar kontainer form di DOM browser. Seluruh 10 modal pada 5 file (`scan-queue.blade.php`, `dashboard.blade.php`, `outgoing/index.blade.php`, `internal/index.blade.php`, dan `incoming/index.blade.php`) telah direstrukturisasi dengan menempatkan tombol aksi secara inline langsung di dalam tag `<form>`, dipisahkan dengan garis `border-t border-slate-100` yang rapi dan konsisten sehingga `wire:submit.prevent` terpanggil secara presisi.
+  - **Integritas Nilai Enum `receipt_status` pada `document_recipients`**: Memperbaiki exception MySQL `Warning: 1265 Data truncated for column 'receipt_status'` saat mengoreksi unit penerima naskah internal/memo dinas. Nilai `'pending'` (yang bukan anggota enum yang sah `['unread', 'read', 'actioned']`) diselaraskan menjadi `'unread'` pada 3 komponen: `Internal\Index.php`, `ScanQueue.php`, dan `Dashboard.php`.
+  - **Smart Unified Sync: Sinkronisasi Terpadu Nomor Surat saat Ralat Klasifikasi & Tanggal Dokumen**: Mengakomodasi kebutuhan koreksi klasifikasi maupun tanggal surat secara harmonis pada modal koreksi metadata (`ScanQueue`, `Dashboard`, `Outgoing\Index`, dan `Internal\Index`):
+    - *Deteksi Perubahan Bulan*: Jika tanggal surat bergeser ke bulan berbeda (misal `/09/` ke `/10/`), sistem otomatis mengusulkan pembaruan segmen bulan pada nomor surat tanpa merusak nomor urut register (`{NO}`).
+    - *Sinkronisasi Ganda*: Jika klasifikasi dan bulan diubah bersamaan, keduanya disinkronkan secara terpadu (`01/.../HM.01/09/...` $\rightarrow$ `01/.../KU.02/10/...`).
+    - *Perlindungan Tahun Takwim*: Jika tahun pada tanggal surat diubah, sistem memunculkan banner peringatan bahwa tahun pada nomor surat dipertahankan demi menjaga kepatuhan integritas buku agenda tahunan ANRI/BPK (disarankan memakai fitur Void jika salah tahun).
+    - *Checkbox Fleksibel*: Pengguna dapat mencentang untuk menyelaraskan nomor naskah (jika fisik belum dicetak/ditandatangani) atau tidak mencentang (jika fisik kertas sudah terlanjur ditandatangani basah). Seluruh perubahan tercatat di Audit Log.
+  - **Penyelarasan Visual Audit Trail untuk Koreksi Metadata & Alasan (Opsi A Tanpa Ikon)**:
+    - *Kolom Aktivitas*: Menampilkan badge jenis aksi kedinasan, nomor naskah resmi, serta kotak teks alasan ralat/pembatalan (`Alasan: ...`) berbasis tipografi murni tanpa ikon/emoji sesuai arahan desain minimalis.
+    - *Kolom Detail Referensi*: Menggantikan dump JSON mentah dengan kartu perbandingan visual (*Visual Diff Before $\rightarrow$ After*) yang hanya menampilkan field-field yang mengalami perubahan (Nomor, Klasifikasi, Tanggal Dokumen, Tanggal Terima, Sifat, Perihal, Penerima).
+    - *Resolusi ID ke Teks*: ID angka pada `classification_id` dan `recipient_id`/`unit_id` diterjemahkan otomatis ke kode klasifikasi resmi (misal `HM.01`) dan nama unit kerja lengkap melalui map lookup di `AuditTrailIndex.php`.
+  - **Penyelarasan Alur Distribusi Naskah pada Tabel Monitoring Dashboard, Antrean Scan & Pinjam Arsip Fisik (Opsi 3 Tanpa Ikon)**:
+    - Kolom "Perihal & Tujuan" pada `dashboard.blade.php`, kolom "Identitas Dokumen" pada `scan-queue.blade.php`, serta kolom "Identitas Dokumen" pada `document-loan-index.blade.php` (Tab 1 Katalog, Tab 2 Pinjaman Saya, dan Tab 3 Sirkulasi Tapersip) menyajikan alur distribusi pengiriman secara kontekstual berbasis tipografi murni menggunakan simbol panah (`→`) tanpa ikon/emoji:
+      - *Surat Khusus (`internal`)*: Menampilkan `[Unit Pengirim] → [Unit Penerima]` (menggunakan relasi polymorphic `recipients.recipient`).
+      - *Surat Keluar (`outgoing`)*: Menampilkan `[Unit Pengirim] → [Instansi/Pihak Luar]`.
+      - *Surat Masuk (`incoming`)*: Menampilkan `[Instansi Pengirim Luar] → [Unit Penerima Internal]`.
+    - *Pencegahan N+1 Query*: Menambahkan eager loading `'recipients.recipient'` pada kueri `Dashboard.php`, `ScanQueue.php`, dan `DocumentLoanIndex.php`.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DocumentCorrectionAndRevisionTest.php`, `DashboardActivityLogTest.php`, `NasStorageTest.php`, & `DocumentLoanTest.php`)**:
+  - `test_tapersip_can_correct_metadata_in_scan_queue_with_audit_log_and_notify`: Koreksi metadata draft di antrean scan + verifikasi audit log.
+  - `test_tapersip_or_creator_can_void_document_number_in_scan_queue`: Pembatalan nomor naskah + verifikasi status `cancelled` dan `notes`.
+  - `test_staff_can_correct_own_draft_metadata_in_dashboard`: Staf mengoreksi metadata draft milik sendiri di dashboard.
+  - `test_staff_can_void_own_draft_number_in_dashboard`: Staf membatalkan nomor draft milik sendiri di dashboard.
+  - `test_tapersip_can_correct_metadata_on_archived_outgoing_document`: Koreksi metadata arsip surat keluar.
+  - `test_tapersip_can_upload_revision_pdf_scan_v2_on_archived_outgoing_document`: Upload revisi v2.0 + verifikasi v1 menjadi `obsolete`.
+  - `test_tapersip_can_correct_metadata_and_upload_revision_on_incoming_document`: Koreksi metadata + upload revisi pada surat masuk.
+  - `test_correct_internal_document_recipient_sets_valid_enum_receipt_status`: Koreksi unit kerja penerima naskah internal di Antrean Scan, Arsip Internal, dan Dashboard memvalidasi kolom `receipt_status` tersimpan sebagai `'unread'` yang sah.
+  - `test_changing_classification_shows_preview_and_updates_number_when_checkbox_checked`: Mengubah klasifikasi dengan checkbox aktif memvalidasi kemunculan pratinjau dan pembaruan nomor surat di database serta audit log.
+  - `test_changing_classification_preserves_number_when_checkbox_unchecked`: Mengubah klasifikasi dengan checkbox tidak dicentang mempertahankan nomor surat lama untuk menjaga kesesuaian fisik surat yang telah ditandatangani.
+  - `test_changing_document_month_updates_number_when_checkbox_checked`: Mengubah tanggal ke bulan berikutnya memicu deteksi pratinjau dan pembaruan segmen bulan pada nomor surat resmi.
+  - `test_changing_both_classification_and_month_updates_both_in_number`: Mengubah klasifikasi dan tanggal sekaligus menguji sinkronisasi ganda kedua segmen secara terpadu.
+  - `test_changing_same_month_day_only_does_not_trigger_number_sync`: Mengubah tanggal dalam bulan yang sama (hanya beda hari) tidak memicu pergantian nomor karena format nomor surat tidak memuat segmen hari.
+  - `test_audit_trail_renders_metadata_diff_and_reason_without_icons`: Memvalidasi rendering kolom Aktivitas (badge, nomor, alasan) dan Detail Referensi (visual diff before-after) pada tabel audit trail tanpa ikon.
+  - `test_dashboard_monitoring_displays_distribution_flow_for_special_and_outgoing_documents`: Menguji keakuratan rendering teks alur distribusi asal dan tujuan pada Surat Khusus dan Surat Keluar di dashboard.
+  - `test_scan_queue_renders_distribution_flow_without_icons`: Menguji rendering alur distribusi asal dan tujuan pada antrean scan tapersip tanpa ikon.
+  - `test_document_loan_catalog_and_my_loans_render_distribution_flow`: Menguji rendering alur distribusi pada katalog pinjam dan pinjaman saya.
+  - Seluruh rangkaian test suite proyek (132 *test cases*, 596 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 103. Alur Permohonan & Persetujuan Pembatalan Naskah Dinas (Workflow Void Approval) dan Halaman Khusus "/canceldoc"
+- **Latar Belakang & Kebutuhan**:
+  - Untuk menjaga tata kelola registrasi kearsipan yang disiplin, pembatalan nomor surat resmi oleh staf pembuat naskah memerlukan persetujuan dari Admin Tapersip / Superadmin.
+  - Staf mengajukan permohonan pembatalan beserta alasan $\rightarrow$ status dokumen berubah menjadi `cancellation_requested`.
+  - Tapersip memeriksa permohonan pada meja kerja baru di URL `/canceldoc`. Jika disetujui, nomor resmi berstatus `cancelled` (Void) dan tercatat identitas penyetuju (`cancelled_by`). Jika ditolak, status dikembalikan ke `waiting_for_file` beserta catatan penolakan (`cancellation_rejection_notes`).
+  - Tapersip / Superadmin tetap memiliki wewenang untuk membatalkan (Void) nomor secara langsung tanpa melalui permohonan terlebih dahulu.
+- **Migrasi Database (`2026_10_26_000001_add_cancellation_workflow_to_documents_table.php`)**:
+  - Penambahan status enum `'cancellation_requested'` pada kolom `documents.status`.
+  - Penambahan kolom `cancellation_requested_at` (timestamp, nullable), `cancelled_by` (foreignId to users, nullable), dan `cancellation_rejection_notes` (text, nullable).
+- **Model Eloquent (`Document.php` & `User.php`)**:
+  - Penambahan `cancellation_requested_at`, `cancelled_by`, dan `cancellation_rejection_notes` ke `$fillable` dan `$casts`.
+  - Penambahan relasi `cancelledBy(): BelongsTo` pada model `Document`.
+  - Penambahan bypass hak akses modul `cancelled_documents` secara default untuk user dengan peran Tapersip pada `User::hasModuleAccess()`.
+- **Halaman `/canceldoc` (`CancelledDocumentIndex.php` & `cancelled-document-index.blade.php`)**:
+  - Ditempatkan di kelompok menu "KEARSIPAN" sidebar dengan label **"Pembatalan Dok"** tepat di bawah menu "Antrean Scan Tapersip".
+  - Desain antarmuka 100% tipografi murni tanpa ikon/emoji:
+    - **Tab 1: "Permohonan Batal"**: Menampilkan antrean permohonan pembatalan nomor dari staf lengkap dengan badge counter, nomor surat, perihal, alur distribusi `[Asal] → [Tujuan]`, alasan pemohon, waktu pengajuan, serta tombol aksi "Setujui Batal" (modal konfirmasi void) dan "Tolak" (modal alasan penolakan).
+    - **Tab 2: "Buku Register Batal (Void)"**: Menampilkan buku register arsip resmi seluruh nomor yang telah dibatalkan lengkap dengan identitas naskah, alur distribusi, pemohon awal, petugas penyetuju pembatalan, alasan pembatalan, dan stempel status BATAL (Void) untuk kebutuhan audit ANRI/BPK.
+- **Penyelarasan Alur di Dashboard & Scan Queue**:
+  - Staf yang menekan tombol pembatalan di Dashboard / Antrean Scan kini memicu perubahan status ke `cancellation_requested` dan notifikasi pengajuan ke Tapersip.
+  - Tapersip / Superadmin yang menekan tombol pembatalan langsung mengeksekusi status `cancelled` dengan `cancelled_by`.
+    - Dashboard monitoring memperluas kueri status `waiting` untuk memuat `cancellation_requested`, menampilkan badge status "Permohonan Batal" dan teks "Menunggu Tapersip" pada kolom aksi.
+  - **Notifikasi Terpadu Permohonan Pembatalan Nomor Naskah ke Admin Tapersip**:
+    - Saat staf mengonfirmasi permohonan pembatalan nomor, sistem memicu event real-time `desktop-notify` dan `loan-status-changed`.
+    - Komponen `TapersipNotificationListener` mengintegrasikan naskah berstatus `cancellation_requested` ke dalam:
+      - *Badge Counter Lonceng*: Menghitung permohonan pembatalan baru yang belum dibaca (`cancel_req_{id}`) ke dalam counter navbar atas.
+      - *Dropdown Popover Notifikasi*: Menampilkan kartu feed notifikasi berlabel "Batal Nomor" (warna rose) lengkap dengan nomor surat, staf pemohon, unit kerja, serta alasan pembatalan. Klik item langsung menandai dibaca dan mengarahkan ke `/canceldoc?tab=requests`.
+      - *Floating In-App Toast*: Memunculkan toast pojok kanan atas dengan nada chime dan tombol aksi cepat "Tinjau Permohonan →".
+      - *Tandai Semua Dibaca*: Method `markAllAsRead()` menyertakan seluruh kunci `cancel_req_{id}` ke dalam cache riwayat dibaca Tapersip.
+  - **Perbaikan Resolusi Layout Livewire ("No hint path defined for [layouts]")**:
+    - *Akar Masalah*: Konfigurasi `config/livewire.php` bawaan memuat `'component_layout' => 'layouts::app'`. Sintaks namespace ganda (`layouts::`) diinterpretasikan Laravel sebagai view namespace vendor eksternal yang tidak terdaftar, sehingga melempar exception saat rute full-page memanggil komponen Livewire secara langsung tanpa override layout eksplisit.
+    - *Solusi Global & Komponen*: Mengubah default `component_layout` pada `config/livewire.php` menjadi `components.layouts.app` dan menambahkan rantai `->layout('components.layouts.app', ['title' => 'Pembatalan Dokumen Dinas'])` secara eksplisit pada method `render()` di `CancelledDocumentIndex.php`.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/CancelledDocumentWorkflowTest.php` & `tests/Feature/DocumentCorrectionAndRevisionTest.php`)**:
+  - `test_staff_can_request_cancellation_from_dashboard`: Memvalidasi staf mengajukan pembatalan dengan alasan dan status berubah menjadi `cancellation_requested`.
+  - `test_staff_cancellation_request_appears_in_canceldoc_requests_tab`: Memvalidasi permohonan staf tampil di Tab 1 halaman `/canceldoc`.
+  - `test_tapersip_can_approve_cancellation_request`: Memvalidasi Tapersip menyetujui pembatalan $\rightarrow$ status `cancelled` dan `cancelled_by` terekam.
+  - `test_tapersip_can_reject_cancellation_request`: Memvalidasi Tapersip menolak pembatalan $\rightarrow$ status kembali ke `waiting_for_file` dan catatan penolakan tersimpan.
+  - `test_tapersip_or_superadmin_can_directly_void_from_scan_queue`: Memvalidasi eksekusi void langsung oleh Tapersip di Antrean Scan.
+  - `test_canceldoc_tab_switching_shows_register_void_records`: Memvalidasi perpindahan tab ke Buku Register Naskah Batal.
+  - `test_unauthorized_user_cannot_approve_or_reject_cancellation`: Memvalidasi proteksi otorisasi bagi staf biasa.
+  - `test_superadmin_can_directly_void_draft_number_in_dashboard`: Memvalidasi pembatalan langsung oleh Superadmin di dashboard.
+  - `test_http_route_canceldoc_renders_successfully_with_app_layout`: Memvalidasi HTTP GET `/canceldoc` berhasil merespons 200 OK dengan layout aplikasi terpadu.
+  - `test_staff_cancellation_dispatches_desktop_notification_event`: Memvalidasi event notifikasi real-time `desktop-notify` ditembakkan saat staf mengajukan pembatalan.
+  - `test_tapersip_notification_listener_includes_cancellation_requests_in_feed_and_badge`: Memvalidasi listener Tapersip menampilkan permohonan pembatalan pada dropdown feed dan badge counter lonceng.
+  - `test_tapersip_notification_dismiss_and_mark_all_as_read_for_cancellations`: Memvalidasi penandaan notifikasi pembatalan sebagai dibaca via klik maupun aksi tandai semua dibaca.
+  - Seluruh rangkaian test suite proyek (144 *test cases*, 650 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 104. Sinkronisasi Real-Time Otomatis pada Dashboard Staf & Meja Kerja Tapersip (Opsi B: Smart Background Polling + In-App Status Toast)
+- **Latar Belakang & Masalah**:
+  - Saat Admin Tapersip menyelesaikan aksi (mengunggah scan PDF berkas final, menyetujui pembatalan nomor, atau menolak permohonan pembatalan), status pada Dashboard staf tidak berubah seketika dan mengharuskan staf me-refresh halaman (F5) secara manual.
+  - Hal ini disebabkan event `$this->dispatch()` pada Livewire 3 terisolasi di memori browser lokal Tapersip dan Dashboard staf sebelumnya berstatus statis tanpa background polling.
+- **Implementasi Solusi (Opsi B - Smart Polling & In-App Toast)**:
+  - **`app/Livewire/Dashboard.php`**:
+    - Menambahkan properti `$lastCheckedAt` untuk merekam rentang waktu pemeriksaan data terkini dan array `$notifiedDocEvents` untuk mencegah duplikasi notifikasi.
+    - Menambahkan listener `#[On('loan-status-changed')]` agar aksi di tab/modal lokal memicu re-render seketika (0 detik).
+    - Menambahkan method polling `checkStatusUpdates()`:
+      - Mendeteksi naskah milik staf yang statusnya baru saja berubah menjadi `archived` $\rightarrow$ memicu toast notifikasi sukses: *"Naskah {nomor} telah selesai di-scan dan resmi diarsipkan oleh Tapersip."*
+      - Mendeteksi penolakan pembatalan oleh Tapersip $\rightarrow$ memicu toast peringatan: *"Permohonan pembatalan naskah {nomor} ditolak Tapersip. Catatan: {alasan}"*
+      - Mendeteksi persetujuan pembatalan (Void) $\rightarrow$ memicu toast info: *"Permohonan pembatalan naskah {nomor} telah disetujui oleh Tapersip (Void)."*
+      - *Proteksi Modal Aktif*: Jika modal koreksi metadata (`$editDocId`) atau modal batal (`$voidDocId`) sedang terbuka, proses notifikasi dan polling dijeda sementara agar tidak mengganggu fokus input pengguna.
+  - **`resources/views/livewire/dashboard.blade.php`**:
+    - Memasang `wire:poll.visible.10s="checkStatusUpdates"` berpagar `@if(!$editDocId && !$voidDocId)`.
+    - Modifier `.visible` menjamin browser hanya mengirim request saat tab aktif di layar staf (0% beban server saat tab diminimize atau membuka aplikasi lain).
+  - **Penyelarasan Meja Kerja Tapersip**:
+    - `ScanQueue.php` & `scan-queue.blade.php`: Menambahkan listener `#[On('loan-status-changed')]` dan polling `wire:poll.visible.15s`.
+    - `CancelledDocumentIndex.php` & `cancelled-document-index.blade.php`: Menambahkan listener `#[On('loan-status-changed')]` dan polling `wire:poll.visible.15s`.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/DashboardRealTimeSyncTest.php`)**:
+  - `test_dashboard_has_loan_status_changed_listener_and_mounts_with_last_checked_at`: Memvalidasi inisialisasi timestamp dan penanganan event status.
+  - `test_dashboard_detects_archived_status_and_dispatches_success_toast`: Memvalidasi deteksi perubahan status ke `archived` memicu toast notifikasi sukses.
+  - `test_dashboard_detects_cancellation_rejection_and_dispatches_warning_toast`: Memvalidasi deteksi penolakan pembatalan memicu toast notifikasi peringatan beserta catatan penolakan Tapersip.
+  - `test_dashboard_detects_cancellation_approval_and_dispatches_info_toast`: Memvalidasi deteksi persetujuan pembatalan memicu toast info Void.
+  - `test_dashboard_pauses_polling_notifications_when_modal_is_active`: Memvalidasi jeda polling saat staf sedang membuka modal input.
+  - `test_dashboard_metrics_and_monitoring_table_update_on_poll`: Memvalidasi pembaruan otomatis angka kartu Bento Grid dan baris tabel monitoring tanpa refresh halaman.
+  - Seluruh rangkaian test suite proyek (150 *test cases*, 658 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 105. Persistensi Status Baca Notifikasi Permanen di Database & Tab "Histori" pada Dropdown Notifikasi Tapersip
+- **Latar Belakang & Masalah**:
+  - Sebelumnya, status pembacaan notifikasi disimpan dalam `Cache::put()` (RAM sementara). Ketika administrator menjalankan `php artisan optimize:clear` atau `cache:clear`, seluruh riwayat baca terhapus sehingga notifikasi lama muncul kembali dan angka badge lonceng kembali bertambah.
+  - Selain itu, saat item notifikasi dibuka, item tersebut langsung hilang dari daftar dropdown karena adanya filter `->filter(fn ($item) => $item['is_unread'])`.
+- **Implementasi Database Permanen (`user_notification_reads`)**:
+  - **Migrasi Database (`2026_10_26_144549_create_user_notification_reads_table.php`)**:
+    - Tabel baru `user_notification_reads` dengan kolom: `id`, `user_id` (foreignId to users, cascade), `notification_key` (string unik seperti `scan_{id}`, `loan_{id}_{status}`, `cancel_req_{id}`), dan timestamps.
+    - Composite unique index pada `['user_id', 'notification_key']` untuk menjamin kecepatan kueri (< 1ms) dan mencegah duplikasi data.
+  - **Model Eloquent (`App\Models\UserNotificationRead`)**: Model representasi data baca notifikasi pengguna.
+  - **Penyelarasan Komponen `TapersipNotificationListener.php`**:
+    - Mengganti `Cache::get()` dan `Cache::put()` dengan kueri langsung ke `UserNotificationRead`.
+    - Riwayat baca 100% tahan banting terhadap `cache:clear`, `optimize:clear`, maupun server reboot.
+- **Implementasi Tab Header "Belum Dibaca" & "Histori" pada Dropdown Popover (`tapersip-notification-listener.blade.php`)**:
+  - Mempertahankan lebar popover (380px) dan **100% selaras dengan desain visual eksisting**:
+    - **Header Popover**: Dilengkapi navigasi tab tipografi bersih berbasis Alpine.js (`activeNotifTab = 'unread' | 'history'`):
+      - Tab **"Belum Dibaca"**: Menampilkan item notifikasi aktif yang belum dibuka bergaris tepi hijau kiri (`border-l-[3px] bg-emerald-50/15`) dan badge counter `Belum Dibaca (X)`.
+      - Tab **"Histori"**: Menampilkan naskah yang sudah dibaca/diselesaikan menggunakan template kartu yang identik dengan latar putih bersih (`bg-white`) dan badge counter `Histori (X)`.
+    - **Aksi Cepat**: Tombol *"Tandai dibaca ✓"* memindahkan seluruh item belum dibaca ke tab Histori secara permanen dan mereset badge counter lonceng menjadi 0.
+- **Verifikasi Pengujian Otomatis (`tests/Feature/TapersipRealTimeNotificationTest.php` & `CancelledDocumentWorkflowTest.php`)**:
+  - `test_listener_can_dismiss_notification_and_reduce_pending_count`: Memvalidasi item yang di-dismiss otomatis berpindah dari daftar `unreadItems` ke `historyItems` dan pendingCount berkurang 1.
+  - `test_read_notifications_persist_in_database_and_survive_cache_flush`: Memvalidasi simulasi eksekusi `Cache::flush()` / `optimize:clear` membuktikan status baca tetap tersimpan di database `user_notification_reads`, pendingCount tetap 0, dan dokumen tidak bangkit kembali ke tab belum dibaca.
+  - Seluruh rangkaian test suite proyek (151 *test cases*, 665 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 106. Redesign Presisi Popover Notifikasi Tapersip Berdasarkan Acuan Visual Mockup & Resolusi Stacking Context Z-Index
+- **Latar Belakang & Masalah**:
+  1. *Dropdown Terpotong Header Tabel*: Pada halaman arsip (Surat Masuk, Surat Keluar, dan Surat Khusus), saat dropdown notifikasi dibuka, badan popover terpotong/tertutup oleh header tabel (`TANGGAL & TUJUAN SURAT`, `SIFAT & STATUS`) karena bentrok stacking context CSS `<header class="... z-10 ...">` dengan `<thead> class="... sticky top-0 z-10 ..."`.
+  2. *Ketidaksesuaian Visual dengan Mockup Acuan*: Posisi judul dan action bar sebelumnya tidak memiliki ikon lonceng, belum memiliki segitiga penunjuk (*pointer/beak*), belum ada pemisah vertikal antar-tab, dan ilustrasi *empty state* belum merefleksikan amplop dinas dengan aksen *speed lines* terpusat.
+- **Implementasi Redesign Presisi (100% Selaras Gambar 1)**:
+  - **`resources/views/components/layouts/app.blade.php`**:
+    - Menaikkan z-index `<header>` navbar atas dari `z-10` menjadi **`z-30`**. Seluruh popover dropdown (`z-50`) melayang bebas di atas sticky thead tabel (`z-10`) tanpa terpotong di modul arsip mana pun.
+  - **`resources/views/livewire/components/tapersip-notification-listener.blade.php`**:
+    - *Indikator Beak / Pointer*: Menambahkan segitiga penunjuk putih di sudut kanan atas popover (`-top-1.5 right-[11px] w-3.5 h-3.5 rotate-45`) yang menunjuk lurus dan presisi ke arah ikon lonceng trigger di atasnya.
+    - *Header Row 1*:
+      - Sisi Kiri: Ikon lonceng outline gelap (`text-[#0F172A] w-5 h-5`) berdampingan dengan judul tegas **"Notifikasi"** (`text-lg font-bold text-[#0F172A] font-jakarta`).
+      - Sisi Kanan: Ghost text action **"Semua selesai"** (atau *"Tandai dibaca ✓"*) dalam warna slate-500 medium.
+      - Hairline divider bawah: `border-b border-slate-100`.
+    - *Header Row 2 (Segmented Tab Bar)*:
+      - Tab "Belum Dibaca": Teks hijau tua bold `#0D6832` dengan active indicator line tebal `border-b-[3px] border-[#0D6832] -mb-px`, serta pill badge angka pending (menampilkan `0` berlatar netral saat tidak ada antrean).
+      - Pemisah Vertikal Pipih: Karakter pipe `|` berwarna abu-abu sangat muda `text-slate-200` di antara kedua tab.
+      - Tab "Histori": Teks slate-500 dengan pill badge netral `bg-slate-100 text-slate-600` menampilkan jumlah seluruh riwayat baca.
+      - Hairline divider bawah: `border-b border-slate-100`.
+    - *Empty State Ilustratif Terpusat*:
+      - Backdrop sirkular 80px `bg-slate-100/90` dengan bayangan oval tipis (*grounding shadow*) di bawah lingkaran.
+      - Amplop dinas berwarna *slate-blue* (`#6B8CB7`) dengan garis lipatan putih tajam (`stroke-width="2.5"`).
+      - 3 aksen garis gerak (*green speed lines/sparkles* `#0D6832`) memancar di pojok kanan atas amplop.
+      - Headline tegas 18px: **"Tidak ada notifikasi baru."** (`text-lg font-bold text-[#0F172A]`).
+      - Deskripsi 14px: **"Semua permohonan dan berkas telah selesai ditinjau."** (`text-sm text-slate-500`).
+    - *Semantic Alert Badge Lonceng*: Diselaraskan menggunakan token merah tegas `bg-[#E11D48]`.
+    - *Reaktivitas Angka Tab Histori Dinamis*: Menghapus pemalsuan data dummy seminggu terakhir dan mengikat pill badge Histori langsung ke properti reaktif `$historyCount` yang dihitung secara matematis riil dari tabel database `user_notification_reads` (`UserNotificationRead::where('user_id', Auth::id())->count()`). Angka bertambah nyata saat Tapersip membaca notifikasi dan berkurang dari pending count.
+- **Verifikasi Pengujian Otomatis**:
+  - `test_history_count_is_real_and_increments_when_notifications_are_read`: Memvalidasi bahwa angka tab Histori bertambah secara nyata saat Tapersip membaca/dismiss notifikasi dan tercatat akurat di database.
+  - Rangkaian test suite (`TapersipRealTimeNotificationTest`, `CancelledDocumentWorkflowTest`, `DashboardRealTimeSyncTest`) dan seluruh test suite proyek (152 *test cases*, 668 *assertions*) terkonfirmasi **lulus 100% (*PASS*)**.
+
+### 107. Spotlight Highlight Navigasi & Smart Page Resolver untuk Modul Pembatalan Dokumen (/canceldoc)
+- **Latar Belakang & Kebutuhan**:
+  - Saat notifikasi "Permohonan Batal Nomor" atau "Nomor Naskah Dibatalkan" diklik dari dropdown popover notifikasi Tapersip maupun desktop notify, pengguna harus langsung diarahkan ke baris data terkait di `/canceldoc` dengan efek sorotan visual (*spotlight*) dan *smooth scroll* selama 5 detik, setara dengan standar yang sudah diterapkan pada Antrean Scan Tapersip (`ScanQueue`) dan Meja Sirkulasi (`DocumentLoanIndex`).
+  - Bila dokumen target berada di luar halaman 1 (misalnya halaman 2 atau 5), sistem harus otomatis mengarahkan paginasi ke halaman yang tepat (*Smart Page Resolver*) sebelum merender baris dokumen di browser.
+- **Implementasi Teknis**:
+  1. **URL Generator & Dispatcher**:
+     - `app/Livewire/Components/TapersipNotificationListener.php`: Menambahkan parameter query `['tab' => 'requests', 'highlight' => "doc-{$doc->id}"]` untuk permohonan pembatalan naskah, serta `['tab' => 'register', 'highlight' => "doc-{$doc->id}"]` untuk naskah yang telah resmi berstatus void.
+     - `app/Livewire/Dashboard.php` & `app/Livewire/Registry/ScanQueue.php`: Menyertakan `highlight` pada payload event `desktop-notify` saat staf mengajukan pembatalan naskah.
+  2. **Smart Page Resolver di `CancelledDocumentIndex.php`**:
+     - Pada method `mount()`:
+       - Membaca parameter query URL `highlight=doc-{id}` dan mengekstrak ID target dokumen.
+       - Menyesuaikan tab aktif (`requests` untuk `cancellation_requested` dan `register` untuk `cancelled`).
+       - Menghitung posisi urutan dokumen secara matematis sesuai urutan sorting tabel:
+         - Tab Permohonan: FIFO (`cancellation_requested_at asc, id asc`).
+         - Tab Register Void: LIFO (`updated_at desc, id desc`).
+       - Menghitung halaman target: `(int) ceil($position / 10)`.
+       - Jika target berada di halaman > 1, memanggil `$this->setPage($targetPage)` saat *mounting*.
+  3. **Visual Spotlight & Smooth Scroll di Blade (`cancelled-document-index.blade.php`)**:
+     - Menyematkan `id="doc-row-{{ $doc->id }}"` dan skrip Alpine.js pada elemen `<tr>`:
+       - `isTarget: new URLSearchParams(window.location.search).get('highlight') === 'doc-{{ $doc->id }}'`
+       - `init()`: Menjalankan `this.$el.scrollIntoView({ behavior: 'smooth', block: 'center' })` dan menonaktifkan sorotan setelah timer 5.000 ms (5 detik).
+       - Desain visual: Menyorot baris menggunakan latar abu-abu halus `background-color: #f1f5f9; outline: 1.5px solid #cbd5e1; outline-offset: -1px; transition: all 0.7s ease;` tanpa mengubah font, badge, atau elemen desain yang ada.
+- **Verifikasi Pengujian Otomatis**:
+  - `test_notification_cancellation_items_contain_highlight_url`: Memvalidasi target URL notifikasi mengandung parameter `highlight=doc-{id}` dan tab yang sesuai.
+  - `test_canceldoc_smart_page_resolver_navigates_to_correct_page_and_renders_spotlight`: Memvalidasi bahwa saat dokumen berada di halaman ke-2, sistem secara otomatis melompat ke halaman 2 dan merender baris `id="doc-row-{id}"`.
+  - `test_canceldoc_smart_page_resolver_for_void_register_tab`: Memvalidasi bahwa naskah void otomatis membuka tab `register` dan menyorot baris dokumen terkait.
+  - Seluruh test suite (155 *test cases*, 681 *assertions*) **100% PASS**.
+
+### 108. Perbaikan & Standardisasi Workflow Pemusnahan Arsip (/destructions)
+- **Latar Belakang & Masalah**:
+  1. *Tombol Usul Pemusnahan dan Eksekusi Macet*: Pada file `destruction-index.blade.php`, modal ditulis menggunakan boilerplate manual Alpine (`x-on:open-modal.window="if ($event.detail === 'modal-propose') open = true"`). Pada Livewire 3, payload CustomEvent dibungkus dalam array (`['modal-propose']`), sehingga evaluasi kesamaan identitas ketat (`===`) selalu bernilai `false` dan modal tidak pernah muncul.
+  2. *Ketidaksesuaian Desain (Zero Icons)*: Terdapat 7 ikon SVG mentah yang melanggar standar antarmuka bebas-ikon (*Zero Icons*).
+  3. *Hak Akses & Alur Penolakan*: Aksi Approve, Reject, dan Eksekusi belum terlindungi RBAC di backend komponen, serta penolakan usulan belum memiliki modal alasan penolakan tertulis.
+- **Implementasi Solusi**:
+  1. **Standardisasi Modal `<x-ui.modal>`**:
+     - Mengganti seluruh modal inline dengan `<x-ui.modal>` (`modal-propose`, `modal-execute`, dan `modal-reject`). Komponen ini secara bawaan mendukung event listener multi-format (`$event.detail.id || $event.detail || $event.detail[0]`), memiliki backdrop blur yang stabil, serta menempatkan tombol form secara inline langsung di dalam tag `<form>` sehingga `wire:submit.prevent` terpanggil secara presisi.
+  2. **Konteks Metadata Dokumen**:
+     - Pada `openProposeModal($docId)`, backend memuat metadata lengkap naskah (`$selectedDocNumber`, `$selectedDocSubject`, `$selectedDocRetentionEnd`) sehingga pemohon melihat detail naskah sebelum mengajukan alasan.
+  3. **Alur Penolakan Usulan dengan Catatan Tertulis**:
+     - Menambahkan `openRejectModal($id)` dan modal konfirmasi `modal-reject` untuk mencatat alasan penolakan secara akuntabel dalam *Audit Log*.
+  4. **Proteksi RBAC**:
+     - Mengamankan method `approveProposal`, `rejectProposal`, dan `executeDestruction` agar hanya dapat dijalankan oleh pengguna berwenang (Super Admin atau Tapersip).
+  5. **Standardisasi Zero Icons 100%**:
+     - Menghapus seluruh ikon SVG mentah. Menggunakan tipografi terpusat yang elegan, pill badge dinamis pada tab header (`$expiredCount` & `$proposalsCount`), badge status semantik, serta tombol teks murni `Unduh BA (PDF)`.
+- **Verifikasi Pengujian Otomatis**:
+  - `test_open_propose_modal_loads_document_metadata_and_dispatches_event`: Memvalidasi pembukaan modal usulan dan pemuatan metadata naskah.
+  - `test_rejection_modal_workflow_with_reason`: Memvalidasi alur penolakan usulan dengan modal catatan tertulis dan audit trail.
+  - `test_unauthorized_staff_cannot_approve_reject_or_execute`: Memvalidasi staf tanpa wewenang Tapersip/Superadmin ditolak saat mencoba menyetujui pemusnahan.
+  - Seluruh test suite (158 *test cases*, 695 *assertions*) **100% PASS**.
+
+### 109. Alur Kerja Usul Pemusnahan Arsip Kolektif (DUPA Batch) & Isolasi Arsip Musnah
+- **Latar Belakang & Kebutuhan Bisnis (Kaidah ANRI / Kearsipan)**:
+  1. *Pengusulan Kolektif*: Di lingkungan pemerintahan dan BUMN, arsip yang habis retensi diajukan dalam satu berkas **Daftar Usul Pemusnahan Arsip (DUPA)** berisikan banyak naskah sekaligus, bukan satu per satu terpisah.
+  2. *Eksekusi Berita Acara (BA) Simultan*: Panitia pemusnah menandatangani 1 lembar Berita Acara (BA) fisik untuk seluruh naskah dalam satu berkas DUPA. Tapersip cukup mengunggah 1 file PDF BA untuk memusnahkan seluruh naskah di dalam berkas tersebut secara simultan.
+  3. *Nasib Berkas Digital*: File scan fisik tetap dipertahankan di storage server (tidak dihapus fisik) dengan status arsip `disposed` demi keutuhan audit trail.
+  4. *Isolasi Katalog Pinjam*: Dokumen yang berstatus `disposed` (Musnah) wajib diblokir 100% dari katalog sirkulasi peminjaman fisik (`/loans`).
+- **Implementasi Solusi**:
+  1. **Skema Database & Model `DestructionRecord`**:
+     - Migration `2026_10_28_030229_add_batch_code_to_destruction_records_table.php`: Menambahkan kolom `batch_code` (string 50, indexed) pada tabel `destruction_records`.
+     - Model `DestructionRecord`: Menambahkan helper `generateBatchCode()` (format: `DUPA-YYYYMM-001`) dan event `booted()` yang otomatis mengisi `batch_code` saat pembuatan data.
+  2. **Interaktivitas Tab 1 (Daftar Retensi Habis)**:
+     - Checkbox Select All pada `<th>` dan checkbox baris pada tiap dokumen (`wire:model.live="selectedDocIds"`).
+     - Floating Action Bar yang otomatis muncul saat $\ge 1$ naskah dicentang dengan tombol *"Ajukan Usulan Kolektif (X Naskah)"* dan *"Batalkan Pilihan"*.
+     - Modal Usulan (`modal-propose`) menampilkan ringkasan daftar naskah terpilih beserta tanggal berakhir retensinya.
+  3. **Pengelolaan Batch pada Tab 2 (Usulan & Eksekusi)**:
+     - Mengelompokkan usulan berdasarkan Berkas DUPA (`batch_code`) dengan pill badge jumlah naskah.
+     - Satu tindakan *Approve* atau *Reject* langsung berlaku untuk seluruh naskah dalam berkas DUPA terkait.
+     - Eksekusi 1 Pintu: Mengunggah 1 file Berita Acara PDF langsung mengeksekusi seluruh naskah dalam berkas, menyetel `ba_file_path`, dan memperbarui status dokumen menjadi `disposed`.
+  4. **Isolasi Katalog Sirkulasi Pinjam (`DocumentLoanIndex.php`)**:
+     - Menambahkan filter `->where('archive_status', '!=', 'disposed')` pada query katalog pinjam, sehingga arsip musnah tidak dapat lagi dilihat maupun diajukan pinjam oleh staf.
+- **Verifikasi Pengujian Otomatis (`ArchiveDestructionTest.php`)**:
+  - `test_user_can_propose_bulk_collective_destruction_in_one_dupa_batch`: Memvalidasi pengajuan usulan kolektif多-dokumen menghasilkan record DUPA dengan 1 `batch_code` bersama.
+  - `test_batch_approval_and_execution_applies_single_ba_to_all_documents_and_marks_disposed`: Memvalidasi persetujuan dan eksekusi batch dengan 1 file PDF BA memusnahkan seluruh naskah terkait.
+  - `test_disposed_documents_are_hidden_from_document_loan_catalog`: Memvalidasi dokumen musnah terisolasi dan tidak tampil di katalog peminjaman fisik.
+  - Seluruh test suite proyek (**161 test cases, 723 assertions**) **100% PASS**.
+
+### 110. Penyelarasan Badge Status "Dimusnahkan" & Proteksi Aksi Berkas Musnah pada Modul Registri
+- **Latar Belakang & Masalah**:
+  1. *Ketidaksinkronan Tampilan Status*: Saat dokumen dieksekusi pemusnahannya di modul `/destructions`, sistem mengupdate kolom `archive_status = 'disposed'`, sedangkan kolom `status` tetap bernilai `'archived'`. Akibatnya, pada halaman index Surat Keluar, Surat Masuk, dan Surat Khusus, dokumen musnah tersebut masih berlabel badge hijau *"Diarsipkan"*.
+  2. *Risiko Operasional*: Tombol aksi *"Pindahkan Lokasi / Loker Berkas"* dan menu *"Unggah Berkas Revisi"* masih aktif pada baris dokumen musnah, padahal secara fisik dokumen sudah tidak berada lagi di loker kantor dan tidak boleh diubah versinya.
+- **Implementasi Solusi**:
+  1. **Hierarki Penentuan Badge Status Kearsipan**:
+     - Pada `outgoing/index.blade.php`, `incoming/index.blade.php`, dan `internal/index.blade.php`:
+       - Prioritas 1: Jika `archive_status === 'disposed'`, render badge tegas: `Dimusnahkan` (`bg-rose-50 text-rose-700 border-rose-200 font-bold`).
+       - Prioritas 2: Jika `status === 'cancelled'`, render badge: `Batal (Void)` (`bg-rose-50 text-rose-700 border-rose-200 font-semibold`).
+       - Prioritas 3: Jika `status === 'waiting_for_file'`, render badge: `Menunggu Upload` (`bg-amber-100 text-amber-800 border-amber-300`).
+       - Prioritas 4: Normal `archived`, render badge: `Diarsipkan` (`bg-emerald-600 text-white`).
+  2. **Pengamanan UI & Aksi**:
+     - Menyembunyikan tombol *"Pindahkan Lokasi / Loker Berkas"* dan menu *"Unggah Berkas Revisi"* jika `archive_status === 'disposed'`.
+     - Tombol *"Lihat Dokumen"* (Preview PDF) tetap aktif agar auditor dan pihak berwenang dapat melihat salinan berkas digital arsip musnah sesuai keputusan retensi server.
+  3. **Proteksi Backend PHP**:
+     - Pada `openMoveModal()` dan `openRevisionModal()` di controller `Outgoing\Index`, `Incoming\Index`, dan `Internal\Index`, disematkan validasi ketat menolak pemindahan loker atau unggah revisi jika `archive_status === 'disposed'`.
+- **Verifikasi Pengujian Otomatis (`ArchiveDestructionTest.php`)**:
+  - `test_registry_indexes_display_dimusnahkan_badge_for_disposed_documents`: Memvalidasi bahwa dokumen musnah di Surat Keluar, Surat Masuk, dan Surat Khusus menampilkan badge "Dimusnahkan".
+  - `test_disposed_documents_cannot_be_moved_or_revised_in_registry`: Memvalidasi penolakan pemindahan loker dan unggah revisi pada dokumen musnah.
+  - Seluruh test suite sistem (**163 test cases, 731 assertions**) **100% PASS**.
+
+### 111. Penyelarasan Standar Badge "Permohonan Batal" pada Modul Registri Arsip
+- **Latar Belakang & Masalah**:
+  - Pada halaman index arsip (Surat Keluar, Surat Masuk, dan Surat Khusus), naskah yang sedang diajukan pembatalan nomornya (`cancellation_requested`) menampilkan label mentah *"Cancellation_requested"*.
+  - Hal ini terjadi akibat tidak adanya pemetaan label bahasa Indonesia untuk status tersebut, sehingga sistem mengeksekusi *fallback* `ucfirst($doc->status)` yang membocorkan format teknis *snake_case* ke antarmuka pengguna.
+- **Implementasi Solusi**:
+  1. **Standardisasi Label & Warna Badge**:
+     - Memetakan eksplisit `$doc->status === 'cancellation_requested'` pada ketiga berkas blade (`outgoing/index.blade.php`, `incoming/index.blade.php`, dan `internal/index.blade.php`) menjadi:
+       $$\mathbf{[Permohonan \; Batal] \quad (bg\text{-}rose\text{-}50 \;\; text\text{-}rose\text{-}700 \;\; border\text{-}rose\text{-}200 \;\; font\text{-}semibold)}$$
+     - Selaras 100% dengan istilah pada Dashboard, popover notifikasi Tapersip, dan halaman `/canceldoc`.
+  2. **Pengamanan Operasional**:
+     - Menonaktifkan/menyembunyikan tombol *"Pindahkan Lokasi / Loker Berkas"* pada baris naskah yang berstatus `cancelled` maupun `cancellation_requested` guna mencegah pergeseran fisik loker selama proses pembatalan nomor berlangsung.
+- **Verifikasi Pengujian Otomatis (`CancelledDocumentWorkflowTest.php`)**:
+  - `test_registry_indexes_display_permohonan_batal_badge_for_cancellation_requested_documents`: Memvalidasi bahwa dokumen berstatus `cancellation_requested` pada modul Surat Keluar, Surat Masuk, dan Surat Khusus secara akurat menampilkan teks *"Permohonan Batal"* dan tidak memunculkan teks *"Cancellation_requested"*.
+  - Seluruh test suite proyek (**164 test cases, 740 assertions**) **100% PASS**.
+
+### 112. Penyelarasan Tata Letak Kolom "Identitas Dokumen" & Alur Distribusi pada Modul Pemusnahan (/destructions)
+- **Latar Belakang & Masalah**:
+  - Kolom *"Identitas Dokumen"* pada tabel Retensi Habis di `destruction-index.blade.php` belum selaras dengan struktur presisi di `cancelled-document-index.blade.php`.
+  - Blok alur distribusi naskah sebelumnya terkurung di dalam baris flex badge jenis dokumen sehingga tampilan teks terdorong ke samping dan belum menangani naskah jenis Surat Masuk (`incoming`).
+- **Implementasi Solusi**:
+  1. **Restrukturisasi Komponen Kolom**:
+     - Memisahkan blok nomor naskah, baris badge (tipe dokumen & tanggal surat), dan blok alur distribusi naskah secara vertikal yang proporsional.
+     - Menambahkan penanganan alur distribusi lengkap untuk 3 jenis naskah:
+       - Surat Khusus (`internal`): `[Unit Asal] → [Unit Tujuan]` (aksen ungu).
+       - Surat Keluar (`outgoing`): `[Unit Asal] → [Nama Penerima]` (aksen hijau emerald).
+       - Surat Masuk (`incoming`): `[Nama Pengirim] → [Unit Penerima]` (aksen biru).
+     - Kolom kedua diselaraskan menjadi **"Perihal"** murni yang bersih tanpa duplikasi teks unit kerja.
+  2. **Eager Loading Anti N+1 Query**:
+     - Pada `DestructionIndex::getExpiredDocumentsProperty()`, menambahkan relasi `'recipients.recipient'` ke dalam `Document::with(...)` untuk menjamin efisiensi pemanggilan database.
+- **Verifikasi Pengujian Otomatis (`ArchiveDestructionTest.php`)**:
+  - `test_destruction_index_renders_aligned_document_identity_and_distribution_flow`: Memvalidasi rendering nomor, tanggal, dan alur distribusi tipografis murni untuk naskah Surat Masuk dan Surat Keluar pada tabel retensi habis.
+  - Seluruh test suite proyek (**165 test cases, 745 assertions**) **100% PASS**.
+
+### 113. Penambahan Hak Akses Otorisasi "Approve Usul Musnah" (approve_destruction) pada Role Management
+- **Latar Belakang & Prinsip Pemisahan Kewenangan (*Separation of Duties*)**:
+  - Petugas arsip unit dapat memiliki hak akses untuk mengajukan usulan naskah retensi habis (`destruction`), tetapi tidak otomatis berwenang menyetujui (*Approve*) atau menolak (*Reject*) pemusnahan berkas fisik dinas.
+  - Otorisasi persetujuan dan penolakan harus dikontrol secara dinamis via matriks peran (*Role Editor*) di bawah grup **Manajemen Kepatuhan** dengan nama **`Approve Usul Musnah`**.
+- **Implementasi Solusi**:
+  1. **Role Editor (`role-editor.blade.php`)**:
+     - Menambahkan checkbox izin baru pada Blok 3 (Hak Akses Visibilitas Modul Navigasi), Group 2 (Manajemen Kepatuhan):
+       ```html
+       <label class="..."><input type="checkbox" wire:model="moduleVisibility.approve_destruction"> Approve Usul Musnah</label>
+       ```
+     - Memperbarui `RoleSeeder.php` mendaftarkan `approve_destruction` pada peran `AdminTapersip` dan `Manager`.
+  2. **Interaktivitas Kolom Tindakan Tab 2 (`destruction-index.blade.php`)**:
+     - Pada baris berstatus **`Diperiksa` (`proposed`)**:
+       - Jika user memiliki izin `approve_destruction` (atau Super Admin): tombol **`Approve`** dan **`Reject`** ditampilkan aktif.
+       - Jika user **TIDAK** memiliki izin `approve_destruction`: kolom Tindakan berubah menjadi strip tanda hubung bersih:
+         $$\mathbf{- \quad (text\text{-}slate\text{-}400 \;\; font\text{-}mono)}$$
+     - Pada baris berstatus **`Disetujui` (`approved`)**:
+       - Kolom tindakan otomatis terbuka menampilkan tombol biru **`Eksekusi BA`** bagi Tapersip / user berizin modul pemusnahan untuk mengunggah Berita Acara.
+  3. **Proteksi Backend PHP (`DestructionIndex.php`)**:
+     - Memasang guard pada `approveProposal()`, `openRejectModal()`, dan `rejectProposal()`:
+       ```php
+       if (!Auth::user()->isSuperAdmin() && !Auth::user()->hasModuleAccess('approve_destruction')) {
+           $this->dispatch('notify', ['message' => 'Anda tidak memiliki hak akses untuk menyetujui/menolak pemusnahan arsip.', 'type' => 'error']);
+           return;
+       }
+       ```
+- **Verifikasi Pengujian Otomatis (`ArchiveDestructionTest.php`)**:
+  - `test_user_without_approve_destruction_permission_sees_dash_and_cannot_approve`: Memvalidasi bahwa user tanpa checklist `approve_destruction` melihat tanda `-`, tidak melihat tombol Approve/Reject, dan diblokir dari aksi penyetujuan.
+  - `test_user_with_approve_destruction_permission_sees_buttons_and_can_approve`: Memvalidasi bahwa user dengan checklist `approve_destruction` melihat tombol Approve/Reject, dapat menyetujui berkas, dan setelah disetujui tombol Eksekusi BA terbuka.
+  - Seluruh test suite sistem (**167 test cases, 760 assertions**) **100% PASS**.
+
 
 
 

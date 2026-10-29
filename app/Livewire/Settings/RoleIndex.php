@@ -6,10 +6,19 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\Role;
 use App\Models\AuditLog;
+use Illuminate\Support\Facades\Auth;
 
 class RoleIndex extends Component
 {
     use WithPagination;
+
+    public function boot()
+    {
+        $user = Auth::user();
+        if (!$user?->isSuperAdmin() && !$user?->hasModuleAccess('roles') && $user?->role?->name !== 'Admin') {
+            abort(403, 'Akses ditolak.');
+        }
+    }
 
     public $search = '';
     public $filterStatus = '';

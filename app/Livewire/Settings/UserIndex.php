@@ -31,6 +31,14 @@ class UserIndex extends Component
     public $position_id;
     public $status = 'active';
 
+    public function boot()
+    {
+        $user = Auth::user();
+        if (!$user?->isSuperAdmin() && !$user?->hasModuleAccess('roles') && $user?->role?->name !== 'Admin') {
+            abort(403, 'Akses ditolak.');
+        }
+    }
+
     public function updatingSearch()
     {
         $this->resetPage();

@@ -91,6 +91,10 @@ class User extends Authenticatable
             return true;
         }
 
+        if ($module === 'cancelled_documents' && $this->isTapersip()) {
+            return true;
+        }
+
         // Backward compatibility fallback untuk role lama yang masih memiliki input_in_out
         if (in_array($module, ['input_incoming', 'input_outgoing']) && in_array('input_in_out', $role->module_visibility)) {
             return true;

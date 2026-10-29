@@ -734,8 +734,9 @@ class DocumentLoanIndex extends Component
         $canViewRahasia = $isPrivileged || ($user && $user->hasDocumentPermission('view', 'rahasia'));
 
         // 1. Data Katalog Arsip (Tab 1)
-        $catalogQuery = Document::with(['folder', 'unit.parent', 'documentType', 'activeLoan.user', 'createdBy.unit'])
-            ->where('status', 'archived');
+        $catalogQuery = Document::with(['folder', 'unit.parent', 'documentType', 'activeLoan.user', 'createdBy.unit', 'recipients.recipient'])
+            ->where('status', 'archived')
+            ->where('archive_status', '!=', 'disposed');
 
         // Batasan Hak Akses Berlapis untuk Staf Biasa (Bukan Superadmin / Tapersip)
         if (!$isPrivileged && $user) {
@@ -836,7 +837,7 @@ class DocumentLoanIndex extends Component
         $catalogDocuments = $catalogQuery->orderBy('document_date', 'desc')->paginate(10, ['*'], 'catalogPage');
 
         // 2. Data Pinjaman Saya (Tab 2)
-        $myLoans = DocumentLoan::with(['document.folder', 'document.unit', 'document.documentType', 'officer'])
+        $myLoans = DocumentLoan::with(['document.folder', 'document.unit', 'document.documentType', 'document.recipients.recipient', 'officer'])
             ->where('user_id', Auth::id())
             ->latest('created_at')
             ->paginate(10, ['*'], 'myLoansPage');
@@ -844,7 +845,7 @@ class DocumentLoanIndex extends Component
         // 3. Data Sirkulasi Tapersip (Tab 3) - Hanya diproses jika user memiliki izin
         $circulationLoans = null;
         if ($this->canManageCirculation) {
-            $circulationQuery = DocumentLoan::with(['document.folder', 'document.unit', 'document.documentType', 'user.unit', 'officer']);
+            $circulationQuery = DocumentLoan::with(['document.folder', 'document.unit', 'document.documentType', 'document.recipients.recipient', 'user.unit', 'officer']);
 
             if ($this->circulationSearch) {
                 $circulationQuery->where(function ($q) {

@@ -372,4 +372,94 @@ class DashboardActivityLogTest extends TestCase
             ->assertSee('Pinjaman Saya')
             ->assertDontSee('Sirkulasi Berkas');
     }
+
+    public function test_audit_trail_renders_metadata_diff_and_reason_without_icons()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $doc = Document::create([
+            'number' => '099/TEST-AUDIT/2026',
+            'subject' => 'Dokumen Uji Audit Trail',
+            'type' => 'outgoing',
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'document_date' => '2026-10-20',
+            'created_by' => $superadmin->id,
+        ]);
+
+        AuditLog::record(
+            action: 'Koreksi Metadata Draft Naskah: ' . $doc->number,
+            documentId: $doc->id,
+            metadata: [
+                'reason' => 'Ralat perihal dan instansi tujuan surat dinas',
+                'before' => [
+                    'subject' => 'Perihal Awal Yang Typo',
+                    'recipient_name' => 'PT Lama Mandiri',
+                ],
+                'after' => [
+                    'subject' => 'Perihal Baru Yang Benar',
+                    'recipient_name' => 'PT Mitra Baru Bersama',
+                ],
+                'editor_id' => $superadmin->id,
+            ],
+            userId: $superadmin->id
+        );
+
+        Livewire::actingAs($superadmin)
+            ->test(AuditTrailIndex::class)
+            ->assertSee('Koreksi Metadata Draft Naskah')
+            ->assertSee('099/TEST-AUDIT/2026')
+            ->assertSee('Ralat perihal dan instansi tujuan surat dinas')
+            ->assertSee('Perihal')
+            ->assertSee('Perihal Awal Yang Typo')
+            ->assertSee('Perihal Baru Yang Benar')
+            ->assertSee('Penerima')
+            ->assertSee('PT Lama Mandiri')
+            ->assertSee('PT Mitra Baru Bersama');
+    }
+
+    public function test_dashboard_monitoring_displays_distribution_flow_for_special_and_outgoing_documents()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $units = Unit::take(2)->get();
+        $unitOrigin = $units[0];
+        $unitDestination = $units[1];
+
+        // 1. Surat Khusus (Internal): Unit Asal -> Unit Tujuan
+        $specialDoc = Document::create([
+            'number' => '101/SP-DASH/X/2026',
+            'subject' => 'Memo Internal Antar Departemen',
+            'type' => 'internal',
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'unit_id' => $unitOrigin->id,
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+        $specialDoc->recipients()->create([
+            'recipient_id' => $unitDestination->id,
+            'recipient_type' => Unit::class,
+            'receipt_status' => 'unread',
+        ]);
+
+        // 2. Surat Keluar (Outgoing): Unit Asal -> Instansi Luar
+        $outgoingDoc = Document::create([
+            'number' => '102/OUT-DASH/X/2026',
+            'subject' => 'Surat Keluar Instansi Luar',
+            'type' => 'outgoing',
+            'recipient_name' => 'Kementerian Perhubungan RI',
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'unit_id' => $unitOrigin->id,
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        Livewire::actingAs($superadmin)
+            ->test(Dashboard::class)
+            ->assertSee($specialDoc->subject)
+            ->assertSee($unitOrigin->name)
+            ->assertSee($unitDestination->name)
+            ->assertSee($outgoingDoc->subject)
+            ->assertSee('Kementerian Perhubungan RI');
+    }
 }

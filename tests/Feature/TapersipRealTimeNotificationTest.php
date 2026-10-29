@@ -304,11 +304,16 @@ class TapersipRealTimeNotificationTest extends TestCase
         $component->call('dismissAndRedirect', "scan_{$doc->id}", $targetUrl)
             ->assertRedirect($targetUrl);
 
-        // Setelah di-dismiss, pendingCount berkurang 1 dan dokumen hilang dari dropdown saat dibuka kembali
-        Livewire::actingAs($superadmin)
+        // Setelah di-dismiss, pendingCount berkurang 1 dan dokumen berpindah ke tab Histori
+        $afterDismiss = Livewire::actingAs($superadmin)
             ->test(TapersipNotificationListener::class)
-            ->assertDontSee('011/DOC/DISMISS/2026')
             ->assertSet('pendingCount', $initialPending - 1);
+
+        $unreadDocNumbers = collect($afterDismiss->viewData('unreadItems'))->pluck('identifier')->toArray();
+        $historyDocNumbers = collect($afterDismiss->viewData('historyItems'))->pluck('identifier')->toArray();
+
+        $this->assertNotContains('011/DOC/DISMISS/2026', $unreadDocNumbers);
+        $this->assertContains('011/DOC/DISMISS/2026', $historyDocNumbers);
     }
 
     public function test_listener_updates_pending_count_on_loan_status_changed_event()
@@ -355,5 +360,35 @@ class TapersipRealTimeNotificationTest extends TestCase
         // Kirim event loan-status-changed ke komponen
         $component->dispatch('loan-status-changed')
             ->assertSet('pendingCount', $initialPending - 1);
+    }
+
+    public function test_history_count_is_real_and_increments_when_notifications_are_read()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+
+        // 1. Ambil history count awal langsung dari database
+        $initialHistory = \App\Models\UserNotificationRead::where('user_id', $superadmin->id)->count();
+
+        $doc = Document::create([
+            'number' => '099/DOC/HIST-TEST/2026',
+            'subject' => 'Surat Uji Histori Count Riil',
+            'type' => 'outgoing',
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        $component = Livewire::actingAs($superadmin)
+            ->test(TapersipNotificationListener::class)
+            ->assertSet('historyCount', $initialHistory);
+
+        // 2. Tapersip membaca/dismiss satu notifikasi
+        $targetUrl = route('registry.scan-queue', ['highlight' => "doc-{$doc->id}"]);
+        $component->call('dismissAndRedirect', "scan_{$doc->id}", $targetUrl)
+            ->assertSet('historyCount', $initialHistory + 1);
+
+        // 3. Verifikasi record di database benar-benar bertambah
+        $this->assertEquals($initialHistory + 1, \App\Models\UserNotificationRead::where('user_id', $superadmin->id)->count());
     }
 }

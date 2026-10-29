@@ -24,17 +24,19 @@ Route::middleware('auth')->group(function () {
             return view('pages.settings.users');
         })->name('users');
         
-        Route::middleware('module:roles')->get('/roles', function () {
-            return view('pages.settings.roles.index');
-        })->name('roles.index');
-        
-        Route::middleware('module:roles')->get('/roles/create', function () {
-            return view('pages.settings.roles.edit', ['role' => null]);
-        })->name('roles.create');
+        Route::middleware('module:roles')->group(function () {
+            Route::get('/roles', function () {
+                return view('pages.settings.roles.index');
+            })->name('roles.index');
+            
+            Route::get('/roles/create', function () {
+                return view('pages.settings.roles.edit', ['role' => null]);
+            })->name('roles.create');
 
-        Route::get('/roles/{role}/edit', function (App\Models\Role $role) {
-            return view('pages.settings.roles.edit', ['role' => $role]);
-        })->name('roles.edit');
+            Route::get('/roles/{role}/edit', function (App\Models\Role $role) {
+                return view('pages.settings.roles.edit', ['role' => $role]);
+            })->name('roles.edit');
+        });
         
         Route::middleware('module:master_data')->get('/organization', function () {
             return view('pages.settings.organization');
@@ -58,7 +60,7 @@ Route::middleware('auth')->group(function () {
             return view('pages.registry.incoming.create');
         })->name('incoming.create');
 
-        Route::get('/incoming/{document}/edit', function (\App\Models\Document $document) {
+        Route::middleware('module:input_incoming')->get('/incoming/{document}/edit', function (\App\Models\Document $document) {
             return view('pages.registry.incoming.edit', ['document' => $document]);
         })->name('incoming.edit');
 
@@ -93,8 +95,10 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('module:document_borrowing,loan_circulation')->get('/borrowings', App\Livewire\Registry\DocumentLoanIndex::class)->name('borrowings.index');
 
+    Route::middleware('module:cancelled_documents')->get('/canceldoc', App\Livewire\Registry\CancelledDocumentIndex::class)->name('registry.cancelled.index');
+
     Route::prefix('archive')->name('archive.')->group(function () {
-        Route::middleware('module:destruction')->get('/destructions', function () {
+        Route::middleware('module:destruction,approve_destruction')->get('/destructions', function () {
             return view('pages.archive.destructions');
         })->name('destructions');
     });
@@ -113,7 +117,11 @@ Route::middleware('auth')->group(function () {
         }
 
         $document = $version->document;
-        if ($document && !Auth::user()->hasDocumentPermission('view', $document->sifat ?? 'biasa')) {
+        if (!$document) {
+            abort(404, 'Dokumen arsip tidak ditemukan.');
+        }
+
+        if (!Auth::user()->hasDocumentPermission('view', $document->sifat ?? 'biasa')) {
             abort(403, 'Akses Ditolak: Anda tidak memiliki izin untuk melihat pratinjau dokumen dengan sifat ini.');
         }
 

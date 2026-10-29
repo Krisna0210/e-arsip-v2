@@ -3,13 +3,23 @@
 namespace App\Livewire\Settings;
 
 use App\Models\AuditLog;
+use App\Models\Classification;
+use App\Models\Unit;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class AuditTrailIndex extends Component
 {
     use WithPagination;
+
+    public function boot()
+    {
+        if (!Auth::user()?->isSuperAdmin() && !Auth::user()?->hasModuleAccess('audit')) {
+            abort(403, 'Akses ditolak.');
+        }
+    }
 
     public $search = '';
     public $filterAction = '';
@@ -69,9 +79,14 @@ class AuditTrailIndex extends Component
         // Get unique actions for the filter dropdown
         $actions = AuditLog::select('action')->distinct()->pluck('action');
 
+        $classificationsMap = Classification::pluck('code', 'id')->toArray();
+        $unitsMap = Unit::all()->mapWithKeys(fn($u) => [$u->id => $u->name . ($u->code ? " ({$u->code})" : '')])->toArray();
+
         return view('livewire.settings.audit-trail-index', [
             'logs' => $logs,
             'actions' => $actions,
+            'classificationsMap' => $classificationsMap,
+            'unitsMap' => $unitsMap,
         ]);
     }
 }

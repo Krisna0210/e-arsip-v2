@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\Registry\ScanQueue;
 use App\Models\Document;
 use App\Models\DocumentVersion;
+use App\Models\Unit;
 use App\Models\User;
 use App\Services\NasHealthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -242,5 +243,51 @@ class NasStorageTest extends TestCase
             ->assertSee($targetDoc->number)
             ->assertSee($targetDoc->subject)
             ->assertSee('id="doc-row-' . $targetDoc->id . '"', false);
+    }
+
+    public function test_scan_queue_renders_distribution_flow_without_icons()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $units = Unit::take(2)->get();
+        $unitOrigin = $units[0];
+        $unitDestination = $units[1];
+
+        // 1. Surat Khusus (Internal): Unit Asal -> Unit Tujuan
+        $specialDoc = Document::create([
+            'number' => '201/SP-QUEUE/X/2026',
+            'subject' => 'Memo Internal Antrean Scan',
+            'type' => 'internal',
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'unit_id' => $unitOrigin->id,
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+        $specialDoc->recipients()->create([
+            'recipient_id' => $unitDestination->id,
+            'recipient_type' => Unit::class,
+            'receipt_status' => 'unread',
+        ]);
+
+        // 2. Surat Keluar (Outgoing): Unit Asal -> Instansi Luar
+        $outgoingDoc = Document::create([
+            'number' => '202/OUT-QUEUE/X/2026',
+            'subject' => 'Surat Keluar Antrean Scan',
+            'type' => 'outgoing',
+            'recipient_name' => 'PT Krakatau Steel',
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'unit_id' => $unitOrigin->id,
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        Livewire::actingAs($superadmin)
+            ->test(ScanQueue::class)
+            ->assertSee($specialDoc->number)
+            ->assertSee($unitOrigin->name)
+            ->assertSee($unitDestination->name)
+            ->assertSee($outgoingDoc->number)
+            ->assertSee('PT Krakatau Steel');
     }
 }

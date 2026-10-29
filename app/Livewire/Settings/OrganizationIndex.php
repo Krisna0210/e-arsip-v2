@@ -34,6 +34,13 @@ class OrganizationIndex extends Component
     public $posLevel;
     public $posAuthority;
 
+    public function boot()
+    {
+        if (!Auth::user()?->isSuperAdmin() && !Auth::user()?->hasModuleAccess('master_data')) {
+            abort(403, 'Akses ditolak.');
+        }
+    }
+
     public function setTab($tab)
     {
         $this->activeTab = $tab;
