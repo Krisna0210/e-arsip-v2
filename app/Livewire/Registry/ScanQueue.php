@@ -139,7 +139,7 @@ class ScanQueue extends Component
     public function openUploadModal($id)
     {
         $doc = Document::with(['createdBy', 'documentType'])->findOrFail($id);
-        
+
         // Cek permission archive (termasuk superadmin check)
         if (!Auth::user()->hasDocumentPermission('archive', $doc->sifat ?? 'biasa')) {
             $this->dispatch('notify', ['message' => 'Anda tidak memiliki hak akses untuk mengarsipkan dokumen ini.', 'type' => 'error']);
@@ -154,14 +154,14 @@ class ScanQueue extends Component
         $this->uploadDocTypeRaw = $doc->type;
         $this->uploadFolderId = $doc->folder_id;
         $this->uploadDocCreator = $doc->createdBy ? $doc->createdBy->name : '-';
-        
+
         $this->dispatch('open-modal', 'modal-upload-queue');
     }
 
     public function saveFinalFile()
     {
         $this->validate([
-            'finalFile' => 'required|file|mimes:pdf|max:10240',
+            'finalFile' => 'required|file|mimes:pdf|max:25600',
             'uploadFolderId' => 'nullable|exists:folders,id',
         ]);
 
@@ -178,7 +178,7 @@ class ScanQueue extends Component
             $this->addError('finalFile', 'Penyimpanan NAS sedang tidak terhubung atau tidak dapat diakses. Mohon periksa koneksi server NAS sebelum mengarsipkan.');
             return;
         }
-        
+
         // Tetapkan loker terlebih dahulu agar struktur direktori di NAS sesuai
         $document->folder_id = $this->uploadFolderId;
         $document->load(['folder.parent', 'documentType']);
