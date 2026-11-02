@@ -35,6 +35,7 @@ class SendOverdueLoanReminders extends Command
 
         $overdueLoans = DocumentLoan::with(['document.documentType', 'user'])
             ->where('status', 'borrowed')
+            ->where('loan_type', 'hardcopy')
             ->whereDate('expected_return_date', '<', $today)
             ->get();
 

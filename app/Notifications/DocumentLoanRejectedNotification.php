@@ -49,8 +49,12 @@ class DocumentLoanRejectedNotification extends Notification
 
         $rejectionReason = $this->reason ?: ($this->loan->notes ?: 'Tidak ada alasan khusus yang dicantumkan.');
 
+        $subject = $this->loan->isSoftcopy()
+            ? "Permohonan Pinjam Berkas Digital (Softcopy) {$this->loan->loan_code} Ditolak"
+            : "Permohonan Pinjam Berkas Fisik {$this->loan->loan_code} Ditolak";
+
         return (new MailMessage)
-            ->subject("Permohonan Pinjam Berkas Fisik {$this->loan->loan_code} Ditolak")
+            ->subject($subject)
             ->view('emails.loan-rejected', [
                 'recipientName' => $notifiable->name ?? 'Staf Pemohon',
                 'loan' => $this->loan,

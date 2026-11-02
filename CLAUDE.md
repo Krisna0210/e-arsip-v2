@@ -2289,6 +2289,235 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - `test_user_with_approve_destruction_permission_sees_buttons_and_can_approve`: Memvalidasi bahwa user dengan checklist `approve_destruction` melihat tombol Approve/Reject, dapat menyetujui berkas, dan setelah disetujui tombol Eksekusi BA terbuka.
   - Seluruh test suite sistem (**167 test cases, 760 assertions**) **100% PASS**.
 
+### 114. Modul Pustaka Digital & Dokumen Proyek Non-Surat (/library)
+- **Latar Belakang & Kebutuhan Bisnis**:
+  - Berdasarkan masukan *end-user*, sistem tidak hanya berfungsi sebagai arsip korespondensi surat dinas, melainkan juga menampung berkas teknis masa lalu yang tidak membutuhkan nomor surat dinas seperti *As-Built Drawing*, kontrak/perjanjian, dokumen hukum/aset, laporan proyek, dan manual/pedoman dengan konsep perpustakaan digital terpadu.
+- **Implementasi Solusi**:
+  1. **Skema Database & Model**:
+     - `digital_folders`: Hierarki pohon folder proyek dinamis bertingkat (`parent_id`).
+     - `digital_documents`: Menampung 6 atribut metadata utama:
+       1. *Nama / Judul Dokumen* (`title`, string)
+       2. *Nomor Berkas Otomatis* (`document_number`, format `{No}-ARSIP-DIG-{Tahun}`, e.g., `001-ARSIP-DIG-2026`)
+       3. *Kategori Berkas* (`category`, enum: `As-Built Drawing`, `Kontrak/Perjanjian`, `Dokumen Hukum/Aset`, `Laporan Proyek`, `Manual/Pedoman`)
+       4. *Tahun Dokumen* (`year`, integer)
+       5. *Unit / Divisi Pemilik* (`unit_id`, foreignId ke `units`)
+       6. *Tagar / Kata Kunci Pencarian* (`tags`, text, e.g., `#drawing #struktur #gedung-a`)
+       - File properties: `file_path`, `file_name`, `file_size`, `mime_type`.
+  2. **Format Penomoran Otomatis**:
+     - `DigitalDocument::generateDocumentNumber(?int $year)`: Menghitung nomor urut 3-digit berulang per tahun kalender `{No}-ARSIP-DIG-{Tahun}` secara aman dan otomatis.
+  3. **Dual-Layer Storage Kompatibel (PC Developer & NAS Server)**:
+     - Berkas disimpan ke disk `nas` pada path `library/{category-slug}/{year}/{filename}`. Di PC developer otomatis tersimpan ke `storage/app/nas/library/...` tanpa perlu NAS fisik, dan di server Linux produksi otomatis tersimpan ke `/mnt/tapersip_nas/library/...`.
+  4. **Antarmuka Interaktif Explorer & Pratinjau (Zero Icons)**:
+     - `resources/views/livewire/library/digital-library-index.blade.php`:
+       - Panel Kiri: Explorer pohon folder hierarkis dinamis dengan penghitung jumlah berkas.
+       - Panel Tengah/Kanan: Filter multifaset (kategori, tahun, pencarian teks bebas, dan tagar berkas yang dapat diklik langsung).
+       - Modal Upload Langsung (`modal-upload-digital-doc`) dengan form 6 atribut.
+       - Modal Pratinjau Canggih (`modal-preview-digital-doc`): Menampilkan dokumen PDF (iframe) dan gambar teknik cetak biru (blueprint image viewer).
+       - Modal Pembuatan Folder (`modal-folder-editor`) dan Hapus Berkas (`modal-delete-digital-doc`).
+  5. **Integrasi Hak Akses & Navigasi**:
+     - Menambahkan rute `/library`, `/library/preview/{document}`, dan `/library/download/{document}`.
+     - Menyematkan menu *"Pustaka Digital"* pada sidebar navigasi di bawah grup Kearsipan berpagar izin `digital_library`.
+     - Mendaftarkan izin `digital_library` pada `role-editor.blade.php` (Manajemen Kepatuhan) dan `RoleSeeder.php`.
+     - Penyelarasan Nama Berkas Unduhan: Menambahkan aksesor `$document->system_file_name` (`{No}-ARSIP-DIG-{Tahun}_{slug_judul}.{ext}`). Saat pengguna mengklik tombol Unduh, file otomatis terunduh menggunakan penamaan resmi sistem (bukan nama acak file asli pengunggah).
+- **Verifikasi Pengujian Otomatis (`DigitalLibraryTest.php`)**:
+  - `test_document_number_generation_follows_specified_format`: Memvalidasi format `{No}-ARSIP-DIG-{Tahun}` dan penomoran urut per tahun.
+  - `test_user_can_upload_digital_document_with_specified_metadata_attributes`: Memvalidasi pengunggahan berkas dengan 6 atribut metadata, penyimpanan NAS, dan pencatatan audit log.
+  - `test_user_can_create_folder_hierarchy_and_filter_documents_by_folder`: Memvalidasi pembuatan pohon folder dan filter berkas per folder.
+  - `test_multifaceted_search_and_hashtag_filtering`: Memvalidasi pencarian multifaset (kategori, tahun, dan saringan tagar #tag).
+  - `test_document_preview_and_download_endpoints`: Memvalidasi endpoint pratinjau dan unduhan file.
+  - `test_unauthorized_user_cannot_access_digital_library_module`: Memvalidasi isolasi modul untuk pengguna tanpa hak akses.
+  - `test_action_column_renders_icon_buttons_for_preview_download_and_delete`: Memvalidasi rendering tombol aksi berbasis ikon: mata (pratinjau), panah ke bawah (unduh), dan tempat sampah (hapus) lengkap dengan tooltip.
+  - Seluruh test suite sistem (**181 test cases, 809 assertions**) **100% PASS**.
+
+### 115. Hak Akses Fleksibilitas Berkas & Hierarki Folder Pustaka Digital (library_flexibility)
+- **Latar Belakang & Kebutuhan**:
+  - Pengelolaan berkas non-surat (seperti gambar teknik/as-built drawing dan dokumen proyek) memerlukan fleksibilitas penataan: memindahkan berkas antar-folder, merapikan struktur pohon folder/subfolder, serta membersihkan folder lama tanpa risiko kehilangan data berkas (*Zero Data Loss*).
+  - Aksi penataan struktur ini harus diproteksi hak akses khusus agar staf biasa hanya dapat membaca/mengunggah berkas tanpa mengubah hierarki repositori.
+- **Implementasi Solusi**:
+  1. **Hak Akses Matriks Peran (`role-editor.blade.php` & `RoleSeeder.php`)**:
+     - Menambahkan checklist izin: `"Fleksibilitas Berkas Pustaka Digital"` (`library_flexibility`) di bawah Blok 3, Group 2 (Manajemen Kepatuhan).
+     - Diaktifkan secara bawaan untuk peran `AdminTapersip` dan `Manager`.
+  2. **Pemindahan Berkas Antar-Folder (`modal-move-digital-doc`)**:
+     - Menambahkan tombol aksi ikon *Pindah Folder* (berwarna amber) pada baris tabel dokumen untuk user yang memiliki hak akses `library_flexibility`.
+     - Pengguna dapat memindahkan berkas ke folder/subfolder tujuan mana pun atau mengeluarkannya ke tingkat Root.
+  3. **Fleksibilitas Hierarki Folder (`modal-move-digital-folder`)**:
+     - Pada sidebar direktori, disediakan tombol aksi cepat untuk memindahkan folder/subfolder ke induk lain atau menjadikannya folder tingkat utama (Root).
+     - **Aturan Pemindahan Folder Induk**: Jika folder induk memiliki subfolder (`children()->exists()`), folder induk tersebut **terkunci dan tidak dapat dipindahkan maupun dihapus**. Pemindahan dan penghapusan hanya diizinkan apabila folder tidak memiliki subfolder turunan.
+     - **Cycle Protection Guard**: Sistem secara otomatis menolak dan memvalidasi jika folder dipindahkan ke dalam dirinya sendiri atau ke dalam subfolder turunannya untuk mencegah galat *infinite loop*.
+  4. **Penghapusan Folder Ramah Kearsipan (`modal-delete-digital-folder` - Zero Data Loss)**:
+     - Folder yang memiliki subfolder ditolak dari penghapusan. Pengguna harus menghapus/memindahkan subfolder terlebih dahulu.
+     - Saat folder tanpa subfolder dihapus, seluruh berkas digital di dalamnya **tidak dihapus dari sistem**, melainkan otomatis dialihkan ke folder induk (atau ke Root jika folder utama).
+  5. **Audit Trail Lengkap**:
+     - Seluruh aktivitas pemindahan berkas, restrukturisasi folder, dan penghapusan folder tercatat secara transparan pada tabel `audit_logs`.
+- **Verifikasi Pengujian Otomatis (`DigitalLibraryTest.php`)**:
+  - `test_user_with_flexibility_permission_can_move_document_between_folders`: Memvalidasi pemindahan berkas antar-folder dan audit log.
+  - `test_user_can_move_folder_with_cycle_protection`: Memvalidasi pemindahan folder dan pencegahan siklus rekursi tak valid.
+  - `test_parent_folder_with_subfolders_cannot_be_moved_or_deleted`: Memvalidasi aturan folder induk yang memiliki subfolder terkunci dari pemindahan dan penghapusan.
+  - `test_folder_deletion_safely_preserves_documents_without_data_loss`: Memvalidasi penghapusan folder memindahkan berkas ke parent tanpa kehilangan data.
+  - `test_user_without_library_flexibility_permission_is_denied`: Memvalidasi penolakan aksi bagi pengguna tanpa izin `library_flexibility`.
+  - Seluruh test suite sistem (**186 test cases, 838 assertions**) **100% PASS**.
+
+### 116. Tipe Dokumen Pustaka Publik vs Privat, 3 Tab Navigasi & Izin Akses Berbatas Waktu (Time-Based Access)
+- **Latar Belakang & Kebutuhan Keamanan Enterprise**:
+  - Berkas non-surat memiliki tingkat sensitivitas berbeda: sebagian terbuka untuk umum (publik) dan sebagian bersifat rahasia/vital seperti kontrak nilai besar, gambar instalasi pengamanan, atau sertifikat aset (privat).
+  - Berkas privat wajib terkunci dari staf biasa, dan memerlukan permohonan izin tertulis berbatas waktu (*Time-to-Live Access*) kepada Admin Tapersip/Superadmin.
+- **Implementasi Solusi**:
+  1. **Skema Basis Data & Model Baru**:
+     - `digital_documents`: Menambahkan kolom `access_type` (`enum('public', 'private')->default('public')`).
+     - `digital_document_access_requests`: Menyimpan riwayat permohonan izin akses: `digital_document_id`, `user_id`, `reason`, `status` (`pending`, `approved`, `rejected`), `duration_hours`, `expires_at`, `approved_by`, `rejection_reason`.
+  2. **Struktur 3 Tab Navigasi (`digital-library-index.blade.php`)**:
+     - **Tab 1: Repositori Berkas (Katalog Utama)**: Menampilkan berkas publik dan privat.
+       - Berkas Publik: Bebas pratinjau dan unduh oleh seluruh pengguna.
+       - Berkas Privat:
+         - Superadmin, Tapersip, atau Pembuat Berkas: Bebas membuka berkas.
+         - Staf biasa tanpa izin: Tombol pratinjau digantikan tombol amber **"Privat"** (klik untuk mengajukan izin).
+         - Staf sedang mengajukan: Menampilkan label non-aktif **"Menunggu Persetujuan"**.
+         - Izin disetujui & aktif: Tombol **"Pratinjau"** terbuka otomatis dilengkapi badge hitung mundur sisa waktu izin (misal: *"Sisa 23 jam"*).
+         - Batas waktu habis: Tombol otomatis terkunci kembali menjadi tombol **"Privat"**.
+     - **Tab 2: Permohonan Akses Saya (Khusus Staf Pemohon)**:
+       - Memantau status seluruh permohonan izin staf bersangkutan (`Menunggu`, `Disetujui`, `Ditolak`) beserta masa berlaku dan tautan pratinjau langsung jika disetujui.
+     - **Tab 3: Persetujuan Akses Privat (Khusus Tapersip / Superadmin)**:
+       - Dilengkapi badge counter merah. Tapersip meninjau identitas pemohon, nomor berkas, dan alasan izin.
+       - Tindakan: Tombol **Setujui Izin** (modal pilihan durasi 2 jam, 6 jam, 24 jam, 3 hari, 7 hari) dan tombol **Tolak** (modal catatan alasan).
+  3. **Proteksi Keamanan Berlapis Tingkat Server (`routes/web.php`)**:
+     - Rute `library.preview` dan `library.download` memvalidasi ketat: jika berkas `private`, pengguna non-pengelola wajib memiliki record izin aktif (`expires_at > now()`). Jika tidak, server langsung melempar respon **403 Forbidden**.
+- **Verifikasi Pengujian Otomatis (`DigitalLibraryTest.php`)**:
+  - `test_user_can_upload_private_document`: Memvalidasi pengunggahan dokumen privat.
+  - `test_private_document_access_request_approval_and_time_based_expiration`: Memvalidasi seluruh siklus: tombol Privat -> submit pengajuan -> status Menunggu -> persetujuan Tapersip 24 jam -> pembukaan tombol Pratinjau & akses rute -> kedaluwarsa waktu -> penolakan 403 & penguncian kembali tombol ke "Privat".
+  - `test_private_document_access_rejection_workflow`: Memvalidasi alur penolakan izin akses privat oleh Tapersip dengan catatan alasan tertulis dan tampil di Tab Permohonan Saya.
+  - Seluruh test suite sistem (**189 test cases, 876 assertions**) **100% PASS**.
+
+### 117. 4 Lapis Perlindungan Keamanan Pratinjau Dokumen Pustaka Digital (Anti-Print, Anti-Context, Anti-Capture, Forensic Watermark)
+- **Latar Belakang & Kebutuhan Keamanan Enterprise**:
+  - Berkas pustaka digital (khususnya dokumen privat, gambar teknik, dan kontrak) tidak boleh dicetak secara sembarangan melalui menu browser, shortcut keyboard, maupun tangkapan layar tanpa otorisasi.
+- **Implementasi Solusi (4 Lapis Keamanan)**:
+  1. **Lapis 1 — Blokir Klik Kanan & Shortcut Cetak**:
+     - Modal pratinjau disematkan `@contextmenu.prevent` sehingga menu klik kanan browser diblokir penuh.
+     - Event listener menangkal dan membatalkan shortcut keyboard cetak dan simpan (`Ctrl+P`, `Cmd+P`, `Ctrl+S`, `Cmd+S`).
+  2. **Lapis 2 — CSS Print Killer (`@media print`)**:
+     - Aturan `@media print` menyembunyikan paksa seluruh konten dokumen (`display: none !important`), dan menggantikannya dengan halaman kosong bertuliskan peringatan resmi berwarna merah: *"DOKUMEN DILINDUNGI: Berkas Pustaka Digital bersifat rahasia dan dilarang dicetak sesuai kebijakan keamanan informasi perusahaan."*
+  3. **Lapis 3 — Anti-Capture Screen Shield (Auto-Blur)**:
+     - Mendeteksi event `window.blur` (saat pengguna membuka snipping tool, menekan PrintScreen, atau beralih jendela).
+     - Layar pratinjau seketika disamarkan secara otomatis dengan overlay buram gelap (`backdrop-blur-2xl`) hingga fokus kembali ke jendela browser e-Arsip.
+  4. **Lapis 4 — Forensic Dynamic Watermark Overlay (Khusus Berkas Privat)**:
+     - Watermark forensik hanya diaktifkan pada dokumen bertipe privat (`access_type === 'private'`). Pada dokumen publik (`access_type === 'public'`), tampilan naskah 100% bersih dan jernih tanpa watermark untuk kenyamanan membaca seluruh staf.
+     - Pada dokumen privat, pola SVG diagonal berulang rapat (grid 340x200px, kemiringan -35°, opasitas 26%, `z-index: 30`, `pointer-events-none`) dengan teks abu-abu gelap kontras ganda (`#0f172a` dengan outline halus `#ffffff`) melintang di atas kertas PDF.
+     - Header pratinjau menyesuaikan badge semantik: `[Dokumen Dilindungi • Berkas Privat]` untuk privat dan `[Dokumen Terbuka • Publik]` untuk publik.
+- **Verifikasi Pengujian Otomatis (`DigitalLibraryTest.php`)**:
+  - `test_preview_modal_renders_security_shield_and_forensic_watermark`: Memvalidasi bahwa dokumen privat merender watermark forensik dan badge proteksi, sedangkan dokumen publik bersih tanpa watermark pattern.
+  - Seluruh test suite sistem (**192 test cases, 898 assertions**) **100% PASS**.
+
+### 118. Otorisasi Akses "Buat Folder & Unggah Berkas" (upload_digital_library) pada Pustaka Digital
+- **Latar Belakang & Kebutuhan Bisnis**:
+  - Untuk mencegah pembuatan folder sembarangan dan pengunggahan berkas liar oleh staf umum, aksi pembuatan folder baru (`+ Folder Baru`) dan unggah dokumen (`+ Unggah Berkas Baru`) wajib diproteksi hak akses khusus berbasis peran (*role-based permission*).
+- **Implementasi Solusi**:
+  1. **Matriks Peran (`role-editor.blade.php` & `RoleSeeder.php`)**:
+     - Menambahkan checklist izin: `"Buat Folder & Unggah Berkas"` (`upload_digital_library`) di bawah Blok 3, Group 2 (Manajemen Kepatuhan).
+     - Diaktifkan secara bawaan untuk peran `AdminTapersip` dan `Manager`.
+  2. **Pengondisian Tampilan Tombol (`digital-library-index.blade.php`)**:
+     - Tombol `+ Folder Baru` dan `+ Unggah Berkas Baru` hanya ditampilkan pada header Tab 1 apabila `$canUploadAndCreateFolder` bernilai `true`.
+  3. **Proteksi Backend PHP (`DigitalLibraryIndex.php`)**:
+     - Method `openCreateFolderModal()`, `saveFolder()`, `openUploadModal()`, dan `saveDocument()` memvalidasi otorisasi `Auth::user()->isSuperAdmin() || Auth::user()->hasModuleAccess('upload_digital_library')`. Upaya akses langsung tanpa izin ditolak seketika.
+- **Verifikasi Pengujian Otomatis (`DigitalLibraryTest.php`)**:
+  - `test_user_with_upload_digital_library_permission_can_create_folder_and_upload`: Memvalidasi user berizin dapat melihat tombol, membuat folder, dan mengunggah berkas.
+  - `test_user_without_upload_digital_library_permission_cannot_create_folder_or_upload`: Memvalidasi user tanpa izin tidak melihat kedua tombol dan aksi pemanggilan method diblokir.
+  - Seluruh test suite sistem (**192 test cases, 895 assertions**) **100% PASS**.
+
+### 119. Penyelarasan Notifikasi Izin Akses Berkas Privat ke Akun Admin Tapersip
+- **Latar Belakang & Kebutuhan Konsistensi**:
+  - Saat staf mengajukan permohonan akses berkas privat pada modul Pustaka Digital, petugas Tapersip harus segera menerima notifikasi otomatis pada lonceng navbar dan desktop notify (polling), selaras dengan alur notifikasi Pinjam Fisik, Antrean Scan, dan Batal Nomor.
+- **Implementasi Solusi**:
+  1. **Lonceng Navbar & Popover (`TapersipNotificationListener.php`)**:
+     - `updatePendingCount()`: Menghitung jumlah permohonan akses privat (`DigitalDocumentAccessRequest` berstatus `pending`) yang belum dibaca (`priv_access_{id}`).
+     - `checkLoanEvents()`: Melacak pengajuan akses privat baru secara berkala via background polling dan mendispatch event `desktop-notify` dengan tautan target:
+       `route('library.index', ['tab' => 'pending_approvals', 'highlight' => "req-{$req->id}"])`.
+     - `render()`: Menyertakan item permohonan akses privat pada feed "Belum Dibaca" (badge semantik *Akses Privat*) dan feed "Histori" saat izin telah dibaca/disetujui/ditolak.
+  2. **Interaktivitas Pengajuan di Sisi Klien (`DigitalLibraryIndex.php` & Blade)**:
+     - Saat staf menekan *Kirim Permohonan Izin*, sistem mendispatch event instan `desktop-notify` dan `loan-status-changed` untuk menyegarkan angka badge lonceng Tapersip.
+     - Saat Tapersip menyetujui atau menolak izin, sistem mendispatch event `loan-status-changed` agar counter notifikasi berkurang seketika.
+     - Di Tab 3 (*Persetujuan Akses Privat*), disematkan atribut `id="req-row-{{ $appr->id }}"` dan Alpine.js *spotlight highlight* (5 detik) sehingga ketika Tapersip mengklik notifikasi lonceng, browser langsung melakukan *smooth scroll* dan menyorot baris pengajuan bersangkutan.
+- **Verifikasi Pengujian Otomatis (`DigitalLibraryTest.php`)**:
+  - `test_private_access_request_triggers_notification_and_increments_tapersip_pending_count`: Memvalidasi pengajuan akses mendispatch event notifikasi, menambah counter lonceng Tapersip, memunculkan feed item dengan tautan `highlight=req-{id}`, dan mengurangi counter saat di-dismiss.
+  - Seluruh test suite sistem (**193 test cases, 908 assertions**) **100% PASS**.
+
+### 120. Penyelarasan Hierarki Loker Penyimpanan & Indentasi Subfolder (Sidebar & Dropdown Metadata)
+- **Latar Belakang & Kebutuhan Konsistensi UI**:
+  - Pada halaman arsip surat (`Surat Masuk`, `Surat Keluar`, dan `Surat Khusus`), struktur loker pada sidebar dan dropdown pilihan loker di form metadata sebelumnya belum menampilkan hierarki cabang yang jelas, berbeda dengan modul Pustaka Digital yang sudah memiliki garis pandu dan penanda panah cabang (`↳`).
+- **Implementasi Solusi**:
+  1. **Model `Folder.php`**:
+     - `getTreeNameAttribute()`: Menghitung kedalaman relasi folder secara otomatis dan membubuhkan spasi indentasi non-breaking serta simbol cabang `↳ ` untuk subfolder (misal: `  ↳ Sub Loker Pajak`).
+     - `getTreeForType(string $type)`: Menyajikan koleksi folder terurut secara hierarkis (folder induk terlebih dahulu, diikuti subfolder dan sub-subfoldernya) dengan eager-loading bebas dari masalah N+1 query.
+  2. **Sidebar Loker Penyimpanan (`folder-item.blade.php`)**:
+     - Subfolder dibungkus dalam kontainer garis pandu vertikal kiri: `border-l-2 border-slate-200 dark:border-slate-700 ml-3.5 pl-3 mt-0.5`.
+     - Nama subfolder diawali penanda siku cabang `↳` dengan teks yang masuk ke dalam secara proporsional.
+     - Penambahan badge counter berkas (`documents_count`) pada setiap kartu loker.
+  3. **Penyelarasan Dropdown Pemilihan Loker**:
+     - Diselaraskan pada seluruh form modal dan halaman registri:
+       - Modal Pindah Berkas & Modal Buat Loker (`incoming/index`, `outgoing/index`, `internal/index`).
+       - Modal Unggah Scan Queue (`scan-queue.blade.php`).
+       - Form Registrasi Surat Baru & Koreksi Metadata (`incoming/create`, `incoming/edit`, `outgoing/create`, `internal/create`).
+       - Dropdown menampilkan opsi berurutan: `Folder Induk` diikuti subfoldernya yang berawalan `  ↳ Nama Subfolder`.
+- **Verifikasi Pengujian Otomatis (`NasStorageTest.php`)**:
+  - `test_hierarchical_folder_tree_sidebar_and_dropdown_arrows`: Memvalidasi rendering pohon folder sidebar dengan garis batas kiri `border-l-2 border-slate-200`, simbol `↳`, serta dropdown pemilihan loker dengan teks berawalan `↳ `.
+  - Seluruh test suite sistem (**194 test cases, 914 assertions**) **100% PASS**.
+
+### 123. Metadata Ketersediaan Media (Hardcopy & Softcopy) dan Layanan Sirkulasi Peminjaman Berkas Digital
+- **Latar Belakang & Kebutuhan Kearsipan Hibrida**:
+  - Pada alur pengelolaan kearsipan resmi, dokumen naskah dinas dapat tersedia dalam bentuk fisik (hardcopy di loker arsip) maupun berkas digital hasil scan (softcopy di server NAS).
+  - Staf yang hanya memerlukan dokumen untuk rujukan membaca tidak perlu meminjam map fisik secara langsung dari lemari kearsipan (mengurangi risiko fisik arsip rusak/hilang), melainkan dapat meminjam akses digital (*softcopy*) berbatas waktu yang disetujui Tapersip.
+- **Implementasi Solusi**:
+  1. **Skema Database & Model (`documents` & `document_loans`)**:
+     - Tabel `documents`: Penambahan kolom boolean `available_hardcopy` (default true) dan `available_softcopy` (default false, auto-true untuk dokumen yang sudah memiliki `current_version_id`).
+     - Tabel `document_loans`: Penambahan kolom `loan_type` (`hardcopy`, `softcopy`, `both`), `duration_hours`, dan `access_expires_at`.
+     - Model helper pada `DocumentLoan`: `isSoftcopy()`, `isHardcopy()`, `hasActiveSoftcopyAccess()`, dan accessor `remaining_time_human`.
+  2. **Verifikasi & Unggah Scan Final (`scan-queue.blade.php`)**:
+     - Menambahkan form metadata ketersediaan: Checkbox `Tersedia Hardcopy` dan `Tersedia Softcopy` pada modal `modal-upload-queue`.
+     - Data ketersediaan disimpan ke database saat Tapersip mengunggah berkas scan final (`saveFinalFile`).
+  3. **Tabel Katalog & Pengajuan Pinjam (`document-loan-index.blade.php`)**:
+     - **Tabel Katalog**: Penambahan kolom "Tersedia" yang menyajikan badge format: `Hardcopy` (amber), `Softcopy` (biru), atau `Belum Tersedia`.
+     - **Modal Ajukan Pinjam**: Checkbox pemilihan `Berkas Fisik (Hardcopy)` dan `Berkas Digital (Softcopy)` yang secara otomatis membaca ketersediaan dokumen. Format yang belum tersedia otomatis dinonaktifkan (disabled) disertai keterangan informatif.
+  4. **Persetujuan Sirkulasi Berbatas Waktu oleh Tapersip**:
+     - Jika pemohon meminjam softcopy, aksi persetujuan Tapersip memicu modal `modal-approve-softcopy-loan` untuk menentukan batas waktu akses digital (2 jam, 6 jam, 24 jam, 3 hari, 7 hari).
+     - Menghitung otomatis `access_expires_at = now()->addHours($duration)`.
+  5. **Pratinjau Softcopy Terlindungi pada Tab Pinjaman Saya**:
+     - Pada baris pinjaman softcopy yang disetujui, muncul tombol ikon mata (*Pratinjau*) dengan indikator hitung mundur waktu aktif.
+     - Modal pratinjau `modal-preview-loan-doc` mengadopsi 4 lapis pengamanan: Anti-Print, Anti-Context Menu, Anti-Screen Capture Shield (auto-blur saat window kehilangan fokus), dan Forensic Dynamic Watermark (`PINJAMAN RESMI • NAMA PEMINJAM • IP ADDRESS • TIMESTAMP`).
+     - Rute streaming `/document/preview/{version}` pada `routes/web.php` mengizinkan akses bagi pemegang tiket pinjaman softcopy aktif (`$hasActiveLoan`).
+     - Ketika masa izin terlampaui, tombol otomatis berubah menjadi `Akses Kedaluwarsa` dan backend menolak akses pratinjau.
+- **Verifikasi Pengujian Otomatis (`DocumentLoanTest.php`)**:
+  - `test_catalog_table_displays_availability_badges_and_softcopy_loan_workflow`: Memvalidasi badge ketersediaan di tabel katalog, pengajuan pinjam softcopy, approval Tapersip dengan batas durasi 24 jam, pratinjau softcopy aktif, serta penolakan akses saat izin kedaluwarsa.
+  - `test_scan_queue_saves_availability_metadata`: Memvalidasi penyimpanan checkbox `uploadAvailableHardcopy` dan `uploadAvailableSoftcopy` di antrean scan.
+     - Pemilihan tipe dokumen dibatasi mutually exclusive (Radio button: Hardcopy ATAU Softcopy saja).
+     - Kolom status tabel katalog menampilkan status spesifik format: `Dipinjam (Softcopy)` beserta durasi batas waktu dan sisa waktu aktif (`Durasi: 24 Jam (Sisa: ...)`), atau `Dipinjam (Hardcopy)`.
+     - Tombol "Ajukan Pinjam" otomatis dinonaktifkan (disabled) saat dokumen sedang dalam status dipinjam/diajukan baik softcopy maupun hardcopy.
+  - Seluruh test suite sistem (**197 test cases, 961 assertions**) **100% PASS**.
+
+### 124. Penyesuaian Teks Notifikasi Peminjaman Arsip (Kontekstual Softcopy vs Hardcopy)
+- **Latar Belakang & Kebutuhan Ergonomi Informasi**:
+  - Pada implementasi sebelumnya, seluruh notifikasi (email, flash toast, floating desktop alert, dan audit log) masih menggunakan redaksi baku peminjaman fisik (misal: *"mohon menuju ke Tapersip untuk mengambil berkas fisik"*).
+  - Saat staf meminjam berkas digital (*softcopy*), pesan tersebut membingungkan karena berkas tidak perlu diambil secara fisik di loker melainkan langsung dipratinjau pada menu *Pinjaman Saya*.
+- **Implementasi Solusi**:
+  1. **Pengajuan Pinjam (`DocumentLoanIndex::submitLoanRequest` & `modal-loan-request`)**:
+     - Teks panduan biru pada modal dinamis:
+       - Softcopy: *"petugas Tapersip akan memeriksa dan memberikan durasi batas waktu izin akses digital. Anda akan menerima notifikasi email saat berkas siap dipratinjau pada menu Pinjaman Saya."*
+       - Hardcopy: *"petugas Tapersip akan menyiapkan berkas fisik di lemari kearsipan dan mencetak bukti peminjaman. Anda akan menerima notifikasi email saat berkas siap diambil di loket Tapersip."*
+     - Toast konfirmasi dan audit log disesuaikan kontekstual (*Pengajuan Pinjam Softcopy* vs *Pengajuan Pinjam Fisik*).
+  2. **Notifikasi Persetujuan (`DocumentLoanApprovedNotification` & `emails/loan-approved.blade.php`)**:
+     - Subjek Email: `Peminjaman Berkas Digital (Softcopy) [KODE] Telah Disetujui` vs `Peminjaman Berkas Fisik [KODE] Telah Disetujui`.
+     - Isi email & kartu rincian: Softcopy menampilkan teks instruksi pratinjau di aplikasi, tipe peminjaman (*Berkas Digital Softcopy*), dan batas waktu akses beserta durasinya (misal: *24 Jam*).
+     - Toast desktop disesuaikan judul dan badannya.
+  3. **Notifikasi Penolakan (`DocumentLoanRejectedNotification` & `emails/loan-rejected.blade.php`)**:
+     - Subjek email dan pesan pembuka secara spesifik menyebutkan penolakan berkas digital (softcopy) atau fisik (hardcopy).
+  4. **Penyelesaian & Pengembalian (`DocumentLoanReturnedNotification` & `modal-loan-return`)**:
+     - Modal konfirmasi membedakan modal penyelesaian softcopy (*"Selesaikan Peminjaman Softcopy"*) dan pengembalian fisik (*"Konfirmasi Pengembalian Berkas ke Loker"*).
+     - Email konfirmasi: Softcopy memberitahukan izin pratinjau digital telah resmi dinonaktifkan dan tanggungan pinjaman selesai.
+  5. **Pengingat & Scheduler (`DocumentLoanReminderNotification` & `SendOverdueLoanReminders.php`)**:
+     - Cron scheduler otomatis `loans:send-overdue-reminders` difilter khusus fisik (`where('loan_type', 'hardcopy')`) agar tidak mengirim pengingat pengembalian kertas pada peminjam softcopy yang aksesnya otomatis kedaluwarsa via sistem.
+     - Email reminder manual menyesuaikan redaksi batas waktu izin digital atau keterlambatan pengembalian fisik.
+- **Verifikasi Pengujian Otomatis (`DocumentLoanNotificationTest.php`)**:
+  - `test_softcopy_loan_approval_rejection_and_reminder_email_subjects_and_templates`: Memvalidasi subjek email, rendering HTML, kartu rincian, dan pesan kontekstual pada approval, rejection, completion, dan reminder untuk peminjaman softcopy.
+  - Seluruh test suite sistem (**198 test cases, 973 assertions**) **100% PASS**.
+
 
 
 

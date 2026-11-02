@@ -290,4 +290,35 @@ class NasStorageTest extends TestCase
             ->assertSee($outgoingDoc->number)
             ->assertSee('PT Krakatau Steel');
     }
+
+    public function test_hierarchical_folder_tree_sidebar_and_dropdown_arrows()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+
+        // Buat folder induk dan subfolder
+        $rootFolder = \App\Models\Folder::create([
+            'name' => 'Loker Keuangan Pusat',
+            'type' => 'incoming',
+        ]);
+
+        $subFolder = \App\Models\Folder::create([
+            'name' => 'Sub Loker Pajak 2026',
+            'type' => 'incoming',
+            'parent_id' => $rootFolder->id,
+        ]);
+
+        // 1. Sidebar folder tree memuat nama induk dan subfolder dengan panah ↳
+        Livewire::actingAs($superadmin)
+            ->test(\App\Livewire\Registry\Incoming\Index::class)
+            ->assertSee('Loker Keuangan Pusat')
+            ->assertSee('Sub Loker Pajak 2026')
+            ->assertSeeHtml('↳')
+            ->assertSeeHtml('border-l-2 border-slate-200');
+
+        // 2. Dropdown pemilihan folder memuat arrow ↳ untuk subfolder
+        Livewire::actingAs($superadmin)
+            ->test(\App\Livewire\Registry\Incoming\Create::class)
+            ->assertSeeHtml($rootFolder->name)
+            ->assertSeeHtml('↳ ' . $subFolder->name);
+    }
 }

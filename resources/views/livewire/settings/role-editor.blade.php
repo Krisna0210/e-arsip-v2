@@ -10,7 +10,7 @@
     </div>
 
     <div class="space-y-6 max-w-5xl">
-        
+
         <!-- Blok 1: Informasi Dasar -->
         <div class="bg-white border border-[var(--color-border)] rounded-xl shadow-xs overflow-hidden">
             <div class="px-5 py-4 border-b border-[var(--color-border)] bg-slate-50">
@@ -46,7 +46,7 @@
                     <p class="text-[11px] text-slate-500 mt-0.5">Tentukan aksi apa saja yang boleh dilakukan pengguna pada tiap tingkat kerahasiaan berkas.</p>
                 </div>
             </div>
-            
+
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[700px]">
                     <thead>
@@ -83,7 +83,7 @@
                                 ['id' => 'archive', 'label' => 'Arsip & Upload Langsung', 'desc' => 'Dapat mengunggah file fisik, menentukan loker penyimpanan, melakukan arsip langsung, dan mengelola retensi arsip.'],
                             ];
                         @endphp
-                        
+
                         @foreach($actions as $action)
                         <tr class="hover:bg-slate-50 transition-colors">
                             <td class="px-6 py-3 border-r border-slate-200 bg-white">
@@ -116,7 +116,7 @@
                     </tbody>
                 </table>
             </div>
-            
+
             <div class="px-5 py-3 border-t border-[var(--color-border)] bg-yellow-50 text-xs text-yellow-800 flex items-start gap-2">
                 <svg class="w-4 h-4 shrink-0 mt-0.5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 <span><b>Perhatian:</b> Pemberian akses kepada Sifat "Rahasia" akan mencabut batas blokir internal. Pastikan Anda mengesahkan prosedur ini sesuai SOP keamanan Direksi.</span>
@@ -147,6 +147,7 @@
                         <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.in_out_mail" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Arsip Surat Masuk & Keluar</label>
                         <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.internal_memo" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Arsip Surat Khusus</label>
                         <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.archive_queue" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Antrean Scan Tapersip</label>
+                        <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.digital_library" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Pustaka Digital</label>
                     </div>
                 </div>
                 <!-- Group 2 -->
@@ -159,6 +160,9 @@
                         <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.audit" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Audit Trail Log</label>
                         <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.document_borrowing" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Katalog & Pinjaman Saya</label>
                         <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.loan_circulation" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Sirkulasi & Persetujuan Tapersip</label>
+                        <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.library_flexibility" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Fleksibilitas Berkas Pustaka Digital</label>
+                        <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.upload_digital_library" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Buat Folder & Unggah Berkas</label>
+
                     </div>
                 </div>
                 <!-- Group 3 -->

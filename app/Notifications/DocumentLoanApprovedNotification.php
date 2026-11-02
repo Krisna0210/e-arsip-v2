@@ -45,8 +45,12 @@ class DocumentLoanApprovedNotification extends Notification
         $docType = $document?->documentType?->name
             ?? ($document?->type === 'outgoing' ? 'Surat Keluar' : ($document?->type === 'incoming' ? 'Surat Masuk' : 'Surat Khusus'));
 
+        $subject = $this->loan->isSoftcopy()
+            ? "Peminjaman Berkas Digital (Softcopy) {$this->loan->loan_code} Telah Disetujui"
+            : "Peminjaman Berkas Fisik {$this->loan->loan_code} Telah Disetujui";
+
         return (new MailMessage)
-            ->subject("Peminjaman Berkas Fisik {$this->loan->loan_code} Telah Disetujui")
+            ->subject($subject)
             ->view('emails.loan-approved', [
                 'recipientName' => $notifiable->name ?? 'Staf Pemohon',
                 'loan' => $this->loan,

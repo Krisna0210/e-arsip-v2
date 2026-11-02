@@ -146,10 +146,14 @@
                     <!-- Body Content -->
                     <tr>
                         <td class="content">
-                            <h2 class="title">Bukti Pengembalian Berkas Fisik</h2>
+                            <h2 class="title">{{ $loan->isSoftcopy() ? 'Peminjaman Berkas Digital Selesai' : 'Bukti Pengembalian Berkas Fisik' }}</h2>
                             <p class="greeting">
                                 Halo <strong>{{ $recipientName }}</strong>,<br>
-                                Berkas fisik dokumen yang Anda pinjam telah resmi diterima kembali oleh Unit Pelayanan Tapersip dan disimpan kembali ke loker arsip. Tanggungan peminjaman Anda atas dokumen ini telah selesai.
+                                @if($loan->isSoftcopy())
+                                    Peminjaman berkas digital (softcopy) dokumen Anda telah resmi diselesaikan oleh Unit Pelayanan Tapersip. Izin akses pratinjau digital telah dinonaktifkan. Tanggungan peminjaman Anda atas dokumen ini telah selesai.
+                                @else
+                                    Berkas fisik dokumen yang Anda pinjam telah resmi diterima kembali oleh Unit Pelayanan Tapersip dan disimpan kembali ke loker arsip. Tanggungan peminjaman Anda atas dokumen ini telah selesai.
+                                @endif
                             </p>
 
                             <!-- Document Details Card -->
@@ -158,6 +162,10 @@
                                     <tr>
                                         <td class="details-label">Kode Tiket</td>
                                         <td class="details-value details-mono">: {{ $loan->loan_code }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="details-label">Tipe Peminjaman</td>
+                                        <td class="details-value">: <strong>{{ $loan->isSoftcopy() ? 'Berkas Digital (Softcopy)' : 'Berkas Fisik (Hardcopy)' }}</strong></td>
                                     </tr>
                                     <tr>
                                         <td class="details-label">Nomor Dokumen</td>

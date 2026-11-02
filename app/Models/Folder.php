@@ -28,6 +28,17 @@ class Folder extends Model
         return $this->belongsTo(Folder::class, 'parent_id');
     }
 
+    public function getAncestorIds(): array
+    {
+        $ids = [];
+        $curr = $this->parent;
+        while ($curr) {
+            $ids[] = $curr->id;
+            $curr = $curr->parent;
+        }
+        return $ids;
+    }
+
     public function children(): HasMany
     {
         return $this->hasMany(Folder::class, 'parent_id');
@@ -36,6 +47,44 @@ class Folder extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(Document::class);
+    }
+
+    public function getTreeNameAttribute(): string
+    {
+        $depth = 0;
+        $curr = $this->parent;
+        while ($curr) {
+            $depth++;
+            $curr = $curr->parent;
+        }
+
+        return ($depth > 0 ? str_repeat('  ', $depth) . '↳ ' : '') . $this->name;
+    }
+
+    /**
+     * Get folders tree flattened with hierarchical order and indentation arrow
+     */
+    public static function getTreeForType(string $type)
+    {
+        $roots = static::forType($type)
+            ->whereNull('parent_id')
+            ->orderBy('name')
+            ->get();
+
+        $flattened = collect();
+
+        $traverse = function ($folders) use (&$traverse, &$flattened) {
+            foreach ($folders as $folder) {
+                $flattened->push($folder);
+                if ($folder->children && $folder->children->isNotEmpty()) {
+                    $traverse($folder->children->sortBy('name'));
+                }
+            }
+        };
+
+        $traverse($roots);
+
+        return $flattened;
     }
 
     /**

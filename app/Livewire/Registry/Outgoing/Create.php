@@ -66,7 +66,7 @@ class Create extends Component
         $this->document_type_id = $outgoingType?->id;
         $this->documentTypes = \App\Models\DocumentType::all();
         $this->units = Unit::divisions()->where('status', 'active')->orderBy('name')->get();
-        $this->folders = \App\Models\Folder::forType('outgoing')->get();
+        $this->folders = \App\Models\Folder::getTreeForType('outgoing');
 
         // Otomatisasi default divisi dari akun staf yang sedang login
         $userDivision = Auth::user()?->getDivision();

@@ -97,6 +97,57 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('module:cancelled_documents')->get('/canceldoc', App\Livewire\Registry\CancelledDocumentIndex::class)->name('registry.cancelled.index');
 
+    Route::middleware('module:digital_library')->get('/library', App\Livewire\Library\DigitalLibraryIndex::class)->name('library.index');
+
+    Route::get('/library/preview/{document}', function (App\Models\DigitalDocument $document) {
+        if ($document->access_type === 'private' && !$document->hasActiveAccessForUser(Auth::id())) {
+            abort(403, 'Akses Ditolak: Anda belum memiliki izin akses aktif untuk berkas privat ini.');
+        }
+
+        $path = Storage::disk('nas')->path($document->file_path);
+
+        if (!file_exists($path)) {
+            $fallbackPath = storage_path('app/nas/' . $document->file_path);
+            if (!file_exists($fallbackPath)) {
+                $fallbackPath = storage_path('app/public/' . $document->file_path);
+            }
+            if (file_exists($fallbackPath)) {
+                $path = $fallbackPath;
+            } else {
+                abort(404, 'Berkas fisik pustaka digital tidak ditemukan.');
+            }
+        }
+
+        $mime = mime_content_type($path) ?: ($document->mime_type ?: 'application/pdf');
+
+        return response()->file($path, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="' . $document->system_file_name . '"'
+        ]);
+    })->name('library.preview');
+
+    Route::get('/library/download/{document}', function (App\Models\DigitalDocument $document) {
+        if ($document->access_type === 'private' && !$document->hasActiveAccessForUser(Auth::id())) {
+            abort(403, 'Akses Ditolak: Anda belum memiliki izin akses aktif untuk berkas privat ini.');
+        }
+
+        $path = Storage::disk('nas')->path($document->file_path);
+
+        if (!file_exists($path)) {
+            $fallbackPath = storage_path('app/nas/' . $document->file_path);
+            if (!file_exists($fallbackPath)) {
+                $fallbackPath = storage_path('app/public/' . $document->file_path);
+            }
+            if (file_exists($fallbackPath)) {
+                $path = $fallbackPath;
+            } else {
+                abort(404, 'Berkas fisik pustaka digital tidak ditemukan.');
+            }
+        }
+
+        return response()->download($path, $document->system_file_name);
+    })->name('library.download');
+
     Route::prefix('archive')->name('archive.')->group(function () {
         Route::middleware('module:destruction,approve_destruction')->get('/destructions', function () {
             return view('pages.archive.destructions');
@@ -124,7 +175,16 @@ Route::middleware('auth')->group(function () {
             abort(404, 'Dokumen arsip tidak ditemukan.');
         }
 
-        if (!Auth::user()->hasDocumentPermission('view', $document->sifat ?? 'biasa')) {
+        $hasActiveLoan = \App\Models\DocumentLoan::where('document_id', $document->id)
+            ->where('user_id', Auth::id())
+            ->where('status', 'borrowed')
+            ->whereIn('loan_type', ['softcopy', 'both'])
+            ->where(function ($q) {
+                $q->whereNull('access_expires_at')->orWhere('access_expires_at', '>=', now());
+            })
+            ->exists();
+
+        if (!Auth::user()->hasDocumentPermission('view', $document->sifat ?? 'biasa') && !$hasActiveLoan) {
             abort(403, 'Akses Ditolak: Anda tidak memiliki izin untuk melihat pratinjau dokumen dengan sifat ini.');
         }
 

@@ -45,11 +45,17 @@ class DocumentLoanReminderNotification extends Notification
         $docType = $document?->documentType?->name
             ?? ($document?->type === 'outgoing' ? 'Surat Keluar' : ($document?->type === 'incoming' ? 'Surat Masuk' : 'Surat Khusus'));
 
-        $isOverdue = $this->loan->expected_return_date && now()->isAfter($this->loan->expected_return_date);
-
-        $subject = $isOverdue
-            ? "Pemberitahuan Keterlambatan Pengembalian Berkas Fisik {$this->loan->loan_code}"
-            : "Pengingat Batas Pengembalian Berkas Fisik {$this->loan->loan_code}";
+        if ($this->loan->isSoftcopy()) {
+            $isOverdue = $this->loan->access_expires_at && now()->gt($this->loan->access_expires_at);
+            $subject = $isOverdue
+                ? "Pemberitahuan Berakhirnya Izin Akses Digital {$this->loan->loan_code}"
+                : "Pengingat Batas Waktu Akses Digital {$this->loan->loan_code}";
+        } else {
+            $isOverdue = $this->loan->expected_return_date && now()->isAfter($this->loan->expected_return_date);
+            $subject = $isOverdue
+                ? "Pemberitahuan Keterlambatan Pengembalian Berkas Fisik {$this->loan->loan_code}"
+                : "Pengingat Batas Pengembalian Berkas Fisik {$this->loan->loan_code}";
+        }
 
         return (new MailMessage)
             ->subject($subject)

@@ -945,4 +945,166 @@ class DocumentLoanTest extends TestCase
             ->assertSee($outgoingDoc->number)
             ->assertSee('PT Mitra Logistik Nusantara');
     }
+
+    public function test_catalog_table_displays_availability_badges_and_softcopy_loan_workflow()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+
+        // 1. Dokumen A: Hardcopy dan Softcopy tersedia
+        $docA = Document::create([
+            'number' => '101/AVAIL/BOTH/2026',
+            'subject' => 'Dokumen Tersedia Fisik dan Digital',
+            'type' => 'incoming',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'available_hardcopy' => true,
+            'available_softcopy' => true,
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        $versionA = \App\Models\DocumentVersion::create([
+            'document_id' => $docA->id,
+            'version_number' => '1.0',
+            'file_path' => 'documents/incoming/2026/test.pdf',
+            'created_by' => $superadmin->id,
+            'status' => 'active',
+        ]);
+        $docA->update(['current_version_id' => $versionA->id]);
+
+        // Dokumen B: Hanya Hardcopy tersedia
+        $docB = Document::create([
+            'number' => '102/AVAIL/HARD/2026',
+            'subject' => 'Dokumen Fisik Tanpa Scan',
+            'type' => 'incoming',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'available_hardcopy' => true,
+            'available_softcopy' => false,
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        // Verifikasi tabel katalog menampilkan badge Hardcopy dan Softcopy
+        Livewire::actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->assertSee('101/AVAIL/BOTH/2026')
+            ->assertSee('Hardcopy')
+            ->assertSee('Softcopy')
+            ->assertSee('102/AVAIL/HARD/2026');
+
+        // 2. Pemohon mengajukan pinjam SOFTCOPY saja untuk Dokumen A
+        $roleBorrower = Role::create([
+            'name' => 'Borrower ' . uniqid(),
+            'status' => 'active',
+            'module_visibility' => ['document_borrowing'],
+        ]);
+
+        $borrower = User::factory()->create([
+            'role_id' => $roleBorrower->id,
+            'unit_id' => $unit->id,
+        ]);
+
+        $testBorrower = Livewire::actingAs($borrower)
+            ->test(DocumentLoanIndex::class)
+            ->call('openLoanModal', $docA->id)
+            ->set('borrowType', 'softcopy')
+            ->set('purpose', 'Kebutuhan verifikasi digital naskah')
+            ->call('submitLoanRequest')
+            ->assertDispatched('close-modal', 'modal-loan-request');
+
+        $loan = DocumentLoan::where('document_id', $docA->id)->where('user_id', $borrower->id)->first();
+        $this->assertNotNull($loan);
+        $this->assertEquals('softcopy', $loan->loan_type);
+        $this->assertEquals('requested', $loan->status);
+
+        // 3. Tapersip menyetujui pinjaman softcopy dengan batas durasi 24 jam
+        Livewire::actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->call('approveLoan', $loan->id)
+            ->assertDispatched('open-modal', 'modal-approve-softcopy-loan')
+            ->set('approveDurationHours', 24)
+            ->call('executeApproveSoftcopyLoan')
+            ->assertDispatched('close-modal', 'modal-approve-softcopy-loan');
+
+        $loan->refresh();
+        $this->assertEquals('borrowed', $loan->status);
+        $this->assertEquals(24, $loan->duration_hours);
+        $this->assertNotNull($loan->access_expires_at);
+        $this->assertTrue($loan->hasActiveSoftcopyAccess());
+
+        // Verifikasi tabel katalog sekarang menampilkan status 'Dipinjam (Softcopy)' dan durasi 'Durasi: 24 Jam'
+        Livewire::actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->assertSee('Dipinjam (Softcopy)')
+            ->assertSee('Durasi: 24 Jam')
+            ->assertSee('Tidak Tersedia');
+
+        // Upaya mengajukan pinjam kembali saat dokumen sedang dipinjam langsung ditolak
+        Livewire::actingAs($borrower)
+            ->test(DocumentLoanIndex::class)
+            ->call('openLoanModal', $docA->id)
+            ->assertDispatched('notify', function ($name, $params) {
+                $payload = is_array($params) && isset($params['type']) ? $params : ($params[0] ?? []);
+                return ($payload['type'] ?? '') === 'error'
+                    && str_contains($payload['message'] ?? '', 'sedang dalam proses peminjaman');
+            });
+
+        // 4. Staf pemohon melihat tombol Pratinjau di tab Pinjaman Saya dan membukanya
+        Livewire::actingAs($borrower)
+            ->test(DocumentLoanIndex::class)
+            ->set('activeTab', 'my_loans')
+            ->assertSee('Pratinjau')
+            ->call('openPreviewModal', $loan->id)
+            ->assertDispatched('open-modal', 'modal-preview-loan-doc');
+
+        // 5. Uji jika akses kedaluwarsa: pratinjau ditolak
+        $loan->update(['access_expires_at' => now()->subHour()]);
+        $this->assertFalse($loan->hasActiveSoftcopyAccess());
+
+        Livewire::actingAs($borrower)
+            ->test(DocumentLoanIndex::class)
+            ->set('activeTab', 'my_loans')
+            ->assertSee('Akses Kedaluwarsa')
+            ->call('openPreviewModal', $loan->id)
+            ->assertDispatched('notify', function ($name, $params) {
+                $payload = is_array($params) && isset($params['type']) ? $params : ($params[0] ?? []);
+                return ($payload['type'] ?? '') === 'error'
+                    && str_contains($payload['message'] ?? '', 'kedaluwarsa');
+            });
+    }
+
+    public function test_scan_queue_saves_availability_metadata()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        \Illuminate\Support\Facades\Storage::fake('nas');
+
+        $doc = Document::create([
+            'number' => '404/QUEUE/SCAN/2026',
+            'subject' => 'Naskah Antrean Scan',
+            'type' => 'outgoing',
+            'sifat' => 'biasa',
+            'status' => 'waiting_for_file',
+            'document_date' => now()->format('Y-m-d'),
+            'created_by' => $superadmin->id,
+        ]);
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('scan.pdf', 100, 'application/pdf');
+
+        Livewire::actingAs($superadmin)
+            ->test(\App\Livewire\Registry\ScanQueue::class)
+            ->call('openUploadModal', $doc->id)
+            ->set('uploadAvailableHardcopy', true)
+            ->set('uploadAvailableSoftcopy', true)
+            ->set('finalFile', $file)
+            ->call('saveFinalFile')
+            ->assertDispatched('close-modal', 'modal-upload-queue');
+
+        $doc->refresh();
+        $this->assertEquals('archived', $doc->status);
+        $this->assertTrue($doc->available_hardcopy);
+        $this->assertTrue($doc->available_softcopy);
+        $this->assertNotNull($doc->current_version_id);
+    }
 }

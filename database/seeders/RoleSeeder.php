@@ -66,6 +66,9 @@ class RoleSeeder extends Seeder
                     'destruction',
                     'approve_destruction',
                     'audit',
+                    'digital_library',
+                    'library_flexibility',
+                    'upload_digital_library',
                 ],
                 'permissions' => [
                     ['code' => 'view', 'sifat' => 'biasa'],
@@ -82,6 +85,7 @@ class RoleSeeder extends Seeder
                     'input_in_out',
                     'input_internal',
                     'input_outgoing',
+                    'digital_library',
                 ],
                 'permissions' => [
                     ['code' => 'create', 'sifat' => 'biasa'],
@@ -103,6 +107,9 @@ class RoleSeeder extends Seeder
                     'destruction',
                     'approve_destruction',
                     'audit',
+                    'digital_library',
+                    'library_flexibility',
+                    'upload_digital_library',
                     'archive_queue',
                     'input_incoming',
                     'input_outgoing',

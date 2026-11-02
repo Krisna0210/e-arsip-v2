@@ -17,7 +17,7 @@
             </button>
 
             @foreach($folders as $folder)
-                @include('livewire.registry.incoming.folder-item', ['folder' => $folder, 'level' => 0])
+                @include('livewire.registry.incoming.folder-item', ['folder' => $folder, 'level' => 0, 'expandedFolderIds' => $expandedFolderIds])
             @endforeach
 
             @if($folders->isEmpty())
@@ -338,7 +338,7 @@
                                                 <select wire:model="folderParentId" id="folderParentId" class="block w-full rounded-md border-0 px-3 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-[var(--color-primary)] sm:text-sm sm:leading-6 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700">
                                                     <option value="">-- Root (Tidak ada induk) --</option>
                                                     @foreach($allFolders as $f)
-                                                        <option value="{{ $f->id }}">{{ $f->name }}</option>
+                                                        <option value="{{ $f->id }}">{{ $f->tree_name ?? ($f->parent ? '  ↳ ' . $f->name : $f->name) }}</option>
                                                     @endforeach
                                                 </select>
                                             </div>
@@ -387,7 +387,7 @@
                     <option value="">-- Tanpa Loker / Root --</option>
                     @foreach($allFolders as $f)
                         <option value="{{ $f->id }}">
-                            {{ $f->parent ? $f->parent->name . ' / ' : '' }}{{ $f->name }}
+                            {{ $f->tree_name ?? ($f->parent ? '  ↳ ' . $f->name : $f->name) }}
                         </option>
                     @endforeach
                 </select>

@@ -51,7 +51,7 @@ class Edit extends Component
         $this->sifat = $document->sifat;
 
         $this->units = Unit::all();
-        $this->folders = \App\Models\Folder::forType('incoming')->get();
+        $this->folders = \App\Models\Folder::getTreeForType('incoming');
 
         $approval = Approval::with('approver')
             ->where('document_id', $document->id)

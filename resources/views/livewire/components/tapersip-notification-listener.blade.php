@@ -320,7 +320,7 @@
                         <div class="h-10 w-10 rounded-lg flex items-center justify-center shrink-0 shadow-xs"
                              :class="{
                                  'bg-emerald-50 text-[#065F46] border border-emerald-200': toast.type === 'loan_requested' || toast.type === 'loan_approved_success' || toast.type === 'scan_archived_success',
-                                 'bg-amber-50 text-amber-700 border border-amber-200': toast.type === 'scan_requested' || toast.type === 'loan_approved_mail_failed' || toast.type === 'loan_reminder_success',
+                                 'bg-amber-50 text-amber-700 border border-amber-200': toast.type === 'scan_requested' || toast.type === 'loan_approved_mail_failed' || toast.type === 'loan_reminder_success' || toast.type === 'private_access_requested',
                                  'bg-rose-50 text-rose-700 border border-rose-200': toast.type === 'loan_cancelled' || toast.type === 'loan_rejected_success' || toast.type === 'cancellation_requested',
                                  'bg-blue-50 text-blue-700 border border-blue-200': toast.type === 'loan_returned_success'
                              }">
@@ -346,7 +346,7 @@
                             <div class="mt-3 flex items-center gap-2">
                                 <a :href="toast.url"
                                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-xs bg-[#065F46] hover:bg-[#047857] transition-colors">
-                                    <span x-text="toast.type === 'cancellation_requested' ? 'Tinjau Permohonan →' : 'Tinjau Data →'"></span>
+                                    <span x-text="toast.type === 'cancellation_requested' || toast.type === 'private_access_requested' ? 'Tinjau Permohonan →' : 'Tinjau Data →'"></span>
                                 </a>
                                 <button type="button"
                                         @click="removeToast(toast.id)"

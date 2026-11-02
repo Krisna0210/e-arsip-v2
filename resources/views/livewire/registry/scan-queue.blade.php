@@ -324,11 +324,29 @@
                                 <option value="">-- Tanpa Loker / Root --</option>
                                 @foreach($availableFolders as $f)
                                     <option value="{{ $f->id }}">
-                                        {{ $f->parent ? $f->parent->name . ' / ' : '' }}{{ $f->name }}
+                                        {{ $f->tree_name ?? ($f->parent ? '  ↳ ' . $f->name : $f->name) }}
                                     </option>
                                 @endforeach
                             </select>
                             @error('uploadFolderId') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                        </div>
+
+                        <!-- Format Ketersediaan Dokumen -->
+                        <div class="mb-6">
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ketersediaan Format Berkas</label>
+                            <div class="grid grid-cols-2 gap-3 bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                                <label class="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-700">
+                                    <input type="checkbox" wire:model="uploadAvailableHardcopy"
+                                           class="rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]">
+                                    <span>Tersedia Hardcopy</span>
+                                </label>
+                                <label class="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-700">
+                                    <input type="checkbox" wire:model="uploadAvailableSoftcopy"
+                                           class="rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]">
+                                    <span>Tersedia Softcopy</span>
+                                </label>
+                            </div>
+                            <span class="text-[11px] text-gray-400 mt-1 block">Tentukan ketersediaan berkas untuk layanan peminjaman arsip.</span>
                         </div>
 
                         <!-- Upload Area -->

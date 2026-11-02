@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Components;
 
+use App\Models\DigitalDocumentAccessRequest;
 use App\Models\Document;
 use App\Models\DocumentLoan;
 use App\Models\UserNotificationRead;
@@ -14,6 +15,7 @@ class TapersipNotificationListener extends Component
     public ?int $lastKnownRequestId = null;
     public ?int $lastKnownDocId = null;
     public ?int $lastKnownCancelDocId = null;
+    public ?int $lastKnownPrivAccessReqId = null;
     public ?string $lastCheckedAt = null;
     public int $pendingCount = 0;
     public int $historyCount = 0;
@@ -31,6 +33,9 @@ class TapersipNotificationListener extends Component
 
         $latestCancelDoc = Document::where('status', 'cancellation_requested')->latest('id')->first();
         $this->lastKnownCancelDocId = $latestCancelDoc ? $latestCancelDoc->id : 0;
+
+        $latestPrivAccess = DigitalDocumentAccessRequest::latest('id')->first();
+        $this->lastKnownPrivAccessReqId = $latestPrivAccess ? $latestPrivAccess->id : 0;
 
         $this->updatePendingCount();
     }
@@ -152,7 +157,13 @@ class TapersipNotificationListener extends Component
             ->filter(fn ($id) => !in_array("cancel_req_{$id}", $readKeys))
             ->count();
 
-        $this->pendingCount = $waitingDocIds + $requestedLoanIds + $cancelDocIds;
+        // 4. Hitung permohonan akses berkas privat yang belum dibaca
+        $privAccessReqIds = DigitalDocumentAccessRequest::where('status', 'pending')
+            ->pluck('id')
+            ->filter(fn ($id) => !in_array("priv_access_{$id}", $readKeys))
+            ->count();
+
+        $this->pendingCount = $waitingDocIds + $requestedLoanIds + $cancelDocIds + $privAccessReqIds;
         $this->historyCount = UserNotificationRead::where('user_id', Auth::id())->count();
     }
 
@@ -268,6 +279,35 @@ class TapersipNotificationListener extends Component
         $latestAnyCancelDoc = Document::where('status', 'cancellation_requested')->latest('id')->first();
         if ($latestAnyCancelDoc && $latestAnyCancelDoc->id > ($this->lastKnownCancelDocId ?? 0)) {
             $this->lastKnownCancelDocId = $latestAnyCancelDoc->id;
+        }
+
+        // 5. Cek permohonan akses berkas privat baru dari staf (status: pending)
+        $newPrivRequests = DigitalDocumentAccessRequest::with(['document', 'user.unit'])
+            ->where('id', '>', $this->lastKnownPrivAccessReqId ?? 0)
+            ->where('status', 'pending')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        foreach ($newPrivRequests as $req) {
+            $hasChanges = true;
+            $this->lastKnownPrivAccessReqId = max($this->lastKnownPrivAccessReqId ?? 0, $req->id);
+
+            $stafName = $req->user?->name ?? 'Staf';
+            $unitName = $req->user?->unit?->name ? " ({$req->user->unit->name})" : '';
+            $docNumber = $req->document?->document_number ?? 'Berkas Privat';
+
+            $this->dispatch('desktop-notify', [
+                'title' => 'Permohonan Akses Berkas Privat',
+                'body' => "{$stafName}{$unitName} mengajukan izin berkas {$docNumber}. Alasan: " . \Illuminate\Support\Str::limit($req->reason, 60),
+                'url' => route('library.index', ['tab' => 'pending_approvals', 'highlight' => "req-{$req->id}"]),
+                'type' => 'private_access_requested',
+                'loan_code' => $docNumber,
+            ]);
+        }
+
+        $latestAnyPrivReq = DigitalDocumentAccessRequest::where('status', 'pending')->latest('id')->first();
+        if ($latestAnyPrivReq && $latestAnyPrivReq->id > ($this->lastKnownPrivAccessReqId ?? 0)) {
+            $this->lastKnownPrivAccessReqId = $latestAnyPrivReq->id;
         }
 
         if ($hasChanges) {
@@ -432,7 +472,66 @@ class TapersipNotificationListener extends Component
                     })
                 : collect();
 
-            $allItems = $scanItems->concat($loanItems)->concat($cancelItems)->concat($archivedScanItems)->concat($voidedItems);
+            // 4. Permohonan akses berkas privat (status: pending) terkini
+            $privAccessItems = DigitalDocumentAccessRequest::with(['document', 'user.unit'])
+                ->where('status', 'pending')
+                ->latest('created_at')
+                ->take(20)
+                ->get()
+                ->map(function ($req) use ($readKeys) {
+                    $key = "priv_access_{$req->id}";
+
+                    return [
+                        'key' => $key,
+                        'category' => 'library_access',
+                        'badge' => 'Akses Privat',
+                        'is_unread' => !in_array($key, $readKeys),
+                        'identifier' => $req->document?->document_number ?? 'Berkas Privat',
+                        'title' => 'Permohonan Akses Berkas Privat',
+                        'actor' => $req->user?->name ?? 'Staf',
+                        'unit' => $req->user?->unit?->name ?? 'Pustaka Digital',
+                        'extra' => 'Alasan: ' . \Illuminate\Support\Str::limit($req->reason, 60),
+                        'timestamp' => $req->created_at,
+                        'target_url' => route('library.index', ['tab' => 'pending_approvals', 'highlight' => "req-{$req->id}"]),
+                    ];
+                });
+
+            // 4b. Permohonan akses berkas privat yang disetujui / ditolak yang pernah dibaca (Histori)
+            $readPrivReqIds = collect($readKeys)
+                ->filter(fn ($k) => str_starts_with($k, 'priv_access_'))
+                ->map(fn ($k) => (int) str_replace('priv_access_', '', $k))
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->toArray();
+
+            $historyPrivItems = !empty($readPrivReqIds)
+                ? DigitalDocumentAccessRequest::with(['document', 'user.unit'])
+                    ->whereIn('id', $readPrivReqIds)
+                    ->whereIn('status', ['approved', 'rejected'])
+                    ->latest('updated_at')
+                    ->take(20)
+                    ->get()
+                    ->map(function ($req) {
+                        $key = "priv_access_{$req->id}";
+                        $isApproved = $req->status === 'approved';
+
+                        return [
+                            'key' => $key,
+                            'category' => 'library_access',
+                            'badge' => $isApproved ? 'Akses Disetujui' : 'Akses Ditolak',
+                            'is_unread' => false,
+                            'identifier' => $req->document?->document_number ?? 'Berkas Privat',
+                            'title' => $isApproved ? 'Izin Akses Privat Disetujui' : 'Izin Akses Privat Ditolak',
+                            'actor' => $req->user?->name ?? 'Staf',
+                            'unit' => $req->user?->unit?->name ?? 'Pustaka Digital',
+                            'extra' => 'Alasan: ' . \Illuminate\Support\Str::limit($req->reason, 60),
+                            'timestamp' => $req->updated_at,
+                            'target_url' => route('library.index', ['tab' => 'pending_approvals', 'highlight' => "req-{$req->id}"]),
+                        ];
+                    })
+                : collect();
+
+            $allItems = $scanItems->concat($loanItems)->concat($cancelItems)->concat($privAccessItems)->concat($archivedScanItems)->concat($voidedItems)->concat($historyPrivItems);
 
             // Pisahkan unread dan history
             $unreadItems = $allItems->filter(fn ($item) => $item['is_unread'])

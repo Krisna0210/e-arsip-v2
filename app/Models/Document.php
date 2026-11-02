@@ -36,6 +36,8 @@ class Document extends Model
         'sifat',
         'status',
         'archive_status',
+        'available_hardcopy',
+        'available_softcopy',
         'current_version_id',
         'retention_start_date',
         'retention_end_date',
@@ -43,6 +45,8 @@ class Document extends Model
     ];
 
     protected $casts = [
+        'available_hardcopy' => 'boolean',
+        'available_softcopy' => 'boolean',
         'document_date' => 'date',
         'received_date' => 'date',
         'cancellation_requested_at' => 'datetime',

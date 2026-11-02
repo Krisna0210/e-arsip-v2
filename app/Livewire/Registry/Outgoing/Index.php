@@ -460,7 +460,7 @@ public function updatedActiveFolderId()
             }])
             ->get();
             
-        $allFolders = Folder::forType('outgoing')->with('parent')->orderBy('name')->get();
+        $allFolders = Folder::getTreeForType('outgoing');
         $classifications = Classification::whereNotNull('parent_id')->orderBy('code')->get();
 
         $query = Document::with(['folder', 'documentType', 'classification', 'unit', 'currentVersion'])
@@ -534,11 +534,20 @@ public function updatedActiveFolderId()
 
         $documents = $query->orderBy('created_at', 'desc')->paginate(10);
 
+        $expandedFolderIds = [];
+        if ($this->activeFolderId) {
+            $actFolder = Folder::find($this->activeFolderId);
+            if ($actFolder) {
+                $expandedFolderIds = array_merge([$actFolder->id], $actFolder->getAncestorIds());
+            }
+        }
+
         return view('livewire.registry.outgoing.index', [
             'folders' => $folders,
             'allFolders' => $allFolders,
             'classifications' => $classifications,
             'documents' => $documents,
+            'expandedFolderIds' => $expandedFolderIds,
         ]);
     }
 }

@@ -73,10 +73,18 @@
                     @endif
 
                     <!-- Kategori: Kearsipan -->
-                    @if(auth()->user()->hasModuleAccess('in_out_mail') || auth()->user()->hasModuleAccess('internal_memo') || auth()->user()->hasModuleAccess('archive_queue') || auth()->user()->hasModuleAccess('document_borrowing') || auth()->user()->hasModuleAccess('loan_circulation') || auth()->user()->hasModuleAccess('cancelled_documents'))
+                    @if(auth()->user()->hasModuleAccess('in_out_mail') || auth()->user()->hasModuleAccess('internal_memo') || auth()->user()->hasModuleAccess('archive_queue') || auth()->user()->hasModuleAccess('document_borrowing') || auth()->user()->hasModuleAccess('loan_circulation') || auth()->user()->hasModuleAccess('cancelled_documents') || auth()->user()->hasModuleAccess('digital_library'))
                     <div>
                         <h3 class="px-3 text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider mb-2 mt-4">Kearsipan</h3>
                         <nav class="space-y-1">
+                            @if(auth()->user()->hasModuleAccess('digital_library'))
+                            <a href="{{ route('library.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg relative {{ request()->routeIs('library.*') ? 'bg-white/10 text-white font-medium before:absolute before:right-0 before:top-2 before:bottom-2 before:w-1 before:bg-emerald-400 before:rounded-l' : 'hover:bg-[var(--color-surface-sidebar-hover)] hover:text-white transition-colors' }}">
+                                <svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                                <span class="text-sm">Pustaka Digital</span>
+                            </a>
+                            @endif
                             @if(auth()->user()->hasModuleAccess('document_borrowing') || auth()->user()->hasModuleAccess('loan_circulation'))
                             <a href="{{ route('borrowings.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg relative {{ request()->routeIs('borrowings.*') ? 'bg-white/10 text-white font-medium before:absolute before:right-0 before:top-2 before:bottom-2 before:w-1 before:bg-emerald-400 before:rounded-l' : 'hover:bg-[var(--color-surface-sidebar-hover)] hover:text-white transition-colors' }}">
                                 <svg class="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

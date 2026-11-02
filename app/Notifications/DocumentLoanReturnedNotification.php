@@ -47,10 +47,17 @@ class DocumentLoanReturnedNotification extends Notification
         $docType = $document?->documentType?->name
             ?? ($document?->type === 'outgoing' ? 'Surat Keluar' : ($document?->type === 'incoming' ? 'Surat Masuk' : 'Surat Khusus'));
 
-        $conditionNotes = $this->notes ?: ($this->loan->notes ?: 'Berkas fisik diterima kembali dalam kondisi baik dan lengkap.');
+        $defaultNotes = $this->loan->isSoftcopy()
+            ? 'Peminjaman berkas digital (softcopy) telah selesai dan izin akses pratinjau ditutup.'
+            : 'Berkas fisik diterima kembali dalam kondisi baik dan lengkap.';
+        $conditionNotes = $this->notes ?: ($this->loan->notes ?: $defaultNotes);
+
+        $subject = $this->loan->isSoftcopy()
+            ? "Peminjaman Berkas Digital {$this->loan->loan_code} Telah Selesai"
+            : "Pengembalian Berkas Fisik {$this->loan->loan_code} Berhasil Dikonfirmasi";
 
         return (new MailMessage)
-            ->subject("Pengembalian Berkas Fisik {$this->loan->loan_code} Berhasil Dikonfirmasi")
+            ->subject($subject)
             ->view('emails.loan-returned', [
                 'recipientName' => $notifiable->name ?? 'Staf Pemohon',
                 'loan' => $this->loan,

@@ -124,10 +124,14 @@
                     <!-- Body Content -->
                     <tr>
                         <td class="content">
-                            <h2 class="title">Peminjaman Berkas Disetujui</h2>
+                            <h2 class="title">{{ $loan->isSoftcopy() ? 'Peminjaman Softcopy Disetujui' : 'Peminjaman Berkas Fisik Disetujui' }}</h2>
                             <p class="greeting">
                                 Halo <strong>{{ $recipientName }}</strong>,<br>
-                                Permohonan peminjaman berkas fisik dokumen Anda telah disetujui mohon menuju ke Tapersip untuk mengambil berkas.
+                                @if($loan->isSoftcopy())
+                                    Permohonan peminjaman berkas digital (softcopy) dokumen Anda telah disetujui. Anda dapat melihat pratinjau dokumen secara langsung melalui menu <strong>Pinjaman Saya</strong> di aplikasi e-Arsip dengan batas waktu akses {{ $loan->duration_hours }} jam.
+                                @else
+                                    Permohonan peminjaman berkas fisik dokumen Anda telah disetujui. Mohon menuju ke Ruang Layanan Tapersip untuk mengambil berkas fisik dengan menunjukkan kode tiket peminjaman.
+                                @endif
                             </p>
 
                             <!-- Document Details Card -->
@@ -136,6 +140,10 @@
                                     <tr>
                                         <td class="details-label">Kode Tiket</td>
                                         <td class="details-value details-mono">: {{ $loan->loan_code }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="details-label">Tipe Peminjaman</td>
+                                        <td class="details-value">: <strong>{{ $loan->isSoftcopy() ? 'Berkas Digital (Softcopy)' : 'Berkas Fisik (Hardcopy)' }}</strong></td>
                                     </tr>
                                     <tr>
                                         <td class="details-label">Nomor Dokumen</td>
@@ -155,12 +163,21 @@
                                             : {{ $loan->borrow_date ? \Carbon\Carbon::parse($loan->borrow_date)->translatedFormat('d F Y') : '-' }}
                                         </td>
                                     </tr>
+                                    @if($loan->isSoftcopy())
+                                    <tr>
+                                        <td class="details-label">Batas Waktu Akses</td>
+                                        <td class="details-value">
+                                            : {{ $loan->access_expires_at ? \Carbon\Carbon::parse($loan->access_expires_at)->translatedFormat('d F Y, H:i') . ' WIB' : '-' }} ({{ $loan->duration_hours }} Jam)
+                                        </td>
+                                    </tr>
+                                    @else
                                     <tr>
                                         <td class="details-label">Batas Pengembalian</td>
                                         <td class="details-value">
                                             : {{ $loan->expected_return_date ? \Carbon\Carbon::parse($loan->expected_return_date)->translatedFormat('d F Y') : '-' }}
                                         </td>
                                     </tr>
+                                    @endif
                                     @if($officer)
                                     <tr>
                                         <td class="details-label">Petugas Tapersip</td>

@@ -149,7 +149,7 @@
                             <h2 class="title">Permohonan Pinjam Berkas Ditolak</h2>
                             <p class="greeting">
                                 Halo <strong>{{ $recipientName }}</strong>,<br>
-                                Mohon maaf, permohonan peminjaman berkas fisik dokumen Anda tidak dapat disetujui oleh Petugas Layanan Tapersip saat ini.
+                                Mohon maaf, permohonan peminjaman berkas {{ $loan->isSoftcopy() ? 'digital (softcopy)' : 'fisik (hardcopy)' }} dokumen Anda tidak dapat disetujui oleh Petugas Layanan Tapersip saat ini.
                             </p>
 
                             <!-- Document Details Card -->
@@ -158,6 +158,10 @@
                                     <tr>
                                         <td class="details-label">Kode Tiket</td>
                                         <td class="details-value details-mono">: {{ $loan->loan_code }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="details-label">Tipe Peminjaman</td>
+                                        <td class="details-value">: <strong>{{ $loan->isSoftcopy() ? 'Berkas Digital (Softcopy)' : 'Berkas Fisik (Hardcopy)' }}</strong></td>
                                     </tr>
                                     <tr>
                                         <td class="details-label">Nomor Dokumen</td>

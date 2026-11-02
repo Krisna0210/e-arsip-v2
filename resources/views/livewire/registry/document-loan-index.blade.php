@@ -4,8 +4,8 @@
         <div>
             <div class="flex items-center gap-3">
                 <div>
-                    <h1 class="text-xl font-bold text-slate-800 tracking-tight">Pinjam Berkas Arsip Fisik</h1>
-                    <p class="text-xs text-slate-500 mt-0.5">Layanan pencarian hardcopy di lemari kearsipan, permohonan peminjaman fisik, dan penerbitan tiket sirkulasi.</p>
+                    <h1 class="text-xl font-bold text-slate-800 tracking-tight">Pinjam Berkas Arsip</h1>
+                    <p class="text-xs text-slate-500 mt-0.5">Layanan pencarian dokumen dan permohonan peminjaman hardcopy, softcopy di lemari kearsipan.</p>
                 </div>
             </div>
         </div>
@@ -157,6 +157,7 @@
                             <th class="px-5 py-3.5 w-1/4">Identitas Dokumen</th>
                             <th class="px-5 py-3.5 w-1/3">Perihal</th>
                             {{-- <th class="px-5 py-3.5 text-center">Lokasi Surat</th> --}}
+                            <th class="px-5 py-3.5 text-center">Tersedia</th>
                             <th class="px-5 py-3.5 text-center">Status</th>
                             <th class="px-5 py-3.5 text-right">Aksi</th>
                         </tr>
@@ -236,67 +237,88 @@
                                             </button>
                                         @endif
                                     </div>
-                                    {{-- <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-2">
-                                        @if($doc->sender)
-                                            <span class="truncate max-w-[200px]">Dari: <strong class="text-slate-700 font-semibold">{{ $doc->sender }}</strong></span>
-                                        @elseif($doc->unit)
-                                            <span class="truncate max-w-[200px]">Unit: <strong class="text-slate-700 font-semibold">{{ $doc->unit->name }}</strong></span>
-                                        @endif
-                                        @if($doc->recipient_name)
-                                            <span class="text-slate-300">|</span>
-                                            <span class="truncate max-w-[200px]">Ke: <strong class="text-slate-700 font-semibold">{{ $doc->recipient_name }}</strong></span>
-                                        @endif
-                                    </div> --}}
                                 </td>
 
-                                {{-- <!-- Lokasi Fisik Loker -->
-                                <td class="px-5 py-4 align-top">
-                                    @if($doc->folder)
-                                        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700">
-                                            <svg class="w-3.5 h-3.5 text-amber-600 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                                <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                                            </svg>
-                                            <span class="truncate max-w-[180px]" title="{{ $doc->folder->name }}">{{ $doc->folder->name }}</span>
-                                        </div>
-                                    @else
-                                        <span class="text-xs text-slate-400 italic">Belum ditentukan</span>
-                                    @endif
-                                </td> --}}
-
-                                <!-- Status Ketersediaan Fisik -->
+                                <!-- Kolom Format Tersedia (Hardcopy / Softcopy) -->
                                 <td class="px-5 py-4 align-top text-center">
-                                    @if($isBorrowed)
-                                        <span class="inline-flex flex-col items-center">
-                                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                                Dipinjam
+                                    <div class="inline-flex items-center gap-1.5 flex-wrap justify-center">
+                                        @if($doc->available_hardcopy)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title="Berkas Fisik Tersedia di Lemari Loker">
+                                                Hardcopy
                                             </span>
-                                            @if($activeLoan && $activeLoan->user)
-                                                <span class="text-[10px] text-amber-700 mt-1 max-w-[140px] truncate" title="Dipinjam oleh {{ $activeLoan->user->name }}">
+                                        @endif
+                                        @if($doc->available_softcopy)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200" title="Berkas Digital PDF Tersedia di Server">
+                                                Softcopy
+                                            </span>
+                                        @endif
+                                        @if(!$doc->available_hardcopy && !$doc->available_softcopy)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                                                Belum Tersedia
+                                            </span>
+                                        @endif
+                                    </div>
+                                </td>
+
+                                <!-- Status Ketersediaan Fisik / Sirkulasi -->
+                                <td class="px-5 py-4 align-top text-center">
+                                    @if($isBorrowed && $activeLoan)
+                                        <span class="inline-flex flex-col items-center">
+                                            @if($activeLoan->isSoftcopy())
+                                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                                    Dipinjam (Softcopy)
+                                                </span>
+                                            @else
+                                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                                    Dipinjam (Hardcopy)
+                                                </span>
+                                            @endif
+                                            @if($activeLoan->user)
+                                                <span class="text-[10px] text-slate-600 mt-1 max-w-[140px] truncate" title="Dipinjam oleh {{ $activeLoan->user->name }}">
                                                     Oleh: {{ $activeLoan->user->name }}
                                                 </span>
                                             @endif
+                                            @if($activeLoan->isSoftcopy())
+                                                <span class="text-[10px] font-mono font-semibold {{ $activeLoan->hasActiveSoftcopyAccess() ? 'text-blue-700' : 'text-rose-600' }} mt-0.5" title="Batas waktu izin digital">
+                                                    @if($activeLoan->duration_hours)
+                                                        Durasi: {{ $activeLoan->duration_hours }} Jam (Sisa: {{ $activeLoan->remaining_time_human }})
+                                                    @elseif($activeLoan->access_expires_at)
+                                                        Sisa: {{ $activeLoan->remaining_time_human }}
+                                                    @endif
+                                                </span>
+                                            @endif
                                         </span>
-                                    @elseif($isRequested)
+                                    @elseif($isRequested && $activeLoan)
                                         <span class="inline-flex flex-col items-center">
-                                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                                Diajukan Pinjam
-                                            </span>
+                                            @if($activeLoan->isSoftcopy())
+                                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                                    Diajukan (Softcopy)
+                                                </span>
+                                            @else
+                                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                                    Diajukan (Hardcopy)
+                                                </span>
+                                            @endif
                                             <span class="text-[10px] text-slate-400 mt-1">Menunggu Tapersip</span>
                                         </span>
-                                    @else
+                                    @elseif($doc->available_hardcopy || $doc->available_softcopy)
                                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                             Tersedia
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                                            Belum Tersedia
                                         </span>
                                     @endif
                                 </td>
 
                                 <!-- Aksi -->
                                 <td class="px-5 py-4 align-top text-right">
-                                    @if(!$isBorrowed && !$isRequested)
+                                    @if(!$isBorrowed && !$isRequested && ($doc->available_hardcopy || $doc->available_softcopy))
                                         <button
                                             type="button"
                                             wire:click="openLoanModal({{ $doc->id }})"
-                                            class="inline-flex items-center gap-1.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-2xs transition-colors">
+                                            class="inline-flex items-center gap-1.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-2xs transition-colors cursor-pointer">
                                             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                                             </svg>
@@ -306,7 +328,8 @@
                                         <button
                                             type="button"
                                             disabled
-                                            class="inline-flex items-center gap-1 bg-slate-100 text-slate-400 text-xs font-semibold px-3 py-1.5 rounded-lg cursor-not-allowed border border-slate-200">
+                                            class="inline-flex items-center gap-1 bg-slate-100 text-slate-400 text-xs font-semibold px-3 py-1.5 rounded-lg cursor-not-allowed border border-slate-200"
+                                            title="{{ ($isBorrowed || $isRequested) ? 'Dokumen sedang dipinjam atau dalam proses pengajuan' : 'Format berkas belum tersedia' }}">
                                             Tidak Tersedia
                                         </button>
                                     @endif
@@ -431,13 +454,25 @@
                                             </div>
                                         @endif
                                     @endif
-                                    {{-- @if($loan->document && $loan->document->folder)
-                                        <div class="mt-1.5">
-                                            <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                                📁 {{ $loan->document->folder->name }}
+
+                                    <!-- Format Pinjaman Badge -->
+                                    <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                                        @if($loan->isHardcopy())
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                                Hardcopy
                                             </span>
-                                        </div>
-                                    @endif --}}
+                                        @endif
+                                        @if($loan->isSoftcopy())
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                                Softcopy
+                                            </span>
+                                            @if($loan->status === 'borrowed' && $loan->access_expires_at)
+                                                <span class="text-[10px] font-mono font-semibold {{ $loan->hasActiveSoftcopyAccess() ? 'text-emerald-700' : 'text-rose-600' }}">
+                                                    ({{ $loan->hasActiveSoftcopyAccess() ? 'Sisa: ' . $loan->remaining_time_human : 'Kedaluwarsa' }})
+                                                </span>
+                                            @endif
+                                        @endif
+                                    </div>
                                 </td>
 
                                 <!-- Masa Peminjaman -->
@@ -502,17 +537,37 @@
 
                                 <!-- Aksi -->
                                 <td class="px-5 py-4 align-top text-right">
-                                    <div class="flex items-center justify-end gap-1.5">
+                                    <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                                        @if($loan->status === 'borrowed' && $loan->isSoftcopy())
+                                            @if($loan->hasActiveSoftcopyAccess())
+                                                <button
+                                                    type="button"
+                                                    wire:click="openPreviewModal({{ $loan->id }})"
+                                                    title="Pratinjau Berkas Softcopy (Sisa: {{ $loan->remaining_time_human }})"
+                                                    class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 hover:text-blue-900 transition-colors shadow-2xs cursor-pointer">
+                                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    </svg>
+                                                    {{-- <span>Pratinjau</span> --}}
+                                                </button>
+                                            @else
+                                                <span class="inline-flex items-center px-2 py-1 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 select-none" title="Masa izin pratinjau digital telah kedaluwarsa">
+                                                    Akses Kedaluwarsa
+                                                </span>
+                                            @endif
+                                        @endif
+
                                         @if($loan->status === 'requested')
                                             <button
                                                 type="button"
                                                 wire:click="cancelLoanRequest({{ $loan->id }})"
-                                                wire:confirm="Batalkan permohonan peminjaman fisik tiket {{ $loan->loan_code }} ini?"
+                                                wire:confirm="Batalkan permohonan peminjaman tiket {{ $loan->loan_code }} ini?"
                                                 title="Batalkan Permohonan"
                                                 class="inline-flex items-center px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-rose-200 text-rose-600 bg-white hover:bg-rose-50 transition-colors shadow-2xs cursor-pointer">
                                                 Batal
                                             </button>
-                                        @else
+                                        @elseif($loan->status !== 'borrowed' || !$loan->isSoftcopy())
                                             <span class="text-slate-400 font-mono text-sm inline-block select-none pr-3">-</span>
                                         @endif
                                     </div>
@@ -683,6 +738,24 @@
                                             <span class="text-[11px] text-red-500 font-semibold italic">⚠️ Belum ada loker fisik</span>
                                         @endif
                                     </div>
+
+                                    <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                        @if($loan->isHardcopy())
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                                Hardcopy
+                                            </span>
+                                        @endif
+                                        @if($loan->isSoftcopy())
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                                Softcopy
+                                            </span>
+                                            @if($loan->status === 'borrowed' && $loan->access_expires_at)
+                                                <span class="text-[10px] font-mono font-semibold {{ $loan->hasActiveSoftcopyAccess() ? 'text-emerald-700' : 'text-rose-600' }}">
+                                                    (Izin: {{ $loan->hasActiveSoftcopyAccess() ? $loan->remaining_time_human : 'Kedaluwarsa' }})
+                                                </span>
+                                            @endif
+                                        @endif
+                                    </div>
                                 </td>
 
                                 <!-- Peminjam -->
@@ -804,15 +877,15 @@
 
                                                 @if($loan->status === 'requested')
                                                     <div class="py-1">
-                                                        <!-- Opsi 2: Serahkan Berkas -->
+                                                        <!-- Opsi 2: Serahkan Berkas / Pinjamkan -->
                                                         <button
                                                             type="button"
                                                             wire:click="approveLoan({{ $loan->id }})"
-                                                            wire:confirm="Konfirmasi penyerahan berkas fisik kepada pemohon?"
+                                                            @if(!$loan->isSoftcopy()) wire:confirm="Konfirmasi penyerahan berkas fisik kepada pemohon?" @endif
                                                             @click="open = false"
                                                             class="w-full text-left px-4 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 transition-colors"
                                                         >
-                                                            Pinjamkan
+                                                            {{ $loan->isSoftcopy() ? 'Setujui & Atur Durasi' : 'Pinjamkan' }}
                                                         </button>
 
                                                         <!-- Opsi 3: Tolak Permohonan -->
@@ -892,7 +965,7 @@
     <!-- ============================================================== -->
     <!-- MODAL 1: FORM PENGAJUAN PINJAM (modal-loan-request)            -->
     <!-- ============================================================== -->
-    <x-ui.modal title="Formulir Permohonan Pinjam Arsip Fisik" id="modal-loan-request" width="max-w-xl">
+    <x-ui.modal title="Formulir Permohonan Pinjam Arsip" id="modal-loan-request" width="max-w-xl">
         @if($selectedDocument)
             <div class="space-y-4">
                 <!-- Info Ringkas Dokumen Terpilih -->
@@ -910,6 +983,59 @@
                             📁 {{ $selectedDocument->folder->name ?? 'Belum Ditentukan' }}
                         </span>
                     </div>
+                </div>
+
+                <!-- Pemilihan Tipe Dokumen yang Dipinjam (Berdasarkan Ketersediaan - Hanya Salah Satu) -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                        Tipe Dokumen yang Dipinjam (Pilih Salah Satu) <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- Pilihan Hardcopy -->
+                        <label class="flex items-start gap-2.5 p-3 rounded-xl border transition-colors {{ !$selectedDocument->available_hardcopy ? 'opacity-50 cursor-not-allowed bg-slate-50 border-slate-200' : ($borrowType === 'hardcopy' ? 'border-amber-500 bg-amber-50/50 cursor-pointer shadow-2xs font-semibold' : 'border-slate-200 hover:bg-slate-50 cursor-pointer') }}">
+                            <input type="radio"
+                                   name="borrowType"
+                                   value="hardcopy"
+                                   wire:model.live="borrowType"
+                                   @disabled(!$selectedDocument->available_hardcopy)
+                                   class="mt-0.5 text-amber-600 focus:ring-amber-500">
+                            <div>
+                                <div class="text-xs font-bold {{ $selectedDocument->available_hardcopy ? 'text-amber-950' : 'text-slate-400' }}">
+                                    Berkas Fisik (Hardcopy)
+                                </div>
+                                <div class="text-[11px] text-slate-500 mt-0.5 font-normal">
+                                    @if($selectedDocument->available_hardcopy)
+                                        Peminjaman fisik di lemari kearsipan Tapersip dengan tiket bukti peminjaman.
+                                    @else
+                                        <span class="text-rose-500 font-medium">Fisik hardcopy belum tersedia di lemari arsip.</span>
+                                    @endif
+                                </div>
+                            </div>
+                        </label>
+
+                        <!-- Pilihan Softcopy -->
+                        <label class="flex items-start gap-2.5 p-3 rounded-xl border transition-colors {{ !$selectedDocument->available_softcopy ? 'opacity-50 cursor-not-allowed bg-slate-50 border-slate-200' : ($borrowType === 'softcopy' ? 'border-blue-500 bg-blue-50/50 cursor-pointer shadow-2xs font-semibold' : 'border-slate-200 hover:bg-slate-50 cursor-pointer') }}">
+                            <input type="radio"
+                                   name="borrowType"
+                                   value="softcopy"
+                                   wire:model.live="borrowType"
+                                   @disabled(!$selectedDocument->available_softcopy)
+                                   class="mt-0.5 text-blue-600 focus:ring-blue-500">
+                            <div>
+                                <div class="text-xs font-bold {{ $selectedDocument->available_softcopy ? 'text-blue-950' : 'text-slate-400' }}">
+                                    Berkas Digital (Softcopy)
+                                </div>
+                                <div class="text-[11px] text-slate-500 mt-0.5 font-normal">
+                                    @if($selectedDocument->available_softcopy)
+                                        Akses pratinjau digital berbatas waktu pada menu Pinjaman Saya.
+                                    @else
+                                        <span class="text-rose-500 font-medium">Dokumen dibawah tahun 2026 tidak semua dokumen tersedia scan digital (PDF).</span>
+                                    @endif
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                    @error('borrowType') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
                 </div>
 
                 <!-- Input Tanggal & Estimasi -->
@@ -953,7 +1079,11 @@
                     <svg class="w-4 h-4 shrink-0 text-blue-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span>Setelah permohonan dikirim, petugas Tapersip akan menerima notifikasi untuk menyiapkan berkas fisik dan mencetak bukti peminjaman. Anda akan menerima notifikasi email konfirmasi saat berkas siap diambil.</span>
+                    @if($borrowType === 'softcopy')
+                        <span>Setelah permohonan dikirim, petugas Tapersip akan memeriksa dan memberikan durasi batas waktu izin akses digital. Anda akan menerima notifikasi email saat berkas siap dipratinjau pada menu <strong>Pinjaman Saya</strong>.</span>
+                    @else
+                        <span>Setelah permohonan dikirim, petugas Tapersip akan menyiapkan berkas fisik di lemari kearsipan dan mencetak bukti peminjaman. Anda akan menerima notifikasi email saat berkas siap diambil di loket Tapersip.</span>
+                    @endif
                 </div>
             </div>
         @endif
@@ -978,22 +1108,30 @@
     </x-ui.modal>
 
     <!-- ============================================================== -->
-    <!-- MODAL 2: KONFIRMASI PENGEMBALIAN BERKAS (modal-loan-return)    -->
+    <!-- MODAL 2: KONFIRMASI PENGEMBALIAN / PENYELESAIAN (modal-loan-return) -->
     <!-- ============================================================== -->
-    <x-ui.modal title="Konfirmasi Pengembalian Berkas ke Loker" id="modal-loan-return" width="max-w-md">
+    @php
+        $currReturnLoan = $selectedLoanId ? \App\Models\DocumentLoan::find($selectedLoanId) : null;
+        $isReturnSoftcopy = $currReturnLoan && $currReturnLoan->isSoftcopy();
+    @endphp
+    <x-ui.modal :title="$isReturnSoftcopy ? 'Selesaikan Peminjaman Softcopy' : 'Konfirmasi Pengembalian Berkas ke Loker'" id="modal-loan-return" width="max-w-md">
         <div class="space-y-4">
             <p class="text-sm text-slate-600">
-                Pastikan fisik naskah surat telah diperiksa kelengkapannya dan dikembalikan ke lemari loker arsip bersangkutan.
+                @if($isReturnSoftcopy)
+                    Konfirmasi penyelesaian peminjaman berkas digital (softcopy). Akses pratinjau digital untuk pemohon akan resmi dinonaktifkan.
+                @else
+                    Pastikan fisik naskah surat telah diperiksa kelengkapannya dan dikembalikan ke lemari loker arsip bersangkutan.
+                @endif
             </p>
 
             <div>
                 <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
-                    Catatan Kondisi Berkas Fisik (Opsional)
+                    {{ $isReturnSoftcopy ? 'Catatan Penyelesaian Akses (Opsional)' : 'Catatan Kondisi Berkas Fisik (Opsional)' }}
                 </label>
                 <textarea
                     wire:model="returnNotes"
                     rows="3"
-                    placeholder="Contoh: Berkas dikembalikan utuh, bersih, dan map tertata rapi..."
+                    placeholder="{{ $isReturnSoftcopy ? 'Contoh: Akses digital ditutup lebih awal atas konfirmasi peminjam...' : 'Contoh: Berkas dikembalikan utuh, bersih, dan map tertata rapi...' }}"
                     class="w-full bg-slate-50 border border-slate-200 text-sm rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
                 ></textarea>
             </div>
@@ -1003,16 +1141,16 @@
             <button
                 type="button"
                 wire:click="confirmReturn"
-                class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors inline-flex items-center justify-center gap-1.5">
+                class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
-                Konfirmasi Berkas Kembali
+                <span>{{ $isReturnSoftcopy ? 'Selesaikan Pinjaman Softcopy' : 'Konfirmasi Berkas Kembali' }}</span>
             </button>
             <button
                 type="button"
                 @click="show = false"
-                class="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+                class="w-full sm:w-auto bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer">
                 Batal
             </button>
         </x-slot:footer>
@@ -1260,6 +1398,164 @@
                 Batal
             </button>
         </x-slot:footer>
+    </x-ui.modal>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: PERSETUJUAN SOFTCOPY DENGAN DURASI (Tapersip)           -->
+    <!-- ============================================================== -->
+    <x-ui.modal name="modal-approve-softcopy-loan" width="max-w-md" title="Persetujuan Akses Dokumen Softcopy">
+        <form wire:submit.prevent="executeApproveSoftcopyLoan" class="space-y-4">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1.5 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-500 font-medium">Tiket Sirkulasi:</span>
+                    <span class="font-mono font-bold text-[var(--color-primary)]">{{ $approveLoanCode }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-500 font-medium">Peminjam:</span>
+                    <span class="font-bold text-slate-800">{{ $approveBorrowerName }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-500 font-medium">Nomor Berkas:</span>
+                    <span class="font-mono font-bold text-slate-800">{{ $approveDocNumber }}</span>
+                </div>
+                <div class="text-slate-600 leading-snug pt-1 border-t border-slate-200 font-medium">{{ $approveDocSubject }}</div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">
+                    Batas Waktu Akses Dokumen Softcopy <span class="text-rose-500">*</span>
+                </label>
+                <select wire:model="approveDurationHours" class="w-full bg-slate-50 border border-slate-200 text-xs rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]">
+                    <option value="2">2 Jam</option>
+                    <option value="6">6 Jam</option>
+                    <option value="24">1 Hari (24 Jam)</option>
+                    <option value="72">3 Hari (72 Jam)</option>
+                    <option value="168">7 Hari (1 Minggu)</option>
+                </select>
+                <span class="text-[11px] text-slate-400 mt-1 block">Setelah durasi ini terlampaui, akses pratinjau dokumen digital otomatis terkunci kembali untuk peminjam.</span>
+                @error('approveDurationHours') <span class="text-xs text-rose-500 mt-1 block">{{ $message }}</span> @enderror
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button type="button"
+                        @click="$dispatch('close-modal', 'modal-approve-softcopy-loan')"
+                        class="px-4 py-2 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
+                    Batal
+                </button>
+                <button type="submit"
+                        wire:loading.attr="disabled"
+                        class="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-2xs cursor-pointer disabled:opacity-50">
+                    Setujui & Buka Akses Digital
+                </button>
+            </div>
+        </form>
+    </x-ui.modal>
+
+    <!-- ============================================================== -->
+    <!-- MODAL: PRATINJAU DOKUMEN SOFTCOPY (4 Lapis Pengamanan)         -->
+    <!-- ============================================================== -->
+    <x-ui.modal name="modal-preview-loan-doc" width="max-w-7xl" padding="false" title="Pratinjau Softcopy Dokumen">
+        @if($previewDocument && $previewVersion)
+            <div x-data="{
+                    isBlurred: false,
+                    init() {
+                        const blockKey = (e) => {
+                            if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                return false;
+                            }
+                        };
+                        window.addEventListener('keydown', blockKey);
+                        window.addEventListener('blur', () => { this.isBlurred = true; });
+                        window.addEventListener('focus', () => { this.isBlurred = false; });
+                    }
+                 }"
+                 @contextmenu.prevent
+                 class="flex flex-col h-[85vh] bg-slate-900 select-none relative overflow-hidden">
+
+                <style>
+                    @media print {
+                        body, iframe, [role='dialog'] {
+                            display: none !important;
+                            visibility: hidden !important;
+                        }
+                        body::before {
+                            content: 'DOKUMEN DILINDUNGI: Berkas digital pinjaman bersifat rahasia dan dilarang dicetak sesuai kebijakan keamanan informasi perusahaan.';
+                            display: block !important;
+                            font-family: sans-serif;
+                            font-size: 16pt;
+                            font-weight: bold;
+                            text-align: center;
+                            color: #b91c1c;
+                            padding-top: 150px;
+                        }
+                    }
+                </style>
+
+                <!-- Toolbar Header Pratinjau -->
+                <div class="bg-slate-800 px-5 py-3 border-b border-slate-700 flex items-center justify-between text-white flex-wrap gap-3 z-30 relative">
+                    <div class="flex items-center gap-3">
+                        <span class="font-mono font-bold text-xs bg-slate-900 px-2.5 py-1 rounded border border-slate-700 text-emerald-400">
+                            {{ $previewDocument->number }}
+                        </span>
+                        <div>
+                            <h4 class="text-xs font-bold text-slate-100 leading-tight">{{ $previewDocument->subject }}</h4>
+                            <span class="text-[11px] text-slate-400">
+                                Tiket: {{ $previewLoan?->loan_code }} &bull; Sifat: {{ ucfirst($previewDocument->sifat ?? 'Biasa') }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        @if($previewLoan?->access_expires_at)
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                                Sisa Waktu: {{ $previewLoan->remaining_time_human }} (s.d {{ $previewLoan->access_expires_at->format('d/m/Y H:i') }})
+                            </span>
+                        @endif
+                    </div>
+                </div>
+
+                <!-- Konten Pratinjau -->
+                <div class="flex-1 overflow-hidden relative bg-slate-950 flex items-center justify-center">
+                    <!-- Anti-Capture Screen Shield -->
+                    <div x-show="isBlurred"
+                         x-transition.opacity
+                         class="absolute inset-0 z-40 bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-center text-center p-6"
+                         style="display: none;">
+                        <div class="p-3 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 mb-3">
+                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-100">Tampilan Pratinjau Diamankan</h3>
+                        <p class="text-xs text-slate-400 mt-1 max-w-sm">Konten disamarkan secara otomatis saat jendela browser kehilangan fokus.</p>
+                    </div>
+
+                    <!-- Forensic Dynamic Watermark Overlay -->
+                    <div class="absolute inset-0 z-30 pointer-events-none overflow-hidden select-none" style="opacity: 0.22;">
+                        <svg class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <pattern id="loan-forensic-watermark" width="340" height="200" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">
+                                    <text x="15" y="45" font-family="monospace" font-size="12" font-weight="bold"  stroke="#ffffff" stroke-width="0.25" letter-spacing="1">
+                                        DOKUMEN ARSIP DIGITAL PERUSAHAAN
+                                    </text>
+                                    <text x="15" y="65" font-family="monospace" font-size="10" font-weight="semibold" fill="#1e293b" stroke="#ffffff" stroke-width="0.2">
+                                       {{ Auth::user()->name }}&bull; {{ Auth::user()->unit?->name ?? 'Internal' }} &bull; {{ request()->ip() }}
+                                    </text>
+                                    <text x="15" y="85" font-family="monospace" font-size="9" fill="#334155" stroke="#ffffff" stroke-width="0.15">
+                                        {{ now()->format('d/m/Y H:i') }} WIB
+                                    </text>
+                                </pattern>
+                            </defs>
+                            <rect width="100%" height="100%" fill="url(#loan-forensic-watermark)" />
+                        </svg>
+                    </div>
+
+                    <iframe src="{{ route('document.preview', $previewVersion->id) }}#toolbar=0&navpanes=0"
+                            class="w-full h-full border-0"></iframe>
+                </div>
+            </div>
+        @endif
     </x-ui.modal>
 
     <!-- Style Print Khusus Isolasi Tiket A4 Portrait -->

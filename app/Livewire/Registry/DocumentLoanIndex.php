@@ -35,6 +35,20 @@ class DocumentLoanIndex extends Component
     public $borrowDate = '';
     public $expectedReturnDate = '';
     public $purpose = '';
+    public string $borrowType = 'hardcopy'; // 'hardcopy' or 'softcopy' (mutually exclusive)
+
+    // State Persetujuan Softcopy Berdurasi (Tapersip)
+    public $approveLoanId = null;
+    public $approveLoanCode = '';
+    public $approveDocNumber = '';
+    public $approveDocSubject = '';
+    public $approveBorrowerName = '';
+    public $approveDurationHours = 24;
+
+    // State Pratinjau Dokumen Softcopy Terlindungi
+    public $previewLoan = null;
+    public $previewDocument = null;
+    public $previewVersion = null;
 
     // State Tiket Cetak
     public $activeTicketLoan = null;
@@ -271,10 +285,25 @@ class DocumentLoanIndex extends Component
             return;
         }
 
-        // Cek apakah sedang ada pinjaman aktif
-        if ($doc->loans()->whereIn('status', ['requested', 'borrowed'])->exists()) {
-            $this->dispatch('notify', ['message' => 'Fisik dokumen ini sedang dalam proses peminjaman.', 'type' => 'error']);
+        // Cek ketersediaan format dokumen
+        if (!$doc->available_hardcopy && !$doc->available_softcopy) {
+            $this->dispatch('notify', ['message' => 'Dokumen ini belum tersedia baik dalam format fisik maupun digital.', 'type' => 'error']);
             return;
+        }
+
+        // Cek apakah dokumen sedang ada pinjaman aktif (softcopy maupun hardcopy)
+        if ($doc->loans()->whereIn('status', ['requested', 'borrowed'])->exists()) {
+            $this->dispatch('notify', ['message' => 'Dokumen ini sedang dalam proses peminjaman.', 'type' => 'error']);
+            return;
+        }
+
+        // Default tipe pinjam
+        if ($doc->available_hardcopy) {
+            $this->borrowType = 'hardcopy';
+        } elseif ($doc->available_softcopy) {
+            $this->borrowType = 'softcopy';
+        } else {
+            $this->borrowType = '';
         }
 
         $this->selectedDocument = $doc;
@@ -296,11 +325,13 @@ class DocumentLoanIndex extends Component
         }
 
         $this->validate([
+            'borrowType' => 'required|in:hardcopy,softcopy',
             'borrowDate' => 'required|date',
             'expectedReturnDate' => 'required|date|after_or_equal:borrowDate',
             'purpose' => 'required|string|min:5|max:1000',
         ], [
-            'purpose.required' => 'Keperluan peminjaman fisik wajib diisi.',
+            'borrowType.required' => 'Pilih salah satu tipe dokumen yang ingin dipinjam (Hardcopy atau Softcopy).',
+            'purpose.required' => 'Keperluan peminjaman wajib diisi.',
             'purpose.min' => 'Keperluan peminjaman minimal 5 karakter.',
             'expectedReturnDate.after_or_equal' => 'Estimasi pengembalian tidak boleh sebelum tanggal pinjam.',
         ]);
@@ -309,9 +340,19 @@ class DocumentLoanIndex extends Component
             return;
         }
 
-        // Cek kembali ketersediaan
+        if ($this->borrowType === 'hardcopy' && !$this->selectedDocument->available_hardcopy) {
+            $this->addError('borrowType', 'Berkas fisik (hardcopy) tidak tersedia untuk dokumen ini.');
+            return;
+        }
+
+        if ($this->borrowType === 'softcopy' && !$this->selectedDocument->available_softcopy) {
+            $this->addError('borrowType', 'Berkas digital (softcopy) belum tersedia untuk dokumen ini.');
+            return;
+        }
+
+        // Cek kembali ketersediaan jika sedang dipinjam softcopy maupun hardcopy
         if ($this->selectedDocument->loans()->whereIn('status', ['requested', 'borrowed'])->exists()) {
-            $this->dispatch('notify', ['message' => 'Fisik dokumen ini baru saja diajukan pinjam oleh pengguna lain.', 'type' => 'error']);
+            $this->dispatch('notify', ['message' => 'Dokumen ini sedang dalam proses peminjaman oleh staf lain.', 'type' => 'error']);
             $this->dispatch('close-modal', 'modal-loan-request');
             return;
         }
@@ -323,14 +364,20 @@ class DocumentLoanIndex extends Component
             'borrow_date' => $this->borrowDate,
             'expected_return_date' => $this->expectedReturnDate,
             'purpose' => $this->purpose,
+            'loan_type' => $this->borrowType,
             'status' => 'requested',
         ]);
 
+        $actionName = $this->borrowType === 'softcopy'
+            ? "Pengajuan Pinjam Softcopy: {$this->selectedDocument->number} (Tiket: {$loan->loan_code})"
+            : "Pengajuan Pinjam Fisik: {$this->selectedDocument->number} (Tiket: {$loan->loan_code})";
+
         \App\Models\AuditLog::record(
-            action: "Pengajuan Pinjam Fisik: {$this->selectedDocument->number} (Tiket: {$loan->loan_code})",
+            action: $actionName,
             documentId: $this->selectedDocument->id,
             metadata: [
                 'loan_code' => $loan->loan_code,
+                'loan_type' => $this->borrowType,
                 'borrow_date' => $this->borrowDate,
                 'expected_return_date' => $this->expectedReturnDate,
                 'purpose' => $this->purpose,
@@ -343,8 +390,13 @@ class DocumentLoanIndex extends Component
         // Alihkan staf ke tab Pinjaman Saya dan tampilkan notifikasi konfirmasi
         $this->activeTab = 'my_loans';
         $this->resetPage('myLoansPage');
+
+        $successMsg = $this->borrowType === 'softcopy'
+            ? "Permohonan pinjam berkas digital (softcopy) berhasil diajukan dengan kode {$loan->loan_code}. Menunggu persetujuan dan pengaturan durasi akses dari Tapersip."
+            : "Permohonan pinjam berkas fisik (hardcopy) berhasil diajukan dengan kode {$loan->loan_code}. Petugas Tapersip sedang menyiapkan berkas fisik dan bukti peminjaman Anda.";
+
         $this->dispatch('notify', [
-            'message' => "Permohonan pinjam berhasil diajukan dengan kode {$loan->loan_code}. Petugas Tapersip sedang menyiapkan berkas fisik dan bukti peminjaman Anda.",
+            'message' => $successMsg,
             'type' => 'success'
         ]);
 
@@ -402,17 +454,61 @@ class DocumentLoanIndex extends Component
         }
 
         $loan = DocumentLoan::with(['document.documentType', 'user'])->findOrFail($loanId);
+
+        if ($loan->isSoftcopy()) {
+            $this->approveLoanId = $loan->id;
+            $this->approveLoanCode = $loan->loan_code;
+            $this->approveDocNumber = $loan->document?->number ?: 'Naskah';
+            $this->approveDocSubject = $loan->document?->subject ?: '-';
+            $this->approveBorrowerName = $loan->user?->name ?: 'Pemohon';
+            $this->approveDurationHours = 24;
+            $this->dispatch('open-modal', 'modal-approve-softcopy-loan');
+            return;
+        }
+
+        $this->executeApproveLoan($loan);
+    }
+
+    public function executeApproveSoftcopyLoan()
+    {
+        if (!$this->canManageCirculation) {
+            abort(403, 'Akses ditolak.');
+        }
+
+        $this->validate([
+            'approveDurationHours' => 'required|integer|in:2,6,24,72,168',
+        ]);
+
+        $loan = DocumentLoan::with(['document.documentType', 'user'])->findOrFail($this->approveLoanId);
+        $duration = (int) $this->approveDurationHours;
+        $expiresAt = now()->addHours($duration);
+
+        $this->executeApproveLoan($loan, $duration, $expiresAt);
+        $this->dispatch('close-modal', 'modal-approve-softcopy-loan');
+    }
+
+    protected function executeApproveLoan(DocumentLoan $loan, ?int $durationHours = null, ?\Carbon\Carbon $expiresAt = null)
+    {
         $loan->update([
             'status' => 'borrowed',
             'officer_id' => Auth::id(),
+            'duration_hours' => $durationHours,
+            'access_expires_at' => $expiresAt,
         ]);
 
+        $actionType = $loan->isSoftcopy()
+            ? ($loan->isHardcopy() ? 'Persetujuan Pinjam Berkas Fisik & Softcopy' : 'Persetujuan Pinjam Akses Softcopy')
+            : 'Persetujuan Pinjam Berkas Fisik';
+
         \App\Models\AuditLog::record(
-            action: "Persetujuan Pinjam Berkas Fisik: " . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})",
+            action: "{$actionType}: " . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})",
             documentId: $loan->document_id,
             metadata: [
                 'loan_code' => $loan->loan_code,
                 'borrower_id' => $loan->user_id,
+                'loan_type' => $loan->loan_type,
+                'duration_hours' => $durationHours,
+                'access_expires_at' => $expiresAt?->toDateTimeString(),
             ]
         );
 
@@ -433,41 +529,86 @@ class DocumentLoanIndex extends Component
             $emailStatus = 'no_email';
         }
 
+        $mediaLabel = $loan->isSoftcopy()
+            ? "Izin pratinjau softcopy aktif {$durationHours} jam"
+            : "Hardcopy berhasil diserahkan";
+
+        $notifTitle = $loan->isSoftcopy() ? 'Peminjaman Softcopy Disetujui' : 'Peminjaman Disetujui';
+        $notifBody = $loan->isSoftcopy()
+            ? "Izin akses digital berkas {$docNumber} (Tiket: {$loan->loan_code}) telah aktif ({$durationHours} jam). Email konfirmasi terkirim ke {$borrower->name}."
+            : "Berkas {$docNumber} (Tiket: {$loan->loan_code}) telah diserahkan. Email konfirmasi telah terkirim ke {$borrower->name} ({$borrower->email}).";
+
         // Tampilkan Floating In-App Visual Toast dengan notifikasi status email
         if ($emailStatus === 'success') {
             $this->dispatch('desktop-notify', [
-                'title' => 'Peminjaman Disetujui & Email Terkirim',
-                'body' => "Berkas {$docNumber} (Tiket: {$loan->loan_code}) telah diserahkan. Email konfirmasi telah terkirim ke {$borrower->name} ({$borrower->email}).",
+                'title' => "{$notifTitle} & Email Terkirim",
+                'body' => $notifBody,
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_approved_success',
                 'loan_code' => $loan->loan_code,
             ]);
-            $successMsg = "Hardcopy berhasil diserahkan. Status 'Sedang Dipinjam'. Notifikasi email dikirim ke {$borrower->name}.";
+            $successMsg = "{$mediaLabel}. Status 'Sedang Dipinjam'. Notifikasi email dikirim ke {$borrower->name}.";
             $notifyType = 'success';
         } elseif ($emailStatus === 'failed') {
             $this->dispatch('desktop-notify', [
-                'title' => 'Peminjaman Disetujui (Email Gagal)',
+                'title' => "{$notifTitle} (Email Gagal)",
                 'body' => "Status diubah ke 'Sedang Dipinjam', namun email konfirmasi ke {$borrower->email} gagal terkirim. Harap hubungi pemohon secara manual.",
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_approved_mail_failed',
                 'loan_code' => $loan->loan_code,
             ]);
-            $successMsg = "Hardcopy diserahkan ('Sedang Dipinjam'), namun email notifikasi gagal terkirim ke {$borrower->email}.";
+            $successMsg = "{$mediaLabel} ('Sedang Dipinjam'), namun email notifikasi gagal terkirim ke {$borrower->email}.";
             $notifyType = 'warning';
         } else {
             $this->dispatch('desktop-notify', [
-                'title' => 'Peminjaman Disetujui (Tanpa Email)',
-                'body' => "Berkas {$docNumber} (Tiket: {$loan->loan_code}) telah diserahkan. Akun pemohon belum memiliki alamat email yang valid.",
+                'title' => "{$notifTitle} (Tanpa Email)",
+                'body' => "Berkas {$docNumber} (Tiket: {$loan->loan_code}) telah disetujui. Akun pemohon belum memiliki alamat email yang valid.",
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_approved_mail_failed',
                 'loan_code' => $loan->loan_code,
             ]);
-            $successMsg = "Hardcopy berhasil diserahkan. Akun pemohon tidak memiliki alamat email terdaftar.";
+            $successMsg = "{$mediaLabel}. Akun pemohon tidak memiliki alamat email terdaftar.";
             $notifyType = 'info';
         }
 
         $this->dispatch('loan-status-changed');
         $this->dispatch('notify', ['message' => $successMsg, 'type' => $notifyType]);
+    }
+
+    public function openPreviewModal($loanId)
+    {
+        $loan = DocumentLoan::with(['document.currentVersion', 'user'])->findOrFail($loanId);
+
+        if ($loan->user_id !== Auth::id() && !Auth::user()->isSuperAdmin() && !Auth::user()->isTapersip()) {
+            abort(403, 'Akses ditolak: Anda tidak memiliki akses ke pratinjau ini.');
+        }
+
+        if (!$loan->isSoftcopy()) {
+            $this->dispatch('notify', ['message' => 'Pinjaman ini hanya mencakup berkas fisik (hardcopy).', 'type' => 'error']);
+            return;
+        }
+
+        if ($loan->status !== 'borrowed') {
+            $this->dispatch('notify', ['message' => 'Dokumen hanya dapat dipratinjau saat status pinjaman disetujui / aktif.', 'type' => 'error']);
+            return;
+        }
+
+        if ($loan->access_expires_at && now()->gt($loan->access_expires_at)) {
+            $this->dispatch('notify', ['message' => 'Masa izin akses digital telah kedaluwarsa. Silakan ajukan pinjaman baru.', 'type' => 'error']);
+            return;
+        }
+
+        $version = $loan->document?->currentVersion;
+        if (!$version) {
+            $this->dispatch('notify', ['message' => 'Berkas digital dokumen ini belum diunggah.', 'type' => 'error']);
+            return;
+        }
+
+        $this->previewLoan = $loan;
+        $this->previewDocument = $loan->document;
+        $this->previewVersion = $version;
+
+        $this->dispatch('open-modal', 'modal-preview-loan-doc');
     }
 
     public function openReturnModal($loanId)
@@ -495,16 +636,20 @@ class DocumentLoanIndex extends Component
             'officer_id' => Auth::id(),
         ]);
 
+        $actionName = ($loan->isSoftcopy() ? "Penyelesaian Pinjaman Softcopy: " : "Pengembalian Berkas Fisik: ")
+            . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})";
+
         \App\Models\AuditLog::record(
-            action: "Pengembalian Berkas Fisik: " . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})",
+            action: $actionName,
             documentId: $loan->document_id,
             metadata: [
                 'loan_code' => $loan->loan_code,
+                'loan_type' => $loan->loan_type,
                 'notes' => $this->returnNotes,
             ]
         );
 
-        // Kirim notifikasi email pengembalian berkas fisik ke staf pemohon (fail-safe)
+        // Kirim notifikasi email pengembalian / penyelesaian berkas ke staf pemohon (fail-safe)
         $borrower = $loan->user;
         $officer = Auth::user();
         $docNumber = $loan->document?->number ?: 'Naskah';
@@ -520,37 +665,46 @@ class DocumentLoanIndex extends Component
             }
         }
 
+        $mediaSuccess = $loan->isSoftcopy()
+            ? "Peminjaman softcopy tiket {$loan->loan_code} telah diselesaikan."
+            : "Berkas fisik berhasil dikonfirmasi kembali ke loker.";
+
+        $notifTitle = $loan->isSoftcopy() ? 'Peminjaman Softcopy Selesai' : 'Berkas Kembali & Email Terkirim';
+        $notifBody = $loan->isSoftcopy()
+            ? "Peminjaman softcopy {$docNumber} (Tiket: {$loan->loan_code}) telah diselesaikan. Email konfirmasi terkirim ke {$borrower->name}."
+            : "Berkas {$docNumber} (Tiket: {$loan->loan_code}) telah kembali ke loker. Email bukti pengembalian terkirim ke {$borrower->name} ({$borrower->email}).";
+
         // Tampilkan Floating In-App Visual Toast
         if ($emailStatus === 'success') {
             $this->dispatch('desktop-notify', [
-                'title' => 'Berkas Kembali & Email Terkirim',
-                'body' => "Berkas {$docNumber} (Tiket: {$loan->loan_code}) telah kembali ke loker. Email bukti pengembalian terkirim ke {$borrower->name} ({$borrower->email}).",
+                'title' => $notifTitle,
+                'body' => $notifBody,
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_returned_success',
                 'loan_code' => $loan->loan_code,
             ]);
-            $successMsg = "Berkas fisik berhasil dikonfirmasi kembali ke loker. Email bukti pengembalian dikirim ke {$borrower->name}.";
+            $successMsg = "{$mediaSuccess} Email konfirmasi dikirim ke {$borrower->name}.";
             $notifyType = 'success';
         } elseif ($emailStatus === 'failed') {
             $this->dispatch('desktop-notify', [
-                'title' => 'Berkas Kembali (Email Gagal)',
-                'body' => "Berkas tiket {$loan->loan_code} telah kembali ke loker, namun email notifikasi gagal terkirim ke {$borrower->email}.",
+                'title' => "{$notifTitle} (Email Gagal)",
+                'body' => "Peminjaman tiket {$loan->loan_code} telah diselesaikan, namun email notifikasi gagal terkirim ke {$borrower->email}.",
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_approved_mail_failed',
                 'loan_code' => $loan->loan_code,
             ]);
-            $successMsg = "Berkas kembali ke loker, namun email bukti pengembalian gagal terkirim ke {$borrower->email}.";
+            $successMsg = "{$mediaSuccess} Namun email bukti gagal terkirim ke {$borrower->email}.";
             $notifyType = 'warning';
         } else {
             $this->dispatch('desktop-notify', [
-                'title' => 'Berkas Kembali ke Loker',
-                'body' => "Berkas {$docNumber} (Tiket: {$loan->loan_code}) telah kembali ke loker Tapersip. Tanggungan peminjaman selesai.",
+                'title' => "{$notifTitle} (Tanpa Email)",
+                'body' => "Peminjaman tiket {$loan->loan_code} telah diselesaikan. Akun pemohon tidak memiliki alamat email valid.",
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_returned_success',
                 'loan_code' => $loan->loan_code,
             ]);
-            $successMsg = "Berkas fisik berhasil dikonfirmasi kembali ke loker.";
-            $notifyType = 'success';
+            $successMsg = $mediaSuccess;
+            $notifyType = 'info';
         }
 
         $this->reset(['selectedLoanId', 'returnNotes']);
@@ -593,11 +747,14 @@ class DocumentLoanIndex extends Component
             'officer_id' => Auth::id(),
         ]);
 
+        $mediaText = $loan->isSoftcopy() ? 'Softcopy' : 'Fisik';
+
         \App\Models\AuditLog::record(
-            action: "Penolakan Pinjam Berkas Fisik: " . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})",
+            action: "Penolakan Pinjam Berkas {$mediaText}: " . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})",
             documentId: $loan->document_id,
             metadata: [
                 'loan_code' => $loan->loan_code,
+                'loan_type' => $loan->loan_type,
                 'reason' => $this->rejectNotes,
                 'borrower_id' => $loan->user_id,
             ]
@@ -619,21 +776,23 @@ class DocumentLoanIndex extends Component
             }
         }
 
+        $rejectTitle = $loan->isSoftcopy() ? 'Permohonan Pinjam Softcopy Ditolak & Email Terkirim' : 'Permohonan Ditolak & Email Terkirim';
+
         // Tampilkan Floating In-App Visual Toast
         if ($emailStatus === 'success') {
             $this->dispatch('desktop-notify', [
-                'title' => 'Permohonan Ditolak & Email Terkirim',
-                'body' => "Permohonan pinjam tiket {$loan->loan_code} ({$docNumber}) telah ditolak. Email pemberitahuan terkirim ke {$borrower->name} ({$borrower->email}).",
+                'title' => $rejectTitle,
+                'body' => "Permohonan pinjam {$mediaText} tiket {$loan->loan_code} ({$docNumber}) telah ditolak. Email pemberitahuan terkirim ke {$borrower->name} ({$borrower->email}).",
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_rejected_success',
                 'loan_code' => $loan->loan_code,
             ]);
-            $successMsg = "Permohonan pinjam tiket {$loan->loan_code} ditolak. Email dikirim ke {$borrower->name}.";
+            $successMsg = "Permohonan pinjam {$mediaText} tiket {$loan->loan_code} ditolak. Email dikirim ke {$borrower->name}.";
             $notifyType = 'success';
         } elseif ($emailStatus === 'failed') {
             $this->dispatch('desktop-notify', [
-                'title' => 'Permohonan Ditolak (Email Gagal)',
-                'body' => "Permohonan pinjam tiket {$loan->loan_code} ditolak, namun email notifikasi gagal terkirim ke {$borrower->email}.",
+                'title' => "Permohonan Pinjam {$mediaText} Ditolak (Email Gagal)",
+                'body' => "Permohonan pinjam {$mediaText} tiket {$loan->loan_code} ditolak, namun email notifikasi gagal terkirim ke {$borrower->email}.",
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_approved_mail_failed',
                 'loan_code' => $loan->loan_code,
@@ -642,13 +801,13 @@ class DocumentLoanIndex extends Component
             $notifyType = 'warning';
         } else {
             $this->dispatch('desktop-notify', [
-                'title' => 'Permohonan Ditolak (Tanpa Email)',
-                'body' => "Permohonan pinjam tiket {$loan->loan_code} ditolak. Pemohon tidak memiliki alamat email valid.",
+                'title' => "Permohonan Pinjam {$mediaText} Ditolak",
+                'body' => "Permohonan pinjam {$mediaText} tiket {$loan->loan_code} ditolak. Pemohon tidak memiliki alamat email valid.",
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_approved_mail_failed',
                 'loan_code' => $loan->loan_code,
             ]);
-            $successMsg = "Permohonan pinjam tiket {$loan->loan_code} telah ditolak.";
+            $successMsg = "Permohonan pinjam {$mediaText} tiket {$loan->loan_code} telah ditolak.";
             $notifyType = 'info';
         }
 
@@ -694,22 +853,33 @@ class DocumentLoanIndex extends Component
             $emailStatus = 'failed';
         }
 
+        $actionName = ($loan->isSoftcopy() ? "Kirim Pengingat Batas Izin Softcopy: " : "Kirim Pengingat Pinjam Berkas Fisik: ")
+            . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})";
+
         \App\Models\AuditLog::record(
-            action: "Kirim Pengingat Pinjam Berkas Fisik: " . ($loan->document?->number ?: 'Dokumen') . " (Tiket: {$loan->loan_code})",
+            action: $actionName,
             documentId: $loan->document_id,
             metadata: [
                 'loan_code' => $loan->loan_code,
+                'loan_type' => $loan->loan_type,
                 'borrower_email' => $borrower->email,
                 'email_status' => $emailStatus,
             ]
         );
 
         if ($emailStatus === 'success') {
-            $isOverdue = $loan->expected_return_date && now()->isAfter($loan->expected_return_date);
+            $isOverdue = $loan->isSoftcopy()
+                ? ($loan->access_expires_at && now()->gt($loan->access_expires_at))
+                : ($loan->expected_return_date && now()->isAfter($loan->expected_return_date));
+
             $title = $isOverdue ? 'Pemberitahuan Terlambat Terkirim' : 'Email Pengingat Berhasil Terkirim';
+            $body = $loan->isSoftcopy()
+                ? "Email pengingat batas waktu izin digital berkas {$docNumber} telah dikirim ke {$borrower->name} ({$borrower->email})."
+                : "Email pengingat batas pengembalian berkas fisik {$docNumber} telah dikirim ke {$borrower->name} ({$borrower->email}).";
+
             $this->dispatch('desktop-notify', [
                 'title' => $title,
-                'body' => "Email pengingat batas pengembalian berkas {$docNumber} telah dikirim ke {$borrower->name} ({$borrower->email}).",
+                'body' => $body,
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_reminder_success',
                 'loan_code' => $loan->loan_code,
@@ -834,7 +1004,7 @@ class DocumentLoanIndex extends Component
             $catalogQuery->whereDate('document_date', '<=', $this->filterDateEnd);
         }
 
-        $catalogDocuments = $catalogQuery->orderBy('document_date', 'desc')->paginate(10, ['*'], 'catalogPage');
+        $catalogDocuments = $catalogQuery->with(['activeLoan.user'])->orderBy('document_date', 'desc')->paginate(10, ['*'], 'catalogPage');
 
         // 2. Data Pinjaman Saya (Tab 2)
         $myLoans = DocumentLoan::with(['document.folder', 'document.unit', 'document.documentType', 'document.recipients.recipient', 'officer'])

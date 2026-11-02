@@ -768,4 +768,78 @@ class DocumentLoanNotificationTest extends TestCase
         $this->assertStringNotContainsString('<td class="footer">', $renderedHtml);
         $this->assertStringNotContainsString('footer-text', $renderedHtml);
     }
+
+    public function test_softcopy_loan_approval_rejection_and_reminder_email_subjects_and_templates()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+
+        $borrower = User::factory()->create([
+            'name' => 'Kurnia Digital',
+            'email' => 'kurnia.digital@perusahaan.co.id',
+            'unit_id' => $unit->id,
+        ]);
+
+        $document = Document::create([
+            'number' => '200/SOFT/X/2026',
+            'subject' => 'Dokumen Digital Softcopy Khusus',
+            'type' => 'outgoing',
+            'sifat' => 'biasa',
+            'status' => 'archived',
+            'available_hardcopy' => false,
+            'available_softcopy' => true,
+            'document_date' => '2026-10-20',
+            'created_by' => $superadmin->id,
+        ]);
+
+        $loan = DocumentLoan::create([
+            'loan_code' => 'TIKET-SOFT-001',
+            'document_id' => $document->id,
+            'user_id' => $borrower->id,
+            'borrow_date' => '2026-10-20',
+            'expected_return_date' => '2026-10-27',
+            'loan_type' => 'softcopy',
+            'duration_hours' => 24,
+            'access_expires_at' => now()->addHours(24),
+            'purpose' => 'Rujukan Teknis',
+            'status' => 'borrowed',
+            'officer_id' => $superadmin->id,
+        ]);
+
+        // 1. Uji Notifikasi Approval Softcopy
+        $approvedNotif = new DocumentLoanApprovedNotification($loan, $superadmin);
+        $mailApproved = $approvedNotif->toMail($borrower);
+        $this->assertEquals('Peminjaman Berkas Digital (Softcopy) TIKET-SOFT-001 Telah Disetujui', $mailApproved->subject);
+
+        $htmlApproved = view($mailApproved->view, $mailApproved->viewData)->render();
+        $this->assertStringContainsString('Permohonan peminjaman berkas digital (softcopy) dokumen Anda telah disetujui', $htmlApproved);
+        $this->assertStringContainsString('Berkas Digital (Softcopy)', $htmlApproved);
+        $this->assertStringContainsString('Batas Waktu Akses', $htmlApproved);
+        $this->assertStringContainsString('24 Jam', $htmlApproved);
+
+        // 2. Uji Notifikasi Rejection Softcopy
+        $rejectedNotif = new DocumentLoanRejectedNotification($loan, $superadmin, 'Izin ditolak untuk periode ini');
+        $mailRejected = $rejectedNotif->toMail($borrower);
+        $this->assertEquals('Permohonan Pinjam Berkas Digital (Softcopy) TIKET-SOFT-001 Ditolak', $mailRejected->subject);
+
+        $htmlRejected = view($mailRejected->view, $mailRejected->viewData)->render();
+        $this->assertStringContainsString('permohonan peminjaman berkas digital (softcopy) dokumen Anda tidak dapat disetujui', $htmlRejected);
+
+        // 3. Uji Notifikasi Returned / Completed Softcopy
+        $returnedNotif = new DocumentLoanReturnedNotification($loan, $superadmin);
+        $mailReturned = $returnedNotif->toMail($borrower);
+        $this->assertEquals('Peminjaman Berkas Digital TIKET-SOFT-001 Telah Selesai', $mailReturned->subject);
+
+        $htmlReturned = view($mailReturned->view, $mailReturned->viewData)->render();
+        $this->assertStringContainsString('Peminjaman berkas digital (softcopy) dokumen Anda telah resmi diselesaikan', $htmlReturned);
+
+        // 4. Uji Notifikasi Reminder Softcopy
+        $reminderNotif = new DocumentLoanReminderNotification($loan, $superadmin);
+        $mailReminder = $reminderNotif->toMail($borrower);
+        $this->assertEquals('Pengingat Batas Waktu Akses Digital TIKET-SOFT-001', $mailReminder->subject);
+
+        $htmlReminder = view($mailReminder->view, $mailReminder->viewData)->render();
+        $this->assertStringContainsString('Pengingat Batas Waktu Akses Digital', $htmlReminder);
+        $this->assertStringContainsString('izin akses digital (softcopy)', $htmlReminder);
+    }
 }

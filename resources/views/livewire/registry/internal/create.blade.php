@@ -96,7 +96,7 @@
                         <select wire:model="folder_id" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] outline-none transition bg-white">
                             <option value="">-- Tanpa Loker --</option>
                             @foreach($folders as $folder)
-                                <option value="{{ $folder->id }}">{{ $folder->name }}</option>
+                                <option value="{{ $folder->id }}">{{ $folder->tree_name ?? ($folder->parent ? '  ↳ ' . $folder->name : $folder->name) }}</option>
                             @endforeach
                         </select>
                         @error('folder_id') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror

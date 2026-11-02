@@ -49,7 +49,7 @@ class Create extends Component
         }
 
         $this->units = Unit::with('parent')->where('status', 'active')->orderBy('type')->orderBy('name')->get();
-        $this->folders = \App\Models\Folder::forType('incoming')->get();
+        $this->folders = \App\Models\Folder::getTreeForType('incoming');
     }
 
     protected function baseRules($isStrict = false)

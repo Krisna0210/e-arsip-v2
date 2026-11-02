@@ -50,7 +50,7 @@ class Create extends Component
 
         $this->documentTypes = \App\Models\DocumentType::all();
         $this->units = Unit::departments()->with('parent')->where('status', 'active')->orderBy('name')->get();
-        $this->folders = \App\Models\Folder::forType('internal')->get();
+        $this->folders = \App\Models\Folder::getTreeForType('internal');
 
         // Otomatisasi default departemen pengirim dari akun staf yang sedang login
         $userUnit = Auth::user()?->unit;

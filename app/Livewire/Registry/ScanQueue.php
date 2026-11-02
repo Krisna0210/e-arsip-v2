@@ -32,6 +32,8 @@ class ScanQueue extends Component
     public $uploadFolderId = null;
     public $uploadDocTypeRaw = '';
     public $finalFile = null;
+    public bool $uploadAvailableHardcopy = true;
+    public bool $uploadAvailableSoftcopy = true;
 
     // State Koreksi Metadata Draft (waiting_for_file)
     public $editDocId = null;
@@ -154,6 +156,8 @@ class ScanQueue extends Component
         $this->uploadDocTypeRaw = $doc->type;
         $this->uploadFolderId = $doc->folder_id;
         $this->uploadDocCreator = $doc->createdBy ? $doc->createdBy->name : '-';
+        $this->uploadAvailableHardcopy = $doc->available_hardcopy ?? true;
+        $this->uploadAvailableSoftcopy = true;
 
         $this->dispatch('open-modal', 'modal-upload-queue');
     }
@@ -163,6 +167,8 @@ class ScanQueue extends Component
         $this->validate([
             'finalFile' => 'required|file|mimes:pdf|max:25600',
             'uploadFolderId' => 'nullable|exists:folders,id',
+            'uploadAvailableHardcopy' => 'boolean',
+            'uploadAvailableSoftcopy' => 'boolean',
         ]);
 
         $document = Document::findOrFail($this->uploadDocId);
@@ -207,6 +213,8 @@ class ScanQueue extends Component
             'current_version_id' => $version->id,
             'status' => 'archived',
             'folder_id' => $this->uploadFolderId,
+            'available_hardcopy' => $this->uploadAvailableHardcopy,
+            'available_softcopy' => $this->uploadAvailableSoftcopy,
             'retention_start_date' => $retentionStartDate,
             'retention_end_date' => $retentionEndDate,
         ]);
@@ -602,7 +610,7 @@ class ScanQueue extends Component
         $documents = $query->orderBy('created_at', 'asc')->orderBy('id', 'asc')->paginate(10); // asc: yang paling lama antre didahulukan
 
         $availableFolders = $this->uploadDocTypeRaw
-            ? \App\Models\Folder::forType($this->uploadDocTypeRaw)->with('parent')->orderBy('name')->get()
+            ? \App\Models\Folder::getTreeForType($this->uploadDocTypeRaw)
             : collect();
 
         $classifications = Classification::whereNotNull('parent_id')->orderBy('code')->get();

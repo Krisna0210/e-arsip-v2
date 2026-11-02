@@ -150,13 +150,25 @@
                     <!-- Body Content -->
                     <tr>
                         <td class="content">
-                            <h2 class="title">{{ $isOverdue ? 'Pemberitahuan Berkas Lewat Jatuh Tempo' : 'Pengingat Batas Pengembalian Berkas' }}</h2>
+                            @if($loan->isSoftcopy())
+                                <h2 class="title">{{ $isOverdue ? 'Izin Akses Digital Telah Kedaluwarsa' : 'Pengingat Batas Waktu Akses Digital' }}</h2>
+                            @else
+                                <h2 class="title">{{ $isOverdue ? 'Pemberitahuan Berkas Lewat Jatuh Tempo' : 'Pengingat Batas Pengembalian Berkas' }}</h2>
+                            @endif
                             <p class="greeting">
                                 Halo <strong>{{ $recipientName }}</strong>,<br>
-                                @if($isOverdue)
-                                    Masa peminjaman berkas fisik dokumen Anda telah <strong>melewati batas jatuh tempo pengembalian</strong>. Mohon kesediaannya untuk segera mengembalikan berkas fisik tersebut ke Ruang Layanan Tapersip agar tertata kembali dalam loker arsip kantor.
+                                @if($loan->isSoftcopy())
+                                    @if($isOverdue)
+                                        Masa izin akses digital (softcopy) dokumen Anda telah <strong>berakhir/kedaluwarsa</strong>. Akses pratinjau dokumen telah otomatis ditutup. Silakan ajukan permohonan pinjam baru jika Anda masih memerlukan berkas ini.
+                                    @else
+                                        Kami mengingatkan bahwa batas waktu izin akses digital (softcopy) dokumen yang Anda pinjam akan segera berakhir. Pastikan Anda telah menyelesaikan kebutuhan rujukan dokumen sebelum masa akses habis.
+                                    @endif
                                 @else
-                                    Kami mengingatkan bahwa batas waktu pengembalian berkas fisik dokumen yang Anda pinjam akan segera berakhir. Mohon dapat mempersiapkan berkas tersebut untuk dikembalikan tepat waktu ke Ruang Layanan Tapersip.
+                                    @if($isOverdue)
+                                        Masa peminjaman berkas fisik dokumen Anda telah <strong>melewati batas jatuh tempo pengembalian</strong>. Mohon kesediaannya untuk segera mengembalikan berkas fisik tersebut ke Ruang Layanan Tapersip agar tertata kembali dalam loker arsip kantor.
+                                    @else
+                                        Kami mengingatkan bahwa batas waktu pengembalian berkas fisik dokumen yang Anda pinjam akan segera berakhir. Mohon dapat mempersiapkan berkas tersebut untuk dikembalikan tepat waktu ke Ruang Layanan Tapersip.
+                                    @endif
                                 @endif
                             </p>
 
@@ -166,6 +178,10 @@
                                     <tr>
                                         <td class="details-label">Kode Tiket</td>
                                         <td class="details-value details-mono">: {{ $loan->loan_code }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="details-label">Tipe Peminjaman</td>
+                                        <td class="details-value">: <strong>{{ $loan->isSoftcopy() ? 'Berkas Digital (Softcopy)' : 'Berkas Fisik (Hardcopy)' }}</strong></td>
                                     </tr>
                                     <tr>
                                         <td class="details-label">Nomor Dokumen</td>
@@ -185,8 +201,21 @@
                                             : {{ $loan->borrow_date ? \Carbon\Carbon::parse($loan->borrow_date)->translatedFormat('d F Y') : '-' }}
                                         </td>
                                     </tr>
+                                    @if($loan->isSoftcopy())
+                                    <tr>
+                                        <td class="details-label">Batas Waktu Akses</td>
+                                        <td class="details-value">
+                                            : {{ $loan->access_expires_at ? \Carbon\Carbon::parse($loan->access_expires_at)->translatedFormat('d F Y, H:i') . ' WIB' : '-' }}
+                                        </td>
+                                    </tr>
+                                    @else
                                     <tr>
                                         <td class="details-label">Batas Pengembalian</td>
+                                        <td class="details-value">
+                                            : {{ $loan->expected_return_date ? \Carbon\Carbon::parse($loan->expected_return_date)->translatedFormat('d F Y') : '-' }}
+                                        </td>
+                                    </tr>
+                                    @endif
                                         <td class="details-value {{ $isOverdue ? 'details-overdue' : '' }}">
                                             : {{ $loan->expected_return_date ? \Carbon\Carbon::parse($loan->expected_return_date)->translatedFormat('d F Y') : '-' }}
                                             @if($isOverdue)
