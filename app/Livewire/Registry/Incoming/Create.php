@@ -60,7 +60,7 @@ class Create extends Component
             'received_date' => 'required|date|after_or_equal:document_date',
             'sender' => 'required|string|max:255',
             'subject' => 'required|string|max:255',
-            'classification_id' => 'required|exists:classifications,id',
+            'classification_id' => 'nullable|exists:classifications,id',
             'folder_id' => 'nullable|exists:folders,id',
             'unit_id' => 'required|exists:units,id',
             'sifat' => 'required|in:biasa,penting,rahasia',

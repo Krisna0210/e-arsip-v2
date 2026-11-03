@@ -111,7 +111,7 @@ class IncomingMailTest extends TestCase
         $component->assertSet('received_date', date('Y-m-d'));
     }
 
-    public function test_incoming_mail_validation_fails_without_classification()
+    public function test_incoming_mail_can_be_registered_without_classification()
     {
         $superadmin = User::where('username', 'superadmin')->first();
         $unit = Unit::first();
@@ -123,11 +123,18 @@ class IncomingMailTest extends TestCase
             ->set('document_date', date('Y-m-d'))
             ->set('received_date', date('Y-m-d'))
             ->set('sender', 'Mitra Kerja')
-            ->set('subject', 'Surat Tanpa Klasifikasi')
+            ->set('subject', 'Surat Masuk Tanpa Klasifikasi')
             ->set('classification_id', null)
             ->set('unit_id', $unit->id)
             ->set('file', $file)
             ->call('save')
-            ->assertHasErrors(['classification_id']);
+            ->assertHasNoErrors()
+            ->assertSet('showSuccessModal', true);
+
+        $doc = Document::where('number', '099/EXT/2026')->first();
+        $this->assertNotNull($doc);
+        $this->assertNull($doc->classification_id);
+        $this->assertNull($doc->retention_start_date);
+        $this->assertNull($doc->retention_end_date);
     }
 }

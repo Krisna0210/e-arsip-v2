@@ -2630,6 +2630,21 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - `test_superadmin_sees_all_activities_on_dashboard` & `test_tapersip_sees_all_activities_on_dashboard`: Memvalidasi bahwa tautan audit trail tetap muncul lengkap untuk akun Superadmin dan Tapersip.
   - Seluruh test suite sistem (**201 test cases, 1041 assertions**) **100% PASS**.
 
+### 131. Penyederhanaan Form Registrasi Surat Masuk (Penghapusan Field Klasifikasi & Retensi)
+- **Latar Belakang & Keselarasan Alur Kerja**:
+  - Pada alur operasional pencatatan surat masuk, staf penerima (*front desk*) mencatat surat dari instansi luar berdasarkan fisik naskah yang tiba. Pada tahap ini, end-user belum memerlukan penentuan klasifikasi arsip dan jadwal retensi (JRA) untuk seluruh surat masuk.
+  - Pada form edit surat masuk (`incoming/edit.blade.php`), field klasifikasi sebelumnya memang sudah tidak ada, sehingga penghapusan field ini pada form create membuat alur registrasi dan edit surat masuk menjadi 100% konsisten.
+- **Implementasi Solusi**:
+  1. **Tampilan Form (`resources/views/livewire/registry/incoming/create.blade.php`)**:
+     - Menghapus blok input dropdown `Klasifikasi Arsip` (`classification_id`).
+     - Judul Section 2 disesuaikan menjadi *Penyimpanan & Sifat Dokumen* (berisi pilihan Loker dan Sifat Surat).
+  2. **Backend Komponen (`app/Livewire/Registry/Incoming/Create.php`)**:
+     - Mengubah aturan validasi `'classification_id'` menjadi `nullable`.
+     - Surat masuk tersimpan dengan `classification_id = null`, `retention_start_date = null`, dan `retention_end_date = null` (tersimpan permanen tanpa batas waktu kadaluwarsa).
+- **Verifikasi Pengujian Otomatis (`IncomingMailTest.php`)**:
+  - `test_incoming_mail_can_be_registered_without_classification`: Memvalidasi pendaftaran surat masuk tanpa klasifikasi berjalan sukses 100%, menghasilkan naskah berstatus archived dengan field klasifikasi dan retensi bernilai null.
+  - Seluruh test suite sistem (**201 test cases, 1044 assertions**) **100% PASS**.
+
 
 
 
