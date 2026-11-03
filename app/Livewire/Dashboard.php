@@ -124,16 +124,25 @@ class Dashboard extends Component
     {
         $user = Auth::user();
         $isSuperAdmin = $user ? $user->isSuperAdmin() : false;
+        $isTapersipOrSuper = $isSuperAdmin || ($user && $user->isTapersip());
 
-        $countIncoming = Document::where('type', 'incoming')->count();
-        $countOutgoing = Document::where('type', 'outgoing')->count();
-        $countInternal = Document::where('type', 'internal')->count();
+        // Kueri dasar untuk kartu statistik:
+        // Jika Tapersip / Superadmin: Akumulasi seluruh surat di kantor
+        // Jika Staf: Khusus naskah yang didaftarkan oleh akun staf bersangkutan (created_by)
+        $docQuery = Document::query();
+        if (!$isTapersipOrSuper && $user) {
+            $docQuery->where('created_by', $user->id);
+        }
+
+        $countIncoming = (clone $docQuery)->where('type', 'incoming')->count();
+        $countOutgoing = (clone $docQuery)->where('type', 'outgoing')->count();
+        $countInternal = (clone $docQuery)->where('type', 'internal')->count();
         $countRetention = Document::whereNotNull('retention_end_date')->where('retention_end_date', '<=', now()->addDays(30))->count();
 
-        // Hitung antrean yang menunggu upload (Personal per akun staf jika bukan Superadmin)
+        // Hitung antrean yang menunggu upload (Personal per akun staf jika bukan Tapersip/Superadmin)
         $countWaitingQuery = Document::whereIn('status', ['waiting_for_file', 'cancellation_requested']);
-        if (!$isSuperAdmin) {
-            $countWaitingQuery->where('created_by', Auth::id());
+        if (!$isTapersipOrSuper && $user) {
+            $countWaitingQuery->where('created_by', $user->id);
         }
         $countWaiting = $countWaitingQuery->count();
 
@@ -193,7 +202,6 @@ class Dashboard extends Component
         $canViewWaiting = $user ? $user->hasModuleAccess('card_waiting') : false;
         $canViewRetention = $user ? $user->hasModuleAccess('card_retention') : false;
 
-        $isTapersipOrSuper = $isSuperAdmin || ($user && $user->isTapersip());
         $canViewLoan = $user ? ($user->hasModuleAccess('card_loans') || $user->hasModuleAccess('loan_circulation') || $user->hasModuleAccess('document_borrowing')) : false;
 
         $countBorrowed = 0;
@@ -327,8 +335,20 @@ class Dashboard extends Component
                 $this->yearChangeWarning = "Perubahan tahun ({$origYear} ke {$newYear}) tidak mengubah segmen tahun pada nomor surat demi menjaga integritas buku agenda tahunan. Jika salah tahun penerbitan, gunakan fitur Pembatalan Nomor (Void).";
             }
 
+            $origMonthRoman = \App\Models\Document::toRomanMonth($this->originalDocumentDate);
+            $newMonthRoman = \App\Models\Document::toRomanMonth($this->editDocumentDate);
+
             if ($origMonth !== $newMonth) {
-                if (str_contains($candidateNumber, '/' . $origMonth . '/')) {
+                if (str_contains($candidateNumber, '/' . $origMonthRoman . '/')) {
+                    $candidateNumber = str_replace('/' . $origMonthRoman . '/', '/' . $newMonthRoman . '/', $candidateNumber);
+                    $hasChanges = true;
+                } elseif (str_contains($candidateNumber, '-' . $origMonthRoman . '/')) {
+                    $candidateNumber = str_replace('-' . $origMonthRoman . '/', '-' . $newMonthRoman . '/', $candidateNumber);
+                    $hasChanges = true;
+                } elseif (str_contains($candidateNumber, '/' . $origMonthRoman . '-')) {
+                    $candidateNumber = str_replace('/' . $origMonthRoman . '-', '/' . $newMonthRoman . '-', $candidateNumber);
+                    $hasChanges = true;
+                } elseif (str_contains($candidateNumber, '/' . $origMonth . '/')) {
                     $candidateNumber = str_replace('/' . $origMonth . '/', '/' . $newMonth . '/', $candidateNumber);
                     $hasChanges = true;
                 } elseif (str_contains($candidateNumber, '/' . $origMonth . '-')) {

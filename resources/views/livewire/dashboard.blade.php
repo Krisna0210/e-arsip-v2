@@ -36,70 +36,106 @@
     <div class="grid {{ $gridColsClass }} gap-4">
         <!-- Card 1: Total Surat Masuk -->
         @if($canViewIncoming)
-        <a href="{{ route('registry.incoming.index') }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-emerald-300 hover:shadow-xs transition-all group flex justify-between items-start">
-            <div>
-                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Total Surat Masuk</p>
-                <h3 class="text-2xl font-bold text-slate-800 tracking-tight group-hover:text-[var(--color-primary)] transition-colors">
-                    {{ $countIncoming }} <span class="text-xs font-normal text-slate-400">Arsip</span>
-                </h3>
-            </div>
-            <div class="p-2.5 bg-emerald-50 rounded-lg text-emerald-600 group-hover:bg-emerald-100 transition-colors shrink-0">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-                </svg>
-            </div>
-        </a>
+            @php $incomingUrl = $isTapersipOrSuper ? route('registry.incoming.index') : null; @endphp
+            @if($incomingUrl)
+                <a href="{{ $incomingUrl }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-emerald-300 hover:shadow-xs transition-all group flex justify-between items-start cursor-pointer">
+            @else
+                <div class="bg-white p-5 rounded-xl border border-slate-200/90 shadow-2xs flex justify-between items-start cursor-default">
+            @endif
+                <div>
+                    <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">{{ $isTapersipOrSuper ? 'Total Surat Masuk' : 'Surat Masuk Saya' }}</p>
+                    <h3 class="text-2xl font-bold text-slate-800 tracking-tight {{ $incomingUrl ? 'group-hover:text-[var(--color-primary)]' : '' }} transition-colors">
+                        {{ $countIncoming }} <span class="text-xs font-normal text-slate-400">Arsip</span>
+                    </h3>
+                </div>
+                <div class="p-2.5 bg-emerald-50 rounded-lg text-emerald-600 {{ $incomingUrl ? 'group-hover:bg-emerald-100' : '' }} transition-colors shrink-0">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                    </svg>
+                </div>
+            @if($incomingUrl)
+                </a>
+            @else
+                </div>
+            @endif
         @endif
 
         <!-- Card 2: Total Surat Keluar -->
         @if($canViewOutgoing)
-        <a href="{{ route('registry.outgoing.index') }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-blue-300 hover:shadow-xs transition-all group flex justify-between items-start">
-            <div>
-                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Total Surat Keluar</p>
-                <h3 class="text-2xl font-bold text-slate-800 tracking-tight group-hover:text-blue-700 transition-colors">
-                    {{ $countOutgoing }} <span class="text-xs font-normal text-slate-400">Arsip</span>
-                </h3>
-            </div>
-            <div class="p-2.5 bg-blue-50 rounded-lg text-blue-600 group-hover:bg-blue-100 transition-colors shrink-0">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                </svg>
-            </div>
-        </a>
+            @php $outgoingUrl = $isTapersipOrSuper ? route('registry.outgoing.index') : null; @endphp
+            @if($outgoingUrl)
+                <a href="{{ $outgoingUrl }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-blue-300 hover:shadow-xs transition-all group flex justify-between items-start cursor-pointer">
+            @else
+                <div class="bg-white p-5 rounded-xl border border-slate-200/90 shadow-2xs flex justify-between items-start cursor-default">
+            @endif
+                <div>
+                    <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">{{ $isTapersipOrSuper ? 'Total Surat Keluar' : 'Surat Keluar Saya' }}</p>
+                    <h3 class="text-2xl font-bold text-slate-800 tracking-tight {{ $outgoingUrl ? 'group-hover:text-blue-700' : '' }} transition-colors">
+                        {{ $countOutgoing }} <span class="text-xs font-normal text-slate-400">Arsip</span>
+                    </h3>
+                </div>
+                <div class="p-2.5 bg-blue-50 rounded-lg text-blue-600 {{ $outgoingUrl ? 'group-hover:bg-blue-100' : '' }} transition-colors shrink-0">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                    </svg>
+                </div>
+            @if($outgoingUrl)
+                </a>
+            @else
+                </div>
+            @endif
         @endif
 
         <!-- Card 3: Total Surat Khusus -->
         @if($canViewInternal)
-        <a href="{{ route('registry.special.index') }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-purple-300 hover:shadow-xs transition-all group flex justify-between items-start">
-            <div>
-                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Total Surat Khusus</p>
-                <h3 class="text-2xl font-bold text-slate-800 tracking-tight group-hover:text-purple-700 transition-colors">
-                    {{ $countInternal }} <span class="text-xs font-normal text-slate-400">Arsip</span>
-                </h3>
-            </div>
-            <div class="p-2.5 bg-purple-50 rounded-lg text-purple-600 group-hover:bg-purple-100 transition-colors shrink-0">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
-                </svg>
-            </div>
-        </a>
+            @php $internalUrl = $isTapersipOrSuper ? route('registry.special.index') : null; @endphp
+            @if($internalUrl)
+                <a href="{{ $internalUrl }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-purple-300 hover:shadow-xs transition-all group flex justify-between items-start cursor-pointer">
+            @else
+                <div class="bg-white p-5 rounded-xl border border-slate-200/90 shadow-2xs flex justify-between items-start cursor-default">
+            @endif
+                <div>
+                    <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">{{ $isTapersipOrSuper ? 'Total Surat Khusus' : 'Surat Khusus Saya' }}</p>
+                    <h3 class="text-2xl font-bold text-slate-800 tracking-tight {{ $internalUrl ? 'group-hover:text-purple-700' : '' }} transition-colors">
+                        {{ $countInternal }} <span class="text-xs font-normal text-slate-400">Arsip</span>
+                    </h3>
+                </div>
+                <div class="p-2.5 bg-purple-50 rounded-lg text-purple-600 {{ $internalUrl ? 'group-hover:bg-purple-100' : '' }} transition-colors shrink-0">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+                    </svg>
+                </div>
+            @if($internalUrl)
+                </a>
+            @else
+                </div>
+            @endif
         @endif
 
         <!-- Card 4: Antrean Menunggu Upload / Scan -->
         @if($canViewWaiting)
-        <a href="{{ route('registry.scan-queue') }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-amber-300 hover:shadow-xs transition-all group flex justify-between items-start">
-            <div>
-                <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Menunggu Upload</p>
-                <h3 class="text-2xl font-bold text-slate-800 tracking-tight group-hover:text-amber-700 transition-colors">
-                    {{ $countWaiting }} <span class="text-xs font-normal text-slate-400">Berkas</span>
-                </h3>
-            </div>
-            <div class="p-2.5 bg-amber-50 rounded-lg text-amber-600 group-hover:bg-amber-100 transition-colors shrink-0">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            </div>
-        </a>
+            @php $waitingUrl = $isTapersipOrSuper ? route('registry.scan-queue') : null; @endphp
+            @if($waitingUrl)
+                <a href="{{ $waitingUrl }}" class="bg-white p-5 rounded-xl border border-slate-200/90 hover:border-amber-300 hover:shadow-xs transition-all group flex justify-between items-start cursor-pointer">
+            @else
+                <div class="bg-white p-5 rounded-xl border border-slate-200/90 shadow-2xs flex justify-between items-start cursor-default">
+            @endif
+                <div>
+                    <p class="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">{{ $isTapersipOrSuper ? 'Menunggu Upload' : 'Draft Saya (Menunggu Upload)' }}</p>
+                    <h3 class="text-2xl font-bold text-slate-800 tracking-tight {{ $waitingUrl ? 'group-hover:text-amber-700' : '' }} transition-colors">
+                        {{ $countWaiting }} <span class="text-xs font-normal text-slate-400">Berkas</span>
+                    </h3>
+                </div>
+                <div class="p-2.5 bg-amber-50 rounded-lg text-amber-600 {{ $waitingUrl ? 'group-hover:bg-amber-100' : '' }} transition-colors shrink-0">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            @if($waitingUrl)
+                </a>
+            @else
+                </div>
+            @endif
         @endif
 
         <!-- Card 5: Peringatan Retensi JRA -->
@@ -403,11 +439,13 @@
                         @endforelse
                     </div>
                 </div>
+                @if($isTapersipOrSuper || auth()->user()->hasModuleAccess('audit'))
                 <div class="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-center">
                     <a href="{{ route('settings.audit-trail') }}" class="text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors">
                         Buka Seluruh Audit Trail Log &rarr;
                     </a>
                 </div>
+                @endif
             </x-ui.card>
         </div>
 

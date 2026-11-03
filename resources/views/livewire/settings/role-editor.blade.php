@@ -182,6 +182,9 @@
                         <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.card_internal" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Total Surat Khusus</label>
                         <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.card_waiting" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Menunggu Upload</label>
                         <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700"><input type="checkbox" wire:model="moduleVisibility.card_retention" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"> Peringatan Retensi (JRA)</label>
+                        <div class="pt-2 text-[11px] text-slate-400 leading-normal border-t border-slate-100">
+                            * Catatan: Untuk peran staf, kartu otomatis menghitung naskah yang didaftarkan oleh akun bersangkutan. Untuk Tapersip/Superadmin, kartu menghitung akumulasi kantor.
+                        </div>
                     </div>
                 </div>
             </div>

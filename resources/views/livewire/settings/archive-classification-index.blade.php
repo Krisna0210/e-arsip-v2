@@ -313,7 +313,7 @@
                     <p class="font-mono text-xs opacity-90">
                         {{ str_replace(
                             ['{NO}', '{KOSUR}', '{kosur}', '{DIV}', '{div}', '{DIR}', '{UNIT}', '{CLASS}', '{kodeklasi}', '{MM}', '{YYYY}', '[Urutan]', '[KodeUnit]', '[BulanRomawi]', '[Tahun]'],
-                            ['01', $typeCode ?: 'KOSUR', $typeCode ?: 'KOSUR', $sampleDiv, $sampleDiv, 'DIR-', 'IT', 'HM.00', 'HM.00', date('m'), date('Y'), '01', 'IT', date('m'), date('Y')],
+                            ['01', $typeCode ?: 'KOSUR', $typeCode ?: 'KOSUR', $sampleDiv, $sampleDiv, 'DIR-', 'IT', 'HM.00', 'HM.00', \App\Models\Document::toRomanMonth(date('m')), date('Y'), '01', 'IT', \App\Models\Document::toRomanMonth(date('m')), date('Y')],
                             $typeNumbering
                         ) }}
                     </p>

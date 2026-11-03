@@ -107,7 +107,7 @@ class Create extends Component
         $classCode = $classification ? $classification->code : 'UM';
         $unit = \App\Models\Unit::find($this->unit_id);
         $unitCode = $unit ? $unit->code : 'ORG';
-        $month = $this->document_date ? date('m', strtotime($this->document_date)) : date('m');
+        $month = \App\Models\Document::toRomanMonth($this->document_date);
         
         $kosur = $docTypeRecord?->code ?: 'MI';
 

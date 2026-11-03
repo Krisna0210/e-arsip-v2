@@ -97,6 +97,8 @@ class DashboardActivityLogTest extends TestCase
         });
         $component->assertSee('Aktivitas User A');
         $component->assertDontSee('Aktivitas User B');
+        $component->assertDontSee('Buka Seluruh Audit Trail Log');
+        $component->assertDontSee(route('settings.audit-trail'));
     }
 
     public function test_superadmin_sees_all_activities_on_dashboard()
@@ -118,6 +120,8 @@ class DashboardActivityLogTest extends TestCase
         $component->assertSee('Seluruh Sistem');
         $component->assertSee('Aktivitas Spesifik User A');
         $component->assertSee('Aktivitas Superadmin');
+        $component->assertSee('Buka Seluruh Audit Trail Log');
+        $component->assertSee(route('settings.audit-trail'));
     }
 
     public function test_tapersip_sees_all_activities_on_dashboard()
@@ -145,6 +149,8 @@ class DashboardActivityLogTest extends TestCase
         $component->assertViewHas('canViewAllActivities', true);
         $component->assertSee('Seluruh Sistem');
         $component->assertSee('Surat Masuk dari Rekanan Luar');
+        $component->assertSee('Buka Seluruh Audit Trail Log');
+        $component->assertSee(route('settings.audit-trail'));
     }
 
     public function test_special_document_booking_records_selected_document_type_name_in_audit_log_metadata()

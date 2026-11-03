@@ -155,6 +155,28 @@ class Document extends Model
     }
 
     /**
+     * Convert month (1-12 or date string) into Roman numeral (I - XII)
+     */
+    public static function toRomanMonth(int|string|\DateTimeInterface|null $dateOrMonth = null): string
+    {
+        if (empty($dateOrMonth)) {
+            $m = (int) date('n');
+        } elseif (is_numeric($dateOrMonth)) {
+            $m = (int) $dateOrMonth;
+        } else {
+            $timestamp = is_string($dateOrMonth) ? strtotime($dateOrMonth) : $dateOrMonth->getTimestamp();
+            $m = $timestamp ? (int) date('n', $timestamp) : (int) date('n');
+        }
+
+        $romanMap = [
+            1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI',
+            7 => 'VII', 8 => 'VIII', 9 => 'IX', 10 => 'X', 11 => 'XI', 12 => 'XII',
+        ];
+
+        return $romanMap[$m] ?? 'I';
+    }
+
+    /**
      * Get storage directory path based on document type and storage locker hierarchy.
      * e.g. "documents/Surat Keluar/Tahun 2026/Divisi Keuangan" or "documents/Surat Masuk/Tanpa Loker"
      */

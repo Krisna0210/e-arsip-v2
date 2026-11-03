@@ -134,10 +134,10 @@ class SequenceNumberingTest extends TestCase
             ->set('sifat', 'biasa')
             ->call('bookNumber');
 
-        // Harus menghasilkan nomor 01/DIR-OPS-HM.00/10/2026 (2 digit, prefix DIR-)
-        $compDir->assertSet('number', '01/DIR-OPS-HM.00/10/2026');
+        // Harus menghasilkan nomor 01/DIR-OPS-HM.00/X/2026 (2 digit, prefix DIR-, bulan Romawi X)
+        $compDir->assertSet('number', '01/DIR-OPS-HM.00/X/2026');
 
-        $docDir = Document::where('number', '01/DIR-OPS-HM.00/10/2026')->first();
+        $docDir = Document::where('number', '01/DIR-OPS-HM.00/X/2026')->first();
         $this->assertNotNull($docDir);
         $this->assertEquals('direktur', $docDir->signer_type);
         $this->assertEquals(1, $docDir->sequence_number);
@@ -155,15 +155,15 @@ class SequenceNumberingTest extends TestCase
             ->set('sifat', 'biasa')
             ->call('bookNumber');
 
-        // Harus menghasilkan nomor 01/OPS-HM.00/10/2026 (2 digit, tanpa DIR-, mulai dari 01 mandiri)
-        $compUnit->assertSet('number', '01/OPS-HM.00/10/2026');
+        // Harus menghasilkan nomor 01/OPS-HM.00/X/2026 (2 digit, tanpa DIR-, mulai dari 01 mandiri, bulan Romawi X)
+        $compUnit->assertSet('number', '01/OPS-HM.00/X/2026');
 
-        $docUnit = Document::where('number', '01/OPS-HM.00/10/2026')->first();
+        $docUnit = Document::where('number', '01/OPS-HM.00/X/2026')->first();
         $this->assertNotNull($docUnit);
         $this->assertEquals('pimpinan_unit', $docUnit->signer_type);
         $this->assertEquals(1, $docUnit->sequence_number);
 
-        // AMBIL NOMOR KEDUA UNTUK DIREKTUR -> Harus naik ke 02/DIR-OPS-HM.00/10/2026
+        // AMBIL NOMOR KEDUA UNTUK DIREKTUR -> Harus naik ke 02/DIR-OPS-HM.00/X/2026
         $compDir2 = Livewire::actingAs($superadmin)
             ->test(OutgoingCreate::class)
             ->set('document_type_id', $docType->id)
@@ -176,7 +176,7 @@ class SequenceNumberingTest extends TestCase
             ->set('sifat', 'biasa')
             ->call('bookNumber');
 
-        $compDir2->assertSet('number', '02/DIR-OPS-HM.00/10/2026');
+        $compDir2->assertSet('number', '02/DIR-OPS-HM.00/X/2026');
     }
 
     public function test_tapersip_can_archive_directly_with_manual_existing_number()
@@ -399,5 +399,47 @@ class SequenceNumberingTest extends TestCase
 
         // Nomor harus dimulai dari urutan normal (01)
         $this->assertStringStartsWith('01/', $generatedNumber);
+    }
+
+    public function test_numbering_format_replaces_mm_with_roman_numerals_across_months()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+        $classification = Classification::first();
+
+        // 1. Uji konversi seluruh 12 bulan ke angka Romawi
+        $expectedRoman = [
+            1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI',
+            7 => 'VII', 8 => 'VIII', 9 => 'IX', 10 => 'X', 11 => 'XI', 12 => 'XII',
+        ];
+        foreach ($expectedRoman as $monthNum => $roman) {
+            $this->assertEquals($roman, Document::toRomanMonth($monthNum));
+            $this->assertEquals($roman, Document::toRomanMonth(sprintf('2026-%02d-15', $monthNum)));
+        }
+
+        // 2. Uji booking nomor surat keluar menghasilkan bulan Romawi
+        $docType = DocumentType::create([
+            'name' => 'Surat Dinas Bulan Romawi ' . uniqid(),
+            'code' => 'SDR',
+            'numbering_format' => '{NO}/{KOSUR}/{UNIT}/{MM}/{YYYY}',
+        ]);
+
+        $testDate = '2026-10-20'; // Bulan Oktober = X
+
+        $component = Livewire::actingAs($superadmin)
+            ->test(OutgoingCreate::class)
+            ->set('document_type_id', $docType->id)
+            ->set('unit_id', $unit->id)
+            ->set('signer_type', 'pimpinan_unit')
+            ->set('recipient_name', 'Mitra Kerja')
+            ->set('subject', 'Uji Format Bulan Romawi')
+            ->set('classification_id', $classification->id)
+            ->set('document_date', $testDate)
+            ->set('sifat', 'biasa')
+            ->call('bookNumber')
+            ->assertHasNoErrors();
+
+        $generatedNumber = $component->get('number');
+        $this->assertStringContainsString("/SDR/{$unit->code}/X/2026", $generatedNumber);
     }
 }

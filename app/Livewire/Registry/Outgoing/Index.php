@@ -241,8 +241,20 @@ public function updatedActiveFolderId()
                 $this->yearChangeWarning = "Perubahan tahun ({$origYear} ke {$newYear}) tidak mengubah segmen tahun pada nomor surat demi menjaga integritas buku agenda tahunan. Jika salah tahun penerbitan, gunakan fitur Pembatalan Nomor (Void).";
             }
 
+            $origMonthRoman = \App\Models\Document::toRomanMonth($this->originalDocumentDate);
+            $newMonthRoman = \App\Models\Document::toRomanMonth($this->editDocumentDate);
+
             if ($origMonth !== $newMonth) {
-                if (str_contains($candidateNumber, '/' . $origMonth . '/')) {
+                if (str_contains($candidateNumber, '/' . $origMonthRoman . '/')) {
+                    $candidateNumber = str_replace('/' . $origMonthRoman . '/', '/' . $newMonthRoman . '/', $candidateNumber);
+                    $hasChanges = true;
+                } elseif (str_contains($candidateNumber, '-' . $origMonthRoman . '/')) {
+                    $candidateNumber = str_replace('-' . $origMonthRoman . '/', '-' . $newMonthRoman . '/', $candidateNumber);
+                    $hasChanges = true;
+                } elseif (str_contains($candidateNumber, '/' . $origMonthRoman . '-')) {
+                    $candidateNumber = str_replace('/' . $origMonthRoman . '-', '/' . $newMonthRoman . '-', $candidateNumber);
+                    $hasChanges = true;
+                } elseif (str_contains($candidateNumber, '/' . $origMonth . '/')) {
                     $candidateNumber = str_replace('/' . $origMonth . '/', '/' . $newMonth . '/', $candidateNumber);
                     $hasChanges = true;
                 } elseif (str_contains($candidateNumber, '/' . $origMonth . '-')) {

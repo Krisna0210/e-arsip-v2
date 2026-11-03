@@ -2556,6 +2556,80 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - `test_upload_and_move_document_creates_and_syncs_hierarchical_directories_on_storage`: Memvalidasi pembuatan struktur direktori 3 tingkat pada storage disk, penyimpanan berkas pada path hierarkis, pemindahan berkas fisik ke direktori baru, serta pembersihan path lama di disk.
   - Seluruh test suite sistem (**199 test cases, 987 assertions**) **100% PASS**.
 
+### 127. Personalisasi Metrik Kartu Statistik Dashboard Berbasis Peran (Staf vs Tapersip/Superadmin)
+- **Latar Belakang & Kebutuhan Visibilitas Mandiri**:
+  - Pada implementasi sebelumnya, kartu statistik dashboard (*Total Surat Masuk, Total Surat Keluar, Total Surat Khusus*) menghitung akumulasi total seluruh kantor tanpa membedakan peran pengguna. Akibatnya, pada pengaturan matriks peran staf, opsi kartu statistik sengaja tidak dicentang agar staf tidak melihat angka global kantor.
+  - Pengelola menginginkan agar kartu statistik dapat dicentang untuk peran staf, dengan ketentuan nilai yang tampil adalah total nomor surat yang diambil/didaftarkan oleh staf bersangkutan (`created_by === auth()->id()`), sedangkan untuk akun Tapersip dan Superadmin nilai yang tampil tetap akumulasi kantor.
+- **Implementasi Solusi**:
+  1. **Perhitungan Metrik Kontekstual (`app/Livewire/Dashboard.php`)**:
+     - Memeriksa hak istimewa pengguna via `$isTapersipOrSuper = $isSuperAdmin || ($user && $user->isTapersip())`.
+     - Jika `$isTapersipOrSuper`: kueri menghitung akumulasi seluruh naskah kantor (`Document::where('type', ...)->count()`).
+     - Jika staf biasa (`!$isTapersipOrSuper`): kueri otomatis memfilter naskah milik staf bersangkutan (`where('created_by', $user->id)`).
+     - Antrean *Menunggu Upload* juga dievaluasi dengan prinsip yang sama: menghitung antrean draft staf vs seluruh antrean kantor.
+  2. **Adaptasi Judul & Label Kartu (`resources/views/livewire/dashboard.blade.php`)**:
+     - Untuk Tapersip/Superadmin: `Total Surat Masuk`, `Total Surat Keluar`, `Total Surat Khusus`, `Menunggu Upload`.
+     - Untuk Staf: `Surat Masuk Saya`, `Surat Keluar Saya`, `Surat Khusus Saya`, `Draft Saya (Menunggu Upload)`.
+  3. **Petunjuk Informatif di Pengaturan Role (`role-editor.blade.php`)**:
+     - Pada Group 4 (*Kartu Statistik Dashboard*), disematkan catatan kontekstual peran agar administrator memahami perilaku kartu saat diaktifkan untuk staf.
+- **Verifikasi Pengujian Otomatis (`DashboardRealTimeSyncTest.php`)**:
+  - `test_dashboard_statistics_cards_distinguish_between_staff_personal_count_and_tapersip_global_count`: Memvalidasi bahwa staf A yang memiliki 1 surat keluar hanya melihat angka 1 dengan label *Surat Keluar Saya*, sedangkan Superadmin pada saat yang sama melihat angka 3 (*Total Surat Keluar*) sebagai akumulasi dari seluruh staf kantor.
+  - Seluruh test suite sistem (**200 test cases, 999 assertions**) **100% PASS**.
+
+### 128. Kondisional Akses Tautan Kartu Statistik Dashboard (Tapersip Klik Navigasi vs Staf Hanya Tampilan Metrik)
+- **Latar Belakang & Kebutuhan Proteksi Navigasi**:
+  - Pada dashboard kearsipan, kartu statistik (*Surat Masuk, Surat Keluar, Surat Khusus, Menunggu Upload*) sebelumnya selalu berbalut tautan `<a href="...">` ke halaman registri arsip.
+  - Karena peran staf biasa tidak memiliki hak akses ke modul arsip global tersebut (`in_out_mail`, `internal_memo`, `archive_queue`), apabila staf mengeklik kartu tersebut mereka akan terbentur halaman *403 Forbidden*.
+  - Diperlukan mekanisme kondisional: jika Tapersip/Superadmin, kartu dapat diklik untuk navigasi cepat; jika staf biasa, kartu murni hanya menyajikan angka metrik naskah miliknya tanpa dapat diklik.
+- **Implementasi Solusi**:
+  1. **Kondisional Pembungkus Kartu (`resources/views/livewire/dashboard.blade.php`)**:
+     - Untuk setiap kartu statistik:
+       - Mengevaluasi `$isTapersipOrSuper`:
+         - Jika `true`: Dibungkus elemen `<a href="..." class="... cursor-pointer hover:border-... hover:shadow-xs ...">`.
+         - Jika `false` (Staf): Dibungkus elemen `<div class="... cursor-default shadow-2xs ...">` tanpa atribut `href` dan tanpa efek hover tautan.
+     - Diterapkan secara konsisten pada:
+       - Card 1: Surat Masuk (`route('registry.incoming.index')` vs div statis).
+       - Card 2: Surat Keluar (`route('registry.outgoing.index')` vs div statis).
+       - Card 3: Surat Khusus (`route('registry.special.index')` vs div statis).
+       - Card 4: Menunggu Upload (`route('registry.scan-queue')` vs div statis).
+- **Verifikasi Pengujian Otomatis (`DashboardRealTimeSyncTest.php`)**:
+  - Diperbarui pada `test_dashboard_statistics_cards_distinguish_between_staff_personal_count_and_tapersip_global_count`:
+    - Memvalidasi bahwa saat login sebagai staf, respon HTML dashboard memuat `cursor-default` dan **tidak memuat** tautan `href` ke rute-rute registri arsip.
+    - Memvalidasi bahwa saat login sebagai Superadmin, kartu berstatus `cursor-pointer` dan memuat tautan `href` aktif ke rute registri arsip.
+  - Seluruh test suite sistem (**200 test cases, 1009 assertions**) **100% PASS**.
+
+### 129. Standardisasi Format Bulan Romawi `{MM}` pada Penomoran Surat Otomatis
+- **Latar Belakang & Kebutuhan Format Resmi Perusahaan**:
+  - Pada format tata naskah dinas resmi di Indonesia (Pedoman ANRI / BUMN / Korporat), segmen penanda bulan pada nomor surat resmi lazim menggunakan angka Romawi (`I` s.d. `XII`), bukan angka desimal dua digit (`01` s.d. `12`).
+  - End-user menginginkan agar pengambilan nomor surat otomatis (`Surat Keluar` dan `Surat Khusus`) yang menggunakan placeholder `{MM}` otomatis menerbitkan bulan dalam bentuk bilangan Romawi.
+- **Implementasi Solusi**:
+  1. **Helper Terpusat Model `Document::toRomanMonth()` (`app/Models/Document.php`)**:
+     - Menambahkan fungsi statis `Document::toRomanMonth(int|string|\DateTimeInterface|null $dateOrMonth)`:
+       Memetakan bulan 1-12 menjadi `I, II, III, IV, V, VI, VII, VIII, IX, X, XI, XII`.
+  2. **Penerbitan Nomor Surat Keluar & Khusus (`Outgoing/Create.php` & `Internal/Create.php`)**:
+     - Nilai placeholder `{MM}` diubah dari `date('m')` menjadi `Document::toRomanMonth($this->document_date)`.
+     - Nomor yang terbit otomatis memuat bulan Romawi (misal: `01/DIR-OPS-HM.00/X/2026` untuk bulan Oktober, `01/DIR-SDM-KP.01/XI/2026` untuk bulan November).
+  3. **Pratinjau Master Data Jenis Naskah (`archive-classification-index.blade.php`)**:
+     - Pratinjau pola penomoran master data diselaraskan menampilkan contoh bulan Romawi saat `{MM}` atau `[BulanRomawi]` digunakan.
+  4. **Sinkronisasi Ralat Tanggal Naskah (`Dashboard.php`, `ScanQueue.php`, `Outgoing/Index.php`, `Internal/Index.php`)**:
+     - Logika kalkulasi `newDocNumberPreview` diselaraskan agar saat tanggal surat diralat (misal dari Oktober ke November), segmen bulan Romawi (`/X/` $\rightarrow$ `/XI/`) otomatis ikut tersinkronisasi tanpa merusak nomor yang sudah ada.
+- **Verifikasi Pengujian Otomatis (`SequenceNumberingTest.php`)**:
+  - `test_numbering_format_replaces_mm_with_roman_numerals_across_months`: Memvalidasi konversi seluruh 12 bulan ke angka Romawi serta booking nomor surat keluar berformat Romawi (`/SDR/{UNIT}/X/2026`).
+  - Seluruh test suite sistem (**201 test cases, 1035 assertions**) **100% PASS**.
+
+### 130. Kondisional Visibilitas Tautan Audit Trail Dashboard (Tapersip Muncul vs Staf Tersembunyi)
+- **Latar Belakang & Prinsip Hak Akses Terbatas (Least Privilege)**:
+  - Pada dashboard kearsipan, kartu kolom kanan *Log Aktivitas Sistem* sebelumnya selalu menampilkan tautan footer *"Buka Seluruh Audit Trail Log →"* yang mengarah ke `/settings/audit-trail`.
+  - Halaman Audit Trail dilindungi oleh middleware `module:audit`. Karena staf biasa tidak memiliki hak akses audit kepatuhan, mengeklik tautan tersebut memicu error *403 Forbidden*.
+  - Pengelola menginginkan agar tautan ini hanya muncul untuk peran Admin Tapersip dan Superadmin, sedangkan untuk peran staf tautan ini dihilangkan.
+- **Implementasi Solusi**:
+  1. **Kondisional Footer Blade (`resources/views/livewire/dashboard.blade.php`)**:
+     - Footer tautan dibungkus kondisional: `@if($isTapersipOrSuper || auth()->user()->hasModuleAccess('audit'))`.
+     - Untuk staf biasa, kontainer footer tidak di-render sama sekali sehingga kartu log aktivitas berakhir rapi setelah 5 entri aktivitas personalnya tanpa ada dead link.
+- **Verifikasi Pengujian Otomatis (`DashboardActivityLogTest.php`)**:
+  - `test_staff_only_sees_their_own_activities_on_dashboard`: Memvalidasi bahwa respon HTML dashboard staf tidak memuat tautan *"Buka Seluruh Audit Trail Log"* dan tidak memuat rute `settings.audit-trail`.
+  - `test_superadmin_sees_all_activities_on_dashboard` & `test_tapersip_sees_all_activities_on_dashboard`: Memvalidasi bahwa tautan audit trail tetap muncul lengkap untuk akun Superadmin dan Tapersip.
+  - Seluruh test suite sistem (**201 test cases, 1041 assertions**) **100% PASS**.
+
 
 
 
