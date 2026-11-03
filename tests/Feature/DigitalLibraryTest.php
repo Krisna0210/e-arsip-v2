@@ -907,4 +907,58 @@ class DigitalLibraryTest extends TestCase
         $this->assertContains($sub2->id, $expandedIds3);
         $this->assertContains($sub3->id, $expandedIds3);
     }
+
+    public function test_upload_and_move_document_creates_and_syncs_hierarchical_directories_on_storage()
+    {
+        Storage::fake('nas');
+        $superadmin = User::where('username', 'superadmin')->first();
+
+        // 1. Buat hierarki folder 3 tingkat: Induk -> Sub Induk -> Sub Sub Induk
+        $rootFolder = DigitalFolder::create(['name' => 'Dokumen As-Built Drawing', 'created_by' => $superadmin->id]);
+        $subFolder = DigitalFolder::create(['name' => 'Divisi Teknik', 'parent_id' => $rootFolder->id, 'created_by' => $superadmin->id]);
+        $leafFolder = DigitalFolder::create(['name' => 'Tahun 2026', 'parent_id' => $subFolder->id, 'created_by' => $superadmin->id]);
+
+        $this->assertEquals('Dokumen As-Built Drawing/Divisi Teknik/Tahun 2026', $leafFolder->getDirectoryPath());
+
+        // 2. Unggah dokumen ke folder tingkat 3
+        $fakePdf = UploadedFile::fake()->create('denah_struktur.pdf', 1024, 'application/pdf');
+
+        Livewire::actingAs($superadmin)
+            ->test(DigitalLibraryIndex::class)
+            ->call('openUploadModal', $leafFolder->id)
+            ->set('uploadTitle', 'Gambar Denah Gedung Utama')
+            ->set('uploadCategory', 'As-Built Drawing')
+            ->set('uploadYear', 2026)
+            ->set('uploadFile', $fakePdf)
+            ->set('uploadFolderId', $leafFolder->id)
+            ->call('saveDocument')
+            ->assertDispatched('close-modal', 'modal-upload-digital-doc');
+
+        $doc = DigitalDocument::where('title', 'Gambar Denah Gedung Utama')->first();
+        $this->assertNotNull($doc);
+
+        // Path penyimpanan harus sesuai struktur direktori bertingkat: library/Induk/Sub/Sub/File.pdf
+        $this->assertStringStartsWith('library/Dokumen As-Built Drawing/Divisi Teknik/Tahun 2026/', $doc->file_path);
+        Storage::disk('nas')->assertExists($doc->file_path);
+
+        $oldFilePath = $doc->file_path;
+
+        // 3. Pindahkan dokumen ke folder baru: 'Arsip Selesai 2026'
+        $destFolder = DigitalFolder::create(['name' => 'Arsip Selesai 2026', 'created_by' => $superadmin->id]);
+
+        Livewire::actingAs($superadmin)
+            ->test(DigitalLibraryIndex::class)
+            ->call('openMoveDocModal', $doc->id)
+            ->set('moveTargetFolderId', $destFolder->id)
+            ->call('executeMoveDoc')
+            ->assertDispatched('close-modal', 'modal-move-digital-doc');
+
+        $doc->refresh();
+        $this->assertEquals($destFolder->id, $doc->folder_id);
+
+        // Path baru di NAS storage harus berpindah ke direktori folder tujuan
+        $this->assertStringStartsWith('library/Arsip Selesai 2026/', $doc->file_path);
+        Storage::disk('nas')->assertExists($doc->file_path);
+        Storage::disk('nas')->assertMissing($oldFilePath);
+    }
 }

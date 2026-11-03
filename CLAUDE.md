@@ -2538,6 +2538,24 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - `test_catalog_table_displays_availability_badges_and_softcopy_loan_workflow`: Memvalidasi bahwa saat softcopy kedaluwarsa, pemanggilan render/siklus Livewire otomatis mengubah status pinjaman menjadi `returned` (`Selesai`), mengubah status dokumen menjadi `Tersedia`, mengaktifkan kembali tombol `Ajukan Pinjam`, serta mengizinkan pengajuan permohonan pinjam baru.
   - Seluruh test suite sistem (**198 test cases, 977 assertions**) **100% PASS**.
 
+### 126. Struktur Direktori Fisik Bertingkat Penyimpanan Pustaka Digital (Hierarchical Disk Storage Mirroring & File Relocation)
+- **Latar Belakang & Kebutuhan Kerapian Penyimpanan**:
+  - Pada implementasi sebelumnya, seluruh berkas digital pustaka disimpan ke folder tetap `library/{kategori}/{tahun}` tanpa mengikuti struktur pohon folder kustom yang dibuat oleh Tapersip.
+  - Pengelola menginginkan agar struktur folder fisik di server penyimpanan disk/NAS merefleksikan secara persis hierarki folder di web UI (Induk -> Sub Induk -> Sub-sub Induk -> Berkas), misal: `library/Dokumen As-Built Drawing/Divisi Teknik/Tahun 2026/001-ARSIP-DIG-2026_gambar-denah.pdf`.
+- **Implementasi Solusi**:
+  1. **Helper Model Hierarki Direktori (`DigitalFolder::getDirectoryPath()`)**:
+     - Menelusuri seluruh rantai leluhur folder ke atas (`$this->parent`) dan menyusun path bertingkat.
+     - Membersihkan nama folder dari karakter khusus yang dilarang di OS Linux/Windows (`\`, `/`, `:`, `*`, `?`, `"`, `<`, `>`, `|`) dengan penggantian tanda strip `-`.
+  2. **Penyusunan Path & Relokasi Berkas (`DigitalDocument.php`)**:
+     - Menambahkan metode `getStorageDirectoryPath()`: Mengembalikan `library/{Hierarchy_Path}` jika memiliki folder, atau `library/Root` jika diunggah pada tingkat utama.
+     - Menambahkan metode `relocateFolder(?int $newFolderId)`: Saat dokumen dipindahkan ke folder lain, sistem secara otomatis memindahkan berkas fisik pada disk penyimpanan (`Storage::disk('nas')->move($oldPath, $newPath)`) dan memperbarui kolom `file_path` di database.
+  3. **Penyesuaian Komponen Unggah & Pindah Berkas (`DigitalLibraryIndex.php`)**:
+     - `saveDocument()`: Berkas diunggah langsung ke direktori hierarkis folder yang dipilih Tapersip.
+     - `executeMoveDoc()`: Memanggil `$doc->relocateFolder($targetFolderId)` sehingga pemindahan berkas di web UI langsung memicu pemindahan file fisik di disk secara realtime.
+- **Verifikasi Pengujian Otomatis (`DigitalLibraryTest.php`)**:
+  - `test_upload_and_move_document_creates_and_syncs_hierarchical_directories_on_storage`: Memvalidasi pembuatan struktur direktori 3 tingkat pada storage disk, penyimpanan berkas pada path hierarkis, pemindahan berkas fisik ke direktori baru, serta pembersihan path lama di disk.
+  - Seluruh test suite sistem (**199 test cases, 987 assertions**) **100% PASS**.
+
 
 
 

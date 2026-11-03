@@ -88,4 +88,28 @@ class DigitalFolder extends Model
 
         return $flattened;
     }
+
+    /**
+     * Get clean hierarchical directory path for physical storage (e.g. "Dokumen As-Built Drawing/Divisi Teknik/Tahun 2026")
+     */
+    public function getDirectoryPath(): string
+    {
+        $segments = [];
+        $current = $this;
+
+        while ($current) {
+            // Sanitize folder name for Linux/Windows filesystem
+            $cleanName = str_replace(['/', '\\'], '-', trim($current->name));
+            $cleanName = preg_replace('/[:*?"<>|]/', '', $cleanName);
+            $cleanName = trim(preg_replace('/\s+/', ' ', $cleanName));
+
+            if (!empty($cleanName)) {
+                array_unshift($segments, $cleanName);
+            }
+
+            $current = $current->parent;
+        }
+
+        return !empty($segments) ? implode('/', $segments) : 'Root';
+    }
 }

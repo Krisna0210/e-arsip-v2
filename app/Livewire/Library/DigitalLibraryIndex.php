@@ -226,9 +226,12 @@ class DigitalLibraryIndex extends Component
         $year = (int) $this->uploadYear;
         $docNumber = DigitalDocument::generateDocumentNumber($year);
 
-        // Sanitize & build destination path for NAS/Storage
-        $catSlug = Str::slug($this->uploadCategory);
-        $directory = "library/{$catSlug}/{$year}";
+        // Resolve destination directory based on hierarchical folder tree
+        $targetFolder = $this->uploadFolderId ? DigitalFolder::find($this->uploadFolderId) : null;
+        $directory = $targetFolder
+            ? "library/" . $targetFolder->getDirectoryPath()
+            : "library/Root";
+
         $originalName = $this->uploadFile->getClientOriginalName();
         $ext = strtolower($this->uploadFile->getClientOriginalExtension());
         
@@ -626,7 +629,7 @@ class DigitalLibraryIndex extends Component
         ]);
 
         $doc = DigitalDocument::findOrFail($this->moveDocId);
-        $doc->update(['folder_id' => $this->moveTargetFolderId]);
+        $doc->relocateFolder($this->moveTargetFolderId);
 
         $targetName = $this->moveTargetFolderId ? DigitalFolder::find($this->moveTargetFolderId)?->name : 'Root (Tanpa Folder)';
 

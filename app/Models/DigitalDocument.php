@@ -160,4 +160,63 @@ class DigitalDocument extends Model
         preg_match_all('/#?([\w\-]+)/u', $this->tags, $matches);
         return array_unique($matches[0] ?? []);
     }
+
+    /**
+     * Get clean hierarchical directory path for physical storage on NAS (e.g. "library/Dokumen As-Built Drawing/Divisi Teknik/Tahun 2026")
+     */
+    public function getStorageDirectoryPath(): string
+    {
+        $folderPath = $this->folder
+            ? $this->folder->getDirectoryPath()
+            : 'Root';
+
+        return "library/{$folderPath}";
+    }
+
+    /**
+     * Relocate document to a new folder, syncing physical file on NAS storage.
+     */
+    public function relocateFolder(?int $newFolderId): bool
+    {
+        if ($this->folder_id == $newFolderId) {
+            return true;
+        }
+
+        $newFolder = $newFolderId ? DigitalFolder::find($newFolderId) : null;
+
+        if (!empty($this->file_path)) {
+            $oldFilePath = $this->file_path;
+            $fileName = basename($oldFilePath);
+
+            // Simulasikan folder_id baru untuk menghitung direktori tujuan
+            $this->folder_id = $newFolderId;
+            $this->setRelation('folder', $newFolder);
+            $newDirectory = $this->getStorageDirectoryPath();
+            $newFilePath = rtrim($newDirectory, '/') . '/' . $fileName;
+
+            // Pindahkan file pada NAS (dengan fallback local storage jika ada)
+            $nasDisk = \Illuminate\Support\Facades\Storage::disk('nas');
+            $publicDisk = \Illuminate\Support\Facades\Storage::disk('public');
+
+            $moved = false;
+
+            if ($nasDisk->exists($oldFilePath)) {
+                $nasDisk->makeDirectory($newDirectory);
+                $nasDisk->move($oldFilePath, $newFilePath);
+                $moved = true;
+            } elseif ($publicDisk->exists($oldFilePath)) {
+                $publicDisk->makeDirectory($newDirectory);
+                $publicDisk->move($oldFilePath, $newFilePath);
+                $moved = true;
+            }
+
+            if ($moved) {
+                $this->file_path = $newFilePath;
+            }
+        } else {
+            $this->folder_id = $newFolderId;
+        }
+
+        return $this->save();
+    }
 }
