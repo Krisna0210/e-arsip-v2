@@ -192,7 +192,7 @@ class TapersipNotificationListener extends Component
             $docNumber = $loan->document?->number ?: 'Naskah';
 
             $this->dispatch('desktop-notify', [
-                'title' => 'Permohonan Pinjam Fisik Baru',
+                'title' => 'Permohonan Pinjam Dokumen Baru',
                 'body' => "{$loan->user?->name}{$unitName} mengajukan pinjam berkas {$docNumber}. Kode: {$loan->loan_code}",
                 'url' => route('borrowings.index', ['tab' => 'circulation', 'highlight' => "loan-{$loan->id}"]),
                 'type' => 'loan_requested',
@@ -402,10 +402,10 @@ class TapersipNotificationListener extends Component
                     return [
                         'key' => $key,
                         'category' => 'loan_circulation',
-                        'badge' => $isRequested ? 'Pinjam Fisik' : 'Batal Pinjam',
+                        'badge' => $isRequested ? 'Pinjam Dokumen' : 'Batal Pinjam',
                         'is_unread' => !in_array($key, $readKeys),
                         'identifier' => $loan->loan_code,
-                        'title' => $isRequested ? 'Pengajuan Pinjam Fisik' : 'Pembatalan Pinjam Fisik',
+                        'title' => $isRequested ? 'Pengajuan Pinjam Dokumen' : 'Pembatalan Pinjam Dokumen',
                         'actor' => $loan->user?->name ?? 'Staf',
                         'unit' => $loan->user?->unit?->name ?? '-',
                         'extra' => $loan->document?->number ?? 'Tanpa Nomor',

@@ -31,7 +31,7 @@ class DocumentLoanTest extends TestCase
         $response = $this->actingAs($superadmin)->get(route('borrowings.index'));
 
         $response->assertStatus(200);
-        $response->assertSeeText('Pinjam Berkas Arsip Fisik');
+        $response->assertSeeText('Pinjam Berkas Arsip');
     }
 
     public function test_user_can_submit_loan_request_and_ticket_is_generated()
@@ -1059,20 +1059,34 @@ class DocumentLoanTest extends TestCase
             ->call('openPreviewModal', $loan->id)
             ->assertDispatched('open-modal', 'modal-preview-loan-doc');
 
-        // 5. Uji jika akses kedaluwarsa: pratinjau ditolak
+        // 5. Uji jika akses kedaluwarsa: otomatis diselesaikan oleh sistem
         $loan->update(['access_expires_at' => now()->subHour()]);
         $this->assertFalse($loan->hasActiveSoftcopyAccess());
 
+        // Saat halaman dimuat/dirender ulang, sistem otomatis mengubah status pinjaman softcopy yang kedaluwarsa menjadi 'returned' (Selesai)
+        $testSettled = Livewire::actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->set('activeTab', 'circulation');
+
+        $loan->refresh();
+        $this->assertEquals('returned', $loan->status);
+
+        // A. Pada tab Persetujuan Tapersip, status berubah menjadi 'Selesai'
+        $testSettled->assertSee('Selesai');
+
+        // B. Pada tab Cari Surat (Katalog), Dokumen A berubah menjadi 'Tersedia' dan tombol 'Ajukan Pinjam' terbuka kembali
+        Livewire::actingAs($superadmin)
+            ->test(DocumentLoanIndex::class)
+            ->set('activeTab', 'catalog')
+            ->assertSee('101/AVAIL/BOTH/2026')
+            ->assertSee('Tersedia')
+            ->assertSee('Ajukan Pinjam');
+
+        // C. Pemohon dapat membuka kembali modal pinjam untuk Dokumen A tanpa ditolak
         Livewire::actingAs($borrower)
             ->test(DocumentLoanIndex::class)
-            ->set('activeTab', 'my_loans')
-            ->assertSee('Akses Kedaluwarsa')
-            ->call('openPreviewModal', $loan->id)
-            ->assertDispatched('notify', function ($name, $params) {
-                $payload = is_array($params) && isset($params['type']) ? $params : ($params[0] ?? []);
-                return ($payload['type'] ?? '') === 'error'
-                    && str_contains($payload['message'] ?? '', 'kedaluwarsa');
-            });
+            ->call('openLoanModal', $docA->id)
+            ->assertDispatched('open-modal', 'modal-loan-request');
     }
 
     public function test_scan_queue_saves_availability_metadata()

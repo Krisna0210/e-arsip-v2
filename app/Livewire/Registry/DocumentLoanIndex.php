@@ -269,6 +269,8 @@ class DocumentLoanIndex extends Component
             return;
         }
 
+        $this->settleExpiredSoftcopyLoans();
+
         $doc = Document::with(['folder', 'unit'])->findOrFail($documentId);
 
         // Security check: Lapisan Hak Akses Kerahasiaan & Divisi
@@ -319,6 +321,8 @@ class DocumentLoanIndex extends Component
         if (!$this->canBorrow) {
             abort(403, 'Akses ditolak: Anda tidak memiliki hak akses untuk meminjam dokumen.');
         }
+
+        $this->settleExpiredSoftcopyLoans();
 
         if (!$this->selectedDocument || !$this->canAccessDocument($this->selectedDocument)) {
             abort(403, 'Akses ditolak: Dokumen ini bersifat rahasia/terbatas untuk divisi lain.');
@@ -897,8 +901,23 @@ class DocumentLoanIndex extends Component
         }
     }
 
+    protected function settleExpiredSoftcopyLoans(): void
+    {
+        DocumentLoan::where('loan_type', 'softcopy')
+            ->where('status', 'borrowed')
+            ->whereNotNull('access_expires_at')
+            ->where('access_expires_at', '<=', now())
+            ->update([
+                'status' => 'returned',
+                'returned_date' => now(),
+                'notes' => 'Masa izin akses digital telah berakhir (Selesai otomatis oleh sistem)',
+            ]);
+    }
+
     public function render()
     {
+        $this->settleExpiredSoftcopyLoans();
+
         $user = Auth::user();
         $isPrivileged = $user && ($user->isSuperAdmin() || $user->isTapersip());
         $canViewRahasia = $isPrivileged || ($user && $user->hasDocumentPermission('view', 'rahasia'));

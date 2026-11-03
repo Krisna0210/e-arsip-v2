@@ -2518,6 +2518,26 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - `test_softcopy_loan_approval_rejection_and_reminder_email_subjects_and_templates`: Memvalidasi subjek email, rendering HTML, kartu rincian, dan pesan kontekstual pada approval, rejection, completion, dan reminder untuk peminjaman softcopy.
   - Seluruh test suite sistem (**198 test cases, 973 assertions**) **100% PASS**.
 
+### 125. Otomatisasi Siklus Pinjaman Digital Softcopy (Auto-Expire, Auto-Settle & Penghapusan Aksi Manual)
+- **Latar Belakang & Kebutuhan Otomatisasi**:
+  - Pada peminjaman berkas digital (*softcopy*), tidak ada perpindahan fisik barang kertas, sehingga petugas Tapersip tidak perlu melakukan tindakan fisik "Terima & Masukkan Loker". Tombol dropdown "Aksi" pada baris pinjaman softcopy yang telah disetujui perlu ditiadakan.
+  - Saat durasi izin akses softcopy berakhir (*expired*), sistem harus otomatis menyelesaikan status peminjaman menjadi "Selesai" tanpa campur tangan petugas Tapersip, sehingga dokumen langsung berstatus bebas/tersedia kembali di katalog dan tombol "Ajukan Pinjam" otomatis aktif kembali.
+- **Implementasi Solusi**:
+  1. **Penghapusan Tombol Aksi Manual Softcopy yang Disetujui (`document-loan-index.blade.php`)**:
+     - Pada tab *Persetujuan Tapersip* (`circulation`), kolom *Tindakan Petugas* dievaluasi:
+       `$canShowAction = $loan->status === 'requested' || ($loan->status === 'borrowed' && !$loan->isSoftcopy())`.
+     - Baris softcopy berstatus `borrowed` menampilkan status `Akses Digital Aktif` dan kolom aksi menampilkan tanda strip (`-`), mencegah tindakan manual yang tidak relevan.
+  2. **Mekanisme Self-Healing Realtime (`settleExpiredSoftcopyLoans`)**:
+     - Pada backend `DocumentLoanIndex.php`, disematkan metode `settleExpiredSoftcopyLoans()` yang dipanggil saat `render()` (dipicu juga oleh `wire:poll.10s`), `openLoanModal()`, dan `submitLoanRequest()`:
+       Mengubah otomatis pinjaman softcopy berstatus `borrowed` yang memiliki `access_expires_at <= now()` menjadi `status = 'returned'`, `returned_date = now()`, dan `notes = 'Masa izin akses digital telah berakhir (Selesai otomatis oleh sistem)'`.
+  3. **Penyelarasan Status Antar Tab**:
+     - **Tab Persetujuan Tapersip**: Status pinjaman softcopy kedaluwarsa seketika berganti menjadi badge hijau `Selesai`.
+     - **Tab Cari Surat (Katalog)**: Karena status pinjaman menjadi `returned`, relasi `activeLoan` bernilai null sehingga dokumen seketika berstatus badge hijau `Tersedia`, dan tombol aksi **Ajukan Pinjam** langsung aktif kembali.
+     - **Tab Pinjaman Saya**: Status peminjam berganti menjadi `Selesai`.
+- **Verifikasi Pengujian Otomatis (`DocumentLoanTest.php`)**:
+  - `test_catalog_table_displays_availability_badges_and_softcopy_loan_workflow`: Memvalidasi bahwa saat softcopy kedaluwarsa, pemanggilan render/siklus Livewire otomatis mengubah status pinjaman menjadi `returned` (`Selesai`), mengubah status dokumen menjadi `Tersedia`, mengaktifkan kembali tombol `Ajukan Pinjam`, serta mengizinkan pengajuan permohonan pinjam baru.
+  - Seluruh test suite sistem (**198 test cases, 977 assertions**) **100% PASS**.
+
 
 
 

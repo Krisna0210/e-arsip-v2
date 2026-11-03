@@ -10,12 +10,12 @@
                 <button type="button"
                         wire:click="openCreateFolderModal"
                         class="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors shadow-2xs cursor-pointer">
-                    + Folder Baru
+                    Folder Baru
                 </button>
                 <button type="button"
                         wire:click="openUploadModal"
                         class="px-4 py-2 text-xs font-semibold text-white bg-[var(--color-primary)] hover:bg-emerald-800 rounded-lg transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5">
-                    <span>+ Unggah Berkas Baru</span>
+                    <span>Tambah Berkas</span>
                 </button>
             </div>
         @endif

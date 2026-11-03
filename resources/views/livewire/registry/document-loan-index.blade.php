@@ -319,9 +319,9 @@
                                             type="button"
                                             wire:click="openLoanModal({{ $doc->id }})"
                                             class="inline-flex items-center gap-1.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-2xs transition-colors cursor-pointer">
-                                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            {{-- <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                                            </svg>
+                                            </svg> --}}
                                             Ajukan Pinjam
                                         </button>
                                     @else
@@ -522,7 +522,7 @@
                                         </span>
                                     @elseif($loan->status === 'returned')
                                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                            Sudah Kembali
+                                            {{ $loan->isSoftcopy() ? 'Selesai' : 'Sudah Kembali' }}
                                         </span>
                                     @elseif($loan->status === 'rejected')
                                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
@@ -806,16 +806,16 @@
                                             Menunggu Persetujuan
                                         </span>
                                     @elseif($loan->status === 'borrowed')
-                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                                        Sedang Dipinjam
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold {{ $loan->isSoftcopy() ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-amber-50 text-amber-800 border border-amber-200' }}">
+                                            {{ $loan->isSoftcopy() ? 'Akses Digital Aktif' : 'Sedang Dipinjam' }}
                                         </span>
                                     @elseif($loan->status === 'returned')
                                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                            Sudah Kembali
+                                            {{ $loan->isSoftcopy() ? 'Selesai' : 'Sudah Kembali' }}
                                         </span>
                                         @if($loan->notes)
-                                            <div class="text-[10px] text-emerald-700 font-medium mt-1 max-w-[160px] mx-auto truncate" title="Kondisi: {{ $loan->notes }}">
-                                                Kondisi: {{ $loan->notes }}
+                                            <div class="text-[10px] text-emerald-700 font-medium mt-1 max-w-[160px] mx-auto truncate" title="{{ $loan->notes }}">
+                                                {{ $loan->notes }}
                                             </div>
                                         @endif
                                     @elseif($loan->status === 'rejected')
@@ -836,7 +836,10 @@
 
                                 <!-- Tindakan Petugas (Dropdown) -->
                                 <td class="px-5 py-4 align-top text-right">
-                                    @if(in_array($loan->status, ['requested', 'borrowed']))
+                                    @php
+                                        $canShowAction = $loan->status === 'requested' || ($loan->status === 'borrowed' && !$loan->isSoftcopy());
+                                    @endphp
+                                    @if($canShowAction)
                                         <div class="relative inline-block text-left" x-data="{ open: false }">
                                             <!-- Tombol Pemicu Dropdown -->
                                             <button

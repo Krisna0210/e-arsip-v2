@@ -731,8 +731,8 @@ class DigitalLibraryTest extends TestCase
 
         Livewire::actingAs($uploader)
             ->test(DigitalLibraryIndex::class)
-            ->assertSee('+ Folder Baru')
-            ->assertSee('+ Unggah Berkas Baru')
+            ->assertSee('Folder Baru')
+            ->assertSee('Tambah Berkas')
             ->call('openCreateFolderModal')
             ->assertDispatched('open-modal', 'modal-folder-editor')
             ->set('folderName', 'Folder Baru Staf')
@@ -768,8 +768,8 @@ class DigitalLibraryTest extends TestCase
 
         Livewire::actingAs($reader)
             ->test(DigitalLibraryIndex::class)
-            ->assertDontSee('+ Folder Baru')
-            ->assertDontSee('+ Unggah Berkas Baru')
+            ->assertDontSee('Folder Baru')
+            ->assertDontSee('Tambah Berkas')
             ->call('openCreateFolderModal')
             ->assertDispatched('notify', function ($name, $params) {
                 $payload = is_array($params) && isset($params['type']) ? $params : ($params[0] ?? []);
