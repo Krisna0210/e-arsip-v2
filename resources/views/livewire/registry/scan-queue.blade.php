@@ -91,7 +91,7 @@
     <!-- Table -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
+            <table class="w-full min-w-[700px] divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
                         <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider sm:pl-6 w-16">Antrean</th>
@@ -266,9 +266,9 @@
               x-on:livewire-upload-error="uploading = false"
               x-on:open-modal.window="if ($event.detail === 'modal-upload-queue' || $event.detail.id === 'modal-upload-queue' || (Array.isArray($event.detail) && $event.detail[0] === 'modal-upload-queue')) pdfUrl = null">
 
-            <div class="flex flex-col lg:flex-row h-[80vh] divide-y lg:divide-y-0 lg:divide-x divide-gray-200">
+            <div class="flex flex-col lg:flex-row h-auto max-h-[85vh] lg:h-[80vh] overflow-y-auto lg:overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-gray-200">
                 <!-- PANEL KIRI: Metadata & Form Upload (Lebar ~40%) -->
-                <div class="w-full lg:w-[450px] flex-shrink-0 flex flex-col h-full bg-white">
+                <div class="w-full lg:w-[450px] flex-shrink-0 flex flex-col h-auto lg:h-full bg-white">
                     <div class="p-6 flex-1 overflow-y-auto">
                         @if(!$nasStatus['online'])
                             <div class="mb-6 bg-rose-50 p-4 rounded-xl border border-rose-200 flex items-start gap-3">
@@ -397,7 +397,7 @@
                 </div>
 
                 <!-- PANEL KANAN: PDF Preview (Lebar ~60%) -->
-                <div class="flex-1 h-full bg-slate-900 relative rounded-br-xl overflow-hidden">
+                <div class="flex-1 min-h-[350px] lg:min-h-0 h-[400px] lg:h-full bg-slate-900 relative rounded-b-xl lg:rounded-bl-none lg:rounded-br-xl overflow-hidden">
                     <!-- Empty State Preview -->
                     <div x-show="!pdfUrl" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 p-8 text-center">
                         <svg class="w-20 h-20 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">

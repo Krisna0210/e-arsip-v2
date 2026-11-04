@@ -25,8 +25,8 @@
     </div>
 
     <!-- Tabs -->
-    <div class="border-b border-[var(--color-border)]">
-        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+    <div class="border-b border-[var(--color-border)] overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <nav class="-mb-px flex space-x-6 sm:space-x-8 min-w-max" aria-label="Tabs">
             <button wire:click="setTab('unit')" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm {{ $activeTab === 'unit' ? 'border-[var(--color-accent)] text-[var(--color-primary)]' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300' }}">
                 Unit Kerja / Departemen
             </button>

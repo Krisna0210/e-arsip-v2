@@ -1,6 +1,6 @@
 <div class="flex flex-col lg:flex-row min-h-[calc(100vh-4rem)] bg-white">
     <!-- Left Pane: Form -->
-    <div class="w-full lg:w-1/2 p-6 lg:p-8 xl:p-10 overflow-y-auto border-r border-gray-200">
+    <div class="w-full lg:w-1/2 p-4 sm:p-6 lg:p-8 xl:p-10 overflow-y-auto border-b lg:border-b-0 lg:border-r border-gray-200">
         <div class="max-w-2xl mx-auto">
             <div class="mb-8">
                 <h2 class="text-2xl font-bold text-gray-900 mb-1">Registrasi Surat Khusus</h2>
@@ -150,7 +150,7 @@
     </div>
 
     <!-- Right Pane: PDF Preview / Workflow Guide -->
-    <div class="w-full lg:w-1/2 bg-gray-50 p-6 lg:p-8 xl:p-10 lg:sticky lg:top-0 h-[600px] lg:h-screen flex flex-col">
+    <div class="w-full lg:w-1/2 bg-gray-50 p-4 sm:p-6 lg:p-8 xl:p-10 lg:sticky lg:top-0 h-[450px] sm:h-[600px] lg:h-screen flex flex-col">
         @if($this->canArchive)
             <h3 class="text-lg font-semibold text-gray-900 mb-4 flex-none">Pratinjau Dokumen</h3>
 

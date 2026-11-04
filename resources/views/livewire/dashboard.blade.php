@@ -236,7 +236,7 @@
                     </div>
                 </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left">
+                    <table class="w-full text-sm text-left min-w-[700px]">
                         <thead class="text-[11px] font-bold text-slate-500 bg-slate-50 uppercase tracking-wider border-b border-slate-200">
                             <tr>
                                 <th scope="col" class="py-2.5 pl-5 pr-3 w-1/4">Nomor & Jenis Dokumen</th>

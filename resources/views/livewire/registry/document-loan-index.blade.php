@@ -12,8 +12,8 @@
     </div>
 
     <!-- Tab Navigasi Mandiri -->
-    <div class="border-b border-slate-200">
-        <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+    <div class="border-b border-slate-200 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <nav class="-mb-px flex space-x-6 min-w-max" aria-label="Tabs">
             @if($this->canBorrow)
             {{-- Tab 1: Katalog & Cari Surat --}}
             <button
@@ -121,20 +121,22 @@
             </div>
 
             <!-- Baris Kedua Filter: Rentang Tanggal & Tombol Reset -->
-            <div class="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div class="flex items-center gap-2 w-full sm:w-auto">
+            <div class="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+                <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
                     <span class="text-xs font-semibold text-slate-500 whitespace-nowrap">Rentang Tanggal Surat:</span>
-                    <input
-                        type="date"
-                        wire:model.live="filterDateStart"
-                        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] bg-slate-50"
-                    >
-                    <span class="text-xs text-slate-400">s/d</span>
-                    <input
-                        type="date"
-                        wire:model.live="filterDateEnd"
-                        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] bg-slate-50"
-                    >
+                    <div class="flex items-center gap-1.5 w-full sm:w-auto">
+                        <input
+                            type="date"
+                            wire:model.live="filterDateStart"
+                            class="flex-1 sm:flex-none rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] bg-slate-50"
+                        >
+                        <span class="text-xs text-slate-400">s/d</span>
+                        <input
+                            type="date"
+                            wire:model.live="filterDateEnd"
+                            class="flex-1 sm:flex-none rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] bg-slate-50"
+                        >
+                    </div>
                 </div>
 
                 <div class="flex items-center gap-2 w-full sm:w-auto justify-end">

@@ -22,8 +22,8 @@
     </div>
 
     <!-- 3 Tab Navigasi Pustaka Digital (Zero Icons) -->
-    <div class="border-b border-slate-200">
-        <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+    <div class="border-b border-slate-200 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <nav class="-mb-px flex space-x-6 min-w-max" aria-label="Tabs">
             <!-- Tab 1: Repositori Berkas -->
             <button type="button"
                     wire:click="setTab('repository')"
@@ -98,7 +98,7 @@
                 </button>
 
                 <!-- Daftar Folder Hierarkis -->
-                <div class="space-y-1 max-h-[60vh] overflow-y-auto pr-1">
+                <div class="space-y-1 max-h-48 sm:max-h-[60vh] overflow-y-auto pr-1">
                     @forelse($folders as $f)
                         @include('livewire.library.folder-item', ['folder' => $f, 'level' => 0, 'expandedFolderIds' => $expandedFolderIds])
                     @empty

@@ -8,8 +8,8 @@
     </div>
 
     <!-- Tab Navigasi Mandiri (Zero Icons) -->
-    <div class="border-b border-slate-200">
-        <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+    <div class="border-b border-slate-200 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <nav class="-mb-px flex space-x-6 min-w-max" aria-label="Tabs">
             <!-- Tab 1: Permohonan Batal -->
             <button
                 type="button"

@@ -2645,6 +2645,53 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - `test_incoming_mail_can_be_registered_without_classification`: Memvalidasi pendaftaran surat masuk tanpa klasifikasi berjalan sukses 100%, menghasilkan naskah berstatus archived dengan field klasifikasi dan retensi bernilai null.
   - Seluruh test suite sistem (**201 test cases, 1044 assertions**) **100% PASS**.
 
+### 133. Audit & Rekayasa Responsivitas Menyeluruh Antarmuka (Universal Frontend Responsiveness)
+- **Latar Belakang & Kebutuhan Ergonomi Multi-Device**:
+  - Pengguna mengakses sistem e-Arsip dari beragam perangkat: smartphone (360px – 430px), tablet (768px – 1024px), hingga layar laptop/desktop (1280px ke atas).
+  - Beberapa komponen sebelumnya mengalami masalah ketidakresponsifan: tab navigasi terpotong atau turun berantakan di layar kecil, header topbar meluap pada ponsel (< 480px), popover notifikasi terpotong di tepi layar, tabel monitoring dashboard gepeng karena tidak memiliki lebar minimal, loker sidebar mendominasi ketinggian layar ponsel, dan modal split-pane terkunci tingginya.
+- **Implementasi Solusi**:
+  1. **Shell Tata Letak & Header Responsif (`components/layouts/app.blade.php`)**:
+     - Padding konten utama adaptif: `p-3.5 sm:p-5 lg:p-6`.
+     - Tombol topbar kanan (*Switch Role* & *Logout*) responsif: label teks disembunyikan di mobile (< 640px) dan tampil hanya ikon atau teks ringkas (`hidden sm:inline`), mencegah meluapnya header.
+     - Wadah Toast Alert Global: `fixed top-4 right-4 left-4 sm:left-auto sm:top-5 sm:right-5` agar tampil rapi dan simetris di ponsel.
+  2. **Standardisasi Bilah Tab Gulir Horisontal Bebas Batang Penggulir (6 Modul)**:
+     - Diterapkan pada `digital-library-index`, `document-loan-index`, `cancelled-document-index`, `destruction-index`, `organization-index`, dan `archive-classification-index`.
+     - Bilah tab dibungkus dalam `overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden` dengan `<nav class="... min-w-max">`.
+     - Pengguna mobile dapat menggeser tab dengan sentuhan jari tanpa memecah susunan tata letak.
+  3. **Penataan Tabel Monitoring & Registri dengan Minimum Width**:
+     - `dashboard.blade.php`: Menambahkan `min-w-[700px]` pada tabel monitoring arsip dokumen.
+     - `scan-queue.blade.php`: Menambahkan `w-full min-w-[700px]` pada tabel antrean scan.
+     - `incoming/index`, `outgoing/index`, `internal/index`: Menambahkan `w-full min-w-[700px]` pada tabel dokumen.
+  4. **Adaptasi Loker Sidebar & Split-Pane pada Modul Registri**:
+     - `incoming/index`, `outgoing/index`, `internal/index`: Wadah diubah menjadi `min-h-[500px] sm:h-[calc(100vh-6rem)]`, dan sidebar loker dibatasi `max-h-48 sm:max-h-none` dengan `border-b sm:border-b-0 sm:border-r`. Tabel dokumen di bawahnya tetap terlihat dan dapat diakses dengan leluasa.
+     - `incoming/create`, `outgoing/create`, `internal/create`: Panel form dan preview PDF disesuaikan dari fixed 600px menjadi `h-[450px] sm:h-[600px] lg:h-screen` dengan padding proporsional `p-4 sm:p-6 lg:p-8 xl:p-10`.
+     - `scan-queue.blade.php`: Modal split-pane `modal-upload-queue` disesuaikan menjadi `h-auto max-h-[85vh] lg:h-[80vh] overflow-y-auto lg:overflow-hidden` dan panel preview memiliki `min-h-[350px] lg:min-h-0 h-[400px] lg:h-full` sehingga preview PDF dapat dilihat di perangkat sentuh.
+     - `digital-library-index.blade.php`: Ketinggian pohon folder dibatasi `max-h-48 sm:max-h-[60vh]`.
+  5. **Penataan Popover Notifikasi Tapersip (`tapersip-notification-listener.blade.php`)**:
+     - Posisi popover diubah menjadi `fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:w-[420px] sm:max-w-none max-w-[calc(100vw-1.5rem)]`.
+     - Menghapus batasan `max-w-full` (yang sebelumnya menjebak lebar popover menjadi hanya 44px mengikuti containing block tombol lonceng di desktop).
+     - Popover melayang simetris di tengah layar ponsel tanpa terpotong di tepi layar, dan memiliki lebar penuh 420px yang rapi di layar web/desktop, dengan indikator paruh segitiga tetap selaras di tengah tombol lonceng (`hidden sm:block`).
+- **Verifikasi**:
+  - `php artisan view:clear` sukses dijalankan.
+  - Seluruh test suite sistem (**201 test cases, 1044 assertions**) **100% PASS** tanpa kegagalan.
+
+### 134. Redesign Modern Scrollbar Sidebar & Loker Navigasi (Stealth Ghost Scrollbar Engine)
+- **Latar Belakang & Kebutuhan Estetika**:
+  - Batang penggulir (*scrollbar*) pada sidebar kiri utama sebelumnya belum memiliki aturan CSS khusus sehingga menggunakan *fallback* bawaan OS (Windows 10/11: batang abu-abu tebal 17px dengan panah atas-bawah yang kaku/kuno).
+  - Tampilan ini menabrak estetika latar belakang sidebar hijau gelap (`#0B2E28`).
+- **Implementasi Solusi (`resources/css/app.css`)**:
+  1. **Sidebar Dark Theme (`.sidebar-scroll`)**:
+     - Standar CSS Modern (Firefox & Chrome 121+): `scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent;`.
+     - WebKit Engine: Lebar ultra-slim 5px (`width: 5px`), rel transparan 100% (`background: transparent`), thumb pil membulat penuh (`border-radius: 9999px`) berwarna frost putih translusen (`rgba(255, 255, 255, 0.16)` $\rightarrow$ `0.32` saat hover), serta tombol panah dihilangkan (`display: none`).
+  2. **Loker Light Theme (`.custom-scrollbar`)**:
+     - Diterapkan pada panel pohon Loker Penyimpanan Surat Masuk, Surat Keluar, dan Surat Khusus.
+     - Menggunakan skema warna terang: thumb slate translusen (`rgba(148, 163, 184, 0.35)` $\rightarrow$ `0.6` saat hover) dengan rel transparan 5px.
+- **Verifikasi**:
+  - Build aset Vite (`npm run build`) sukses tanpa warning.
+  - Seluruh test suite sistem (**201 test cases, 1044 assertions**) **100% PASS**.
+
+
+
 
 
 

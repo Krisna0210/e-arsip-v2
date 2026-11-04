@@ -1,6 +1,6 @@
-<div class="flex flex-col sm:flex-row h-[calc(100vh-6rem)] bg-white dark:bg-slate-900 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+<div class="flex flex-col sm:flex-row min-h-[500px] sm:h-[calc(100vh-6rem)] bg-white dark:bg-slate-900 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
     <!-- Left Sidebar: Folder Tree -->
-    <div class="w-full sm:w-64 lg:w-72 flex-shrink-0 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50/50 dark:bg-slate-900/50">
+    <div class="w-full sm:w-64 lg:w-72 flex-shrink-0 border-b sm:border-b-0 sm:border-r border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50/50 dark:bg-slate-900/50 max-h-48 sm:max-h-none">
         <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900">
             <h2 class="text-sm font-bold text-slate-800 dark:text-slate-200 tracking-wide uppercase">Loker Penyimpanan</h2>
             <button wire:click="createFolder" class="p-1.5 rounded-md bg-[var(--color-primary)] text-white hover:bg-emerald-700 transition-colors shadow-sm" title="Tambah Loker Baru">
@@ -57,7 +57,7 @@
 
         <!-- Table Content -->
         <div class="flex-1 overflow-auto">
-            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+            <table class="w-full min-w-[700px] divide-y divide-slate-200 dark:divide-slate-800">
                 <thead class="bg-slate-50 dark:bg-slate-800/50 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800">
                     <tr>
                         <th scope="col" class="py-2.5 pl-4 pr-3 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider sm:pl-6 w-1/6">Nomor Surat</th>

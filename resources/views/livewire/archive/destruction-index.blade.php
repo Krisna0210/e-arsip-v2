@@ -8,8 +8,8 @@
     </div>
 
     <!-- Tabs Navigasi -->
-    <div class="border-b border-slate-200 mb-6">
-        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+    <div class="border-b border-slate-200 mb-6 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <nav class="-mb-px flex space-x-6 sm:space-x-8 min-w-max" aria-label="Tabs">
             <button type="button"
                 wire:click="setTab('expired')"
                 class="whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-2 {{ $activeTab === 'expired' ? 'border-[var(--color-primary)] text-[var(--color-primary)] font-semibold' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300' }}">

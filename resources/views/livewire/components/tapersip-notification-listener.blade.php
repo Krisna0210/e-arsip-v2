@@ -92,11 +92,11 @@
                  x-transition:leave="transition ease-in duration-100"
                  x-transition:leave-start="transform opacity-100 scale-100"
                  x-transition:leave-end="transform opacity-0 scale-95"
-                 class="absolute right-0 top-full mt-2 rounded-xl bg-white shadow-[0_4px_20px_-2px_rgba(15,23,42,0.08)] border border-slate-200 z-50 text-left focus:outline-none"
-                 style="width: 440px; max-width: calc(100vw - 2rem); display: none;">
+                 class="fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full mt-2 rounded-xl bg-white shadow-[0_4px_20px_-2px_rgba(15,23,42,0.08)] border border-slate-200 z-50 text-left focus:outline-none sm:w-[420px] sm:max-w-none max-w-[calc(100vw-1.5rem)]"
+                 style="display: none;">
 
                 <!-- Upward Pointer Beak Indicator -->
-                <div class="absolute -top-1.5 right-4 w-3 h-3 bg-white border-t border-l border-slate-200 rotate-45 z-20"></div>
+                <div class="hidden sm:block absolute -top-1.5 right-4 w-3 h-3 bg-white border-t border-l border-slate-200 rotate-45 z-20"></div>
 
                 <!-- Header Popover Row 1: Padding 16px (py-4) x 24px (px-6) sesuai 8px grid -->
                 <div class="px-6 py-4 flex items-center justify-between border-b border-slate-200 bg-white rounded-t-xl relative z-10">
