@@ -30,7 +30,7 @@
                 <span class="absolute inset-y-0 left-0 flex items-center pl-3">
                     <svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 </span>
-                <input type="text" wire:model.live="search" class="w-full bg-white border border-slate-200 text-sm rounded-lg pl-9 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="Cari nama, NIP, atau unit...">
+                <input type="text" wire:model.live="search" class="w-full bg-white border border-slate-200 text-sm rounded-lg pl-9 px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="Cari nama, NIP, atau email...">
             </div>
             <!-- Filter -->
             <div class="flex items-center gap-2 w-full sm:w-auto">
@@ -50,12 +50,13 @@
 
         <!-- Table -->
         <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse min-w-[900px]">
+            <table class="w-full text-left border-collapse min-w-[1000px]">
                 <thead>
                     <tr class="bg-[var(--color-background)] border-b border-[var(--color-border)] text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-                        <th class="px-5 py-3 w-1/4">Nama Lengkap</th>
-                        <th class="px-5 py-3 w-1/4">Unit Kerja</th>
-                        <th class="px-5 py-3 w-1/5">Jabatan / Posisi</th>
+                        <th class="px-5 py-3 w-1/5">Nama Lengkap</th>
+                        <th class="px-5 py-3 w-1/5">Email Akun</th>
+                        <th class="px-5 py-3 w-1/5">Unit Kerja</th>
+                        <th class="px-5 py-3 w-1/6">Jabatan / Posisi</th>
                         <th class="px-5 py-3 w-1/6">Role Sistem</th>
                         <th class="px-5 py-3 text-right">Opsi</th>
                     </tr>
@@ -80,6 +81,13 @@
                             </div>
                         </td>
                         <td class="px-5 py-4 align-middle">
+                            @if($user->email)
+                                <span class="text-xs font-mono text-slate-600 select-all">{{ $user->email }}</span>
+                            @else
+                                <span class="text-xs text-slate-400 italic">Belum disetel</span>
+                            @endif
+                        </td>
+                        <td class="px-5 py-4 align-middle">
                             <div class="font-medium text-slate-700">{{ $user->unit->name ?? '-' }}</div>
                             <div class="text-xs text-slate-500 mt-0.5">{{ $user->unit->code ?? '' }}</div>
                         </td>
@@ -100,7 +108,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="5" class="px-5 py-8 text-center text-slate-500">Tidak ada data pengguna yang ditemukan.</td>
+                        <td colspan="6" class="px-5 py-8 text-center text-slate-500">Tidak ada data pengguna yang ditemukan.</td>
                     </tr>
                     @endforelse
                 </tbody>

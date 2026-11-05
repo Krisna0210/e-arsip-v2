@@ -143,6 +143,32 @@ class UserAndRoleManagementTest extends TestCase
         ]);
     }
 
+    public function test_user_index_table_displays_email_and_supports_email_search()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+        $position = Position::first();
+        $roleUser = Role::where('name', 'User')->first();
+
+        $userWithEmail = User::factory()->create([
+            'name' => 'Aditya Pratama',
+            'username' => 'aditya_p',
+            'email' => 'aditya.pratama@perusahaan.co.id',
+            'unit_id' => $unit->id,
+            'position_id' => $position->id,
+            'role_id' => $roleUser->id,
+        ]);
+
+        Livewire::actingAs($superadmin)
+            ->test(UserIndex::class)
+            ->assertSee('Email Akun')
+            ->assertSee('aditya.pratama@perusahaan.co.id')
+            ->set('search', 'aditya.pratama')
+            ->assertSee('Aditya Pratama')
+            ->set('search', 'nonexistent.email@domain.com')
+            ->assertDontSee('Aditya Pratama');
+    }
+
     public function test_admin_cannot_delete_role_in_use()
     {
         $superadmin = User::where('username', 'superadmin')->first();

@@ -2690,6 +2690,24 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - Build aset Vite (`npm run build`) sukses tanpa warning.
   - Seluruh test suite sistem (**201 test cases, 1044 assertions**) **100% PASS**.
 
+### 135. Penambahan Kolom Email Akun pada Tabel Manajemen Pengguna
+- **Latar Belakang & Kebutuhan Manajemen Akses**:
+  - Pada halaman *Manajemen Akun Pengguna* (`resources/views/livewire/settings/user-index.blade.php`), data kontak resmi karyawan (email) sebelumnya hanya dapat dilihat dengan membuka modal edit pengguna.
+  - Administrator membutuhkan visibilitas langsung terhadap alamat email akun untuk keperluan verifikasi identitas, korespondensi, dan notifikasi persetujuan berkas.
+- **Implementasi Solusi**:
+  1. **Tampilan Tabel Pengguna (`user-index.blade.php`)**:
+     - Menambahkan header kolom `<th class="px-5 py-3 w-1/5">Email Akun</th>` di samping Nama Lengkap.
+     - Merender sel email menggunakan font monospace bersih yang dapat disalin: `<span class="text-xs font-mono text-slate-600 select-all">{{ $user->email }}</span>`, dengan fallback `<span class="text-xs text-slate-400 italic">Belum disetel</span>` jika email belum diisi.
+     - Menyesuaikan batas minimum tabel menjadi `min-w-[1000px]` agar tata letak tetap proporsional saat di-scroll horizontal di perangkat tablet/ponsel.
+     - Menyesuaikan `colspan="6"` pada penanda data kosong (*empty state*).
+  2. **Penyelarasan Fitur Pencarian Backend (`app/Livewire/Settings/UserIndex.php`)**:
+     - Kueri pencarian diperluas dengan `$q->orWhere('email', 'like', '%' . $this->search . '%')` sehingga admin dapat mencari data akun langsung menggunakan alamat email.
+     - Placeholder input pencarian diselaraskan menjadi `"Cari nama, NIP, atau email..."`.
+- **Verifikasi Pengujian Otomatis (`UserAndRoleManagementTest.php`)**:
+  - Menambahkan pengujian `test_user_index_table_displays_email_and_supports_email_search` yang memvalidasi header 'Email Akun', rendering email pengguna, serta fungsionalitas pencarian berdasarkan email.
+  - Seluruh test suite sistem (**202 test cases, 1048 assertions**) **100% PASS**.
+
+
 
 
 
