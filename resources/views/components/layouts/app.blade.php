@@ -227,10 +227,10 @@
                             {{ substr(auth()->user()->name, 0, 2) }}
                         </div>
                         <div class="h-6 w-px bg-slate-200 mx-1"></div>
-                        <button class="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 sm:px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-1 shrink-0" title="Switch Role">
+                        {{-- <button class="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 sm:px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-1 shrink-0" title="Switch Role">
                             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
                             <span class="hidden sm:inline">Switch Role</span>
-                        </button>
+                        </button> --}}
                         <form method="POST" action="{{ route('logout') }}" class="ml-1 sm:ml-2 shrink-0">
                             @csrf
                             <button type="submit" class="text-xs font-semibold bg-red-50 text-red-700 border border-red-200 px-2.5 sm:px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors" title="Logout">
