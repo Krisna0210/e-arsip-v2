@@ -22,7 +22,7 @@ class Login extends Component
             'email' => 'required',
             'password' => 'required',
         ], [
-            'email.required' => 'Email Karyawan wajib diisi.',
+            'email.required' => 'Username wajib diisi.',
             'password.required' => 'Password wajib diisi.',
         ]);
 
@@ -53,7 +53,7 @@ class Login extends Component
             return;
         }
 
-        $this->addError('email', 'Kredensial yang diberikan tidak cocok dengan data kami.');
+        $this->addError('email', 'Username dan Password salah.');
     }
 
     public function togglePassword()

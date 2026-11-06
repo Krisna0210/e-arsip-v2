@@ -88,7 +88,7 @@
             <!-- Footer inside Card as requested -->
             <div class="w-full mt-8 pt-6 border-t border-[var(--color-border)] flex flex-col items-center gap-1 text-center">
                 <span class="text-[0.8125rem] text-[var(--color-text-secondary)] font-medium">&copy; 2026 Departemen MGT & IT</span>
-                <span class="text-[0.75rem] text-slate-400 font-medium">Version 1.0.0</span>
+                <span class="text-[0.75rem] text-slate-400 font-medium">Version 1.0.1</span>
             </div>
         </div>
     </div>

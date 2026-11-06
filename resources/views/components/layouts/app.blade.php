@@ -177,7 +177,7 @@
 
                 <div class="p-4 bg-[rgba(0,0,0,0.15)] mt-auto">
                     <div class="flex items-center text-xs text-[#94A3B8] justify-between">
-                        <span>v1.0.0-rc</span>
+                        <span>v1.0.1</span>
                         <a href="#" class="hover:text-white transition-colors">Bantuan</a>
                     </div>
                 </div>
