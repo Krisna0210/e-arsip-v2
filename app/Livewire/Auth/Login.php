@@ -53,7 +53,7 @@ class Login extends Component
             return;
         }
 
-        $this->addError('email', 'Username dan Password salah.');
+        $this->addError('email', 'Login gagal, Username atau Password salah.');
     }
 
     public function togglePassword()
