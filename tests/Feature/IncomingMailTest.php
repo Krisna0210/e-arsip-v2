@@ -137,4 +137,78 @@ class IncomingMailTest extends TestCase
         $this->assertNull($doc->retention_start_date);
         $this->assertNull($doc->retention_end_date);
     }
+
+    public function test_user_can_register_incoming_mail_with_hardcopy_only_without_file()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+
+        Livewire::actingAs($superadmin)
+            ->test(IncomingCreate::class)
+            ->set('number', '088/HARDCOPY-ONLY/2026')
+            ->set('document_date', date('Y-m-d'))
+            ->set('received_date', date('Y-m-d'))
+            ->set('sender', 'Instansi Fisik')
+            ->set('subject', 'Surat Masuk Fisik Saja')
+            ->set('unit_id', $unit->id)
+            ->set('available_hardcopy', true)
+            ->set('available_softcopy', false)
+            ->set('file', null)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showSuccessModal', true);
+
+        $doc = Document::where('number', '088/HARDCOPY-ONLY/2026')->first();
+        $this->assertNotNull($doc);
+        $this->assertTrue($doc->available_hardcopy);
+        $this->assertFalse($doc->available_softcopy);
+        $this->assertNull($doc->current_version_id);
+    }
+
+    public function test_user_cannot_register_incoming_mail_if_both_formats_are_unchecked()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+
+        Livewire::actingAs($superadmin)
+            ->test(IncomingCreate::class)
+            ->set('number', '077/NO-FORMAT/2026')
+            ->set('document_date', date('Y-m-d'))
+            ->set('received_date', date('Y-m-d'))
+            ->set('sender', 'Instansi')
+            ->set('subject', 'Tanpa Format')
+            ->set('unit_id', $unit->id)
+            ->set('available_hardcopy', false)
+            ->set('available_softcopy', false)
+            ->call('save')
+            ->assertHasErrors(['available_hardcopy']);
+    }
+
+    public function test_user_can_register_incoming_mail_with_both_hardcopy_and_softcopy()
+    {
+        $superadmin = User::where('username', 'superadmin')->first();
+        $unit = Unit::first();
+        $file = UploadedFile::fake()->create('surat_keduanya.pdf', 100, 'application/pdf');
+
+        Livewire::actingAs($superadmin)
+            ->test(IncomingCreate::class)
+            ->set('number', '066/BOTH-FORMATS/2026')
+            ->set('document_date', date('Y-m-d'))
+            ->set('received_date', date('Y-m-d'))
+            ->set('sender', 'Instansi Lengkap')
+            ->set('subject', 'Surat Masuk Hardcopy dan Softcopy')
+            ->set('unit_id', $unit->id)
+            ->set('available_hardcopy', true)
+            ->set('available_softcopy', true)
+            ->set('file', $file)
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('showSuccessModal', true);
+
+        $doc = Document::where('number', '066/BOTH-FORMATS/2026')->first();
+        $this->assertNotNull($doc);
+        $this->assertTrue($doc->available_hardcopy);
+        $this->assertTrue($doc->available_softcopy);
+        $this->assertNotNull($doc->current_version_id);
+    }
 }

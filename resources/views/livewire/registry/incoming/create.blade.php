@@ -61,6 +61,25 @@
                 <div class="space-y-6">
                     <h3 class="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Penyimpanan & Sifat Dokumen</h3>
 
+                    <!-- Format Ketersediaan Dokumen -->
+                    <div class="space-y-1.5">
+                        <label class="block text-sm font-medium text-gray-700">
+                            Ketersediaan Format Berkas <span class="text-red-500">*</span>
+                        </label>
+                        <div class="grid grid-cols-2 gap-3 bg-gray-50 p-3.5 rounded-xl border border-gray-200">
+                            <label class="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-700">
+                                <input type="checkbox" wire:model.live="available_hardcopy" class="rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]">
+                                <span>Tersedia Hardcopy</span>
+                            </label>
+                            <label class="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-700">
+                                <input type="checkbox" wire:model.live="available_softcopy" class="rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]">
+                                <span>Tersedia Softcopy</span>
+                            </label>
+                        </div>
+                        @error('available_hardcopy') <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span> @enderror
+                        <span class="text-[11px] text-gray-500 mt-0.5 block">Tentukan ketersediaan berkas fisik dan/atau berkas digital hasil scan untuk sirkulasi peminjaman.</span>
+                    </div>
+
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Lokasi Penyimpanan (Loker)</label>
                         <select wire:model="folder_id" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] outline-none transition bg-white">
@@ -241,9 +260,19 @@
                                         <div class="font-medium text-slate-700 truncate">{{ $savedDocumentUnitName }}</div>
                                     </div>
                                 </div>
-                                <div class="pt-1 text-[11px] text-slate-500 flex items-center gap-1.5">
-                                    <span class="text-slate-400">Loker:</span>
-                                    <span class="font-semibold text-slate-700 font-mono">{{ $savedDocumentFolderName }}</span>
+                                <div class="pt-2 border-t border-slate-200/80 text-xs flex items-center justify-between">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-[10px] text-slate-400">Loker:</span>
+                                        <span class="font-semibold text-slate-700 font-mono text-[11px]">{{ $savedDocumentFolderName }}</span>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        @if($savedAvailableHardcopy)
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">Hardcopy</span>
+                                        @endif
+                                        @if($savedAvailableSoftcopy)
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">Softcopy</span>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                         </div>

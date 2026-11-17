@@ -24,6 +24,8 @@ class Create extends Component
     public $classification_id;
     public $folder_id;
     public $sifat = 'biasa';
+    public bool $available_hardcopy = true;
+    public bool $available_softcopy = true;
     public $file;
     public $showSuccessModal = false;
 
@@ -33,6 +35,8 @@ class Create extends Component
     public $savedDocumentSender = '';
     public $savedDocumentUnitName = '';
     public $savedDocumentFolderName = '';
+    public bool $savedAvailableHardcopy = true;
+    public bool $savedAvailableSoftcopy = true;
 
     public $units;
     public $folders;
@@ -52,6 +56,13 @@ class Create extends Component
         $this->folders = \App\Models\Folder::getTreeForType('incoming');
     }
 
+    public function updatedFile()
+    {
+        if ($this->file) {
+            $this->available_softcopy = true;
+        }
+    }
+
     protected function baseRules($isStrict = false)
     {
         return [
@@ -64,12 +75,19 @@ class Create extends Component
             'folder_id' => 'nullable|exists:folders,id',
             'unit_id' => 'required|exists:units,id',
             'sifat' => 'required|in:biasa,penting,rahasia',
-            'file' => $isStrict ? 'required|file|mimes:pdf|max:10240' : 'nullable|file|mimes:pdf|max:10240',
+            'available_hardcopy' => 'boolean',
+            'available_softcopy' => 'boolean',
+            'file' => ($isStrict && $this->available_softcopy) ? 'required|file|mimes:pdf|max:10240' : 'nullable|file|mimes:pdf|max:10240',
         ];
     }
 
     public function save()
     {
+        if (!$this->available_hardcopy && !$this->available_softcopy) {
+            $this->addError('available_hardcopy', 'Pilih minimal salah satu format ketersediaan (Hardcopy atau Softcopy).');
+            return;
+        }
+
         $this->validate($this->baseRules(true));
 
         $document = $this->createDocument('archived');
@@ -83,6 +101,8 @@ class Create extends Component
                 'subject' => $this->subject,
                 'type' => 'incoming',
                 'sender' => $this->sender,
+                'available_hardcopy' => $this->available_hardcopy,
+                'available_softcopy' => $this->available_softcopy,
             ]
         );
 
@@ -92,6 +112,8 @@ class Create extends Component
         $this->savedDocumentSender = $document->sender;
         $this->savedDocumentUnitName = $document->unit ? $document->unit->name : '-';
         $this->savedDocumentFolderName = $document->folder ? $document->folder->name : 'Tanpa Loker / Root';
+        $this->savedAvailableHardcopy = $this->available_hardcopy;
+        $this->savedAvailableSoftcopy = $this->available_softcopy;
         $this->showSuccessModal = true;
     }
 
@@ -116,6 +138,10 @@ class Create extends Component
         $this->document_date = date('Y-m-d');
         $this->received_date = date('Y-m-d');
         $this->sifat = 'biasa';
+        $this->available_hardcopy = true;
+        $this->available_softcopy = true;
+        $this->savedAvailableHardcopy = true;
+        $this->savedAvailableSoftcopy = true;
     }
 
     public function redirectToIndex()
@@ -149,6 +175,8 @@ class Create extends Component
             'classification_id' => $this->classification_id,
             'folder_id' => $this->folder_id,
             'sifat' => $this->sifat,
+            'available_hardcopy' => $this->available_hardcopy,
+            'available_softcopy' => $this->available_softcopy,
             'status' => $status,
             'retention_start_date' => $retentionStartDate,
             'retention_end_date' => $retentionEndDate,

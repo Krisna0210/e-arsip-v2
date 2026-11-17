@@ -2707,6 +2707,28 @@ Boost replaces these bootstrap instructions with guidelines tailored to the appl
   - Menambahkan pengujian `test_user_index_table_displays_email_and_supports_email_search` yang memvalidasi header 'Email Akun', rendering email pengguna, serta fungsionalitas pencarian berdasarkan email.
   - Seluruh test suite sistem (**202 test cases, 1048 assertions**) **100% PASS**.
 
+### 136. Penambahan Pemilihan Ketersediaan Media (Hardcopy/Softcopy) pada Registrasi Surat Masuk
+- **Latar Belakang & Keselarasan Alur Kerja**:
+  - Pada formulir antrean scan Tapersip (`scan-queue.blade.php`), operator memiliki opsi memilih ketersediaan dokumen fisik (*Hardcopy*) dan digital (*Softcopy*).
+  - Pada pencatatan surat masuk di bagian depan (`incoming/create.blade.php`), staf penerima surat juga membutuhkan fleksibilitas mencatat format naskah yang tiba (hanya hardcopy fisik, hanya e-surat softcopy, atau keduanya).
+- **Implementasi Solusi**:
+  1. **Tampilan Formulir Blade (`incoming/create.blade.php`)**:
+     - Menambahkan kartu *Ketersediaan Format Berkas* pada Section 2 (Penyimpanan & Sifat Dokumen): Checkbox `Tersedia Hardcopy` dan `Tersedia Softcopy`.
+     - Menyertakan validasi visual dan keterangan pembantu untuk peminjaman arsip.
+     - Memperbarui kartu modal sukses penyimpanan dengan badge ketersediaan (Hardcopy / Softcopy / Keduanya).
+  2. **Komponen Livewire (`app/Livewire/Registry/Incoming/Create.php`)**:
+     - Menambahkan property `$available_hardcopy = true` dan `$available_softcopy = true`.
+     - Hook `updatedFile`: Otomatis mengaktifkan `$available_softcopy = true` saat file PDF dipilih.
+     - Aturan validasi pintar (*Smart Validation*):
+       - Jika hanya Hardcopy yang dipilih (`available_softcopy = false`), upload file PDF bersifat opsional/nullable sehingga surat fisik dapat langsung didaftarkan tanpa scanner.
+       - Jika Softcopy dipilih (`available_softcopy = true`), upload file PDF diwajibkan.
+       - Validasi memverifikasi bahwa minimal satu format (Hardcopy atau Softcopy) wajib dipilih.
+     - Menyimpan kolom `available_hardcopy` dan `available_softcopy` ke tabel `documents`.
+- **Verifikasi Pengujian Otomatis (`IncomingMailTest.php`)**:
+  - Menambahkan 3 pengujian baru: registrasi hanya hardcopy tanpa file PDF (`test_user_can_register_incoming_mail_with_hardcopy_only_without_file`), penolakan jika kedua format tidak dicentang (`test_user_cannot_register_incoming_mail_if_both_formats_are_unchecked`), dan registrasi lengkap kedua format (`test_user_can_register_incoming_mail_with_both_hardcopy_and_softcopy`).
+  - Seluruh test suite sistem (**205 test cases, 1063 assertions**) **100% PASS**.
+
+
 
 
 
