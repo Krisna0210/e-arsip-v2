@@ -78,8 +78,9 @@ function pdfViewerComponent(url, initialScale) {
         },
 
         async ensurePdfJsReady() {
+            const workerUrl = window.pdfjsWorkerSrc || '/vendor/pdfjs/pdf.worker.min.js';
             if (window.pdfjsLib) {
-                window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
                 return;
             }
 
@@ -87,13 +88,15 @@ function pdfViewerComponent(url, initialScale) {
                 let script = document.querySelector('script[src*="pdf.min.js"]');
                 if (!script) {
                     script = document.createElement('script');
-                    script.src = '/vendor/pdfjs/pdf.min.js';
+                    script.src = window.pdfjsWorkerSrc
+                        ? window.pdfjsWorkerSrc.replace('pdf.worker.min.js', 'pdf.min.js')
+                        : '/vendor/pdfjs/pdf.min.js';
                     document.head.appendChild(script);
                 }
 
                 const timeout = setTimeout(() => {
                     if (window.pdfjsLib) {
-                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
+                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
                         resolve();
                     } else {
                         reject(new Error('Waktu tunggu pemuatan modul PDF.js habis.'));
@@ -102,7 +105,7 @@ function pdfViewerComponent(url, initialScale) {
 
                 if (window.pdfjsLib) {
                     clearTimeout(timeout);
-                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
                     resolve();
                     return;
                 }
@@ -110,7 +113,7 @@ function pdfViewerComponent(url, initialScale) {
                 script.addEventListener('load', () => {
                     clearTimeout(timeout);
                     if (window.pdfjsLib) {
-                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
+                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
                         resolve();
                     } else {
                         reject(new Error('Pustaka PDF.js termuat namun objek pdfjsLib tidak ditemukan.'));

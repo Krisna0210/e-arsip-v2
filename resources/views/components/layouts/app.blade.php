@@ -350,14 +350,15 @@
         </template>
     </div>
 
-    <!-- Local Vendor Scripts for Offline PDF Rendering (Root-Relative to avoid port mismatch) -->
-    <script src="/vendor/pdfjs/pdf.min.js"></script>
+    <!-- Local Vendor Scripts for Offline PDF Rendering (Dynamic via asset() for root and subdirectory support) -->
+    <script src="{{ asset('vendor/pdfjs/pdf.min.js') }}"></script>
     <script>
+        window.pdfjsWorkerSrc = "{{ asset('vendor/pdfjs/pdf.worker.min.js') }}";
         if (window.pdfjsLib) {
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.js";
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = window.pdfjsWorkerSrc;
         }
     </script>
-    <script src="/vendor/pdfjs/pdf-viewer.js?v={{ filemtime(public_path('vendor/pdfjs/pdf-viewer.js')) }}"></script>
+    <script src="{{ asset('vendor/pdfjs/pdf-viewer.js') }}?v={{ filemtime(public_path('vendor/pdfjs/pdf-viewer.js')) }}"></script>
 
     @livewireScripts
 </body>

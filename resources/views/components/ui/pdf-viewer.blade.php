@@ -15,8 +15,14 @@
 @endphp
 
 @once
-    <script src="/vendor/pdfjs/pdf.min.js"></script>
-    <script src="/vendor/pdfjs/pdf-viewer.js?v={{ filemtime(public_path('vendor/pdfjs/pdf-viewer.js')) }}"></script>
+    <script src="{{ asset('vendor/pdfjs/pdf.min.js') }}"></script>
+    <script>
+        window.pdfjsWorkerSrc = window.pdfjsWorkerSrc || "{{ asset('vendor/pdfjs/pdf.worker.min.js') }}";
+        if (window.pdfjsLib) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = window.pdfjsWorkerSrc;
+        }
+    </script>
+    <script src="{{ asset('vendor/pdfjs/pdf-viewer.js') }}?v={{ filemtime(public_path('vendor/pdfjs/pdf-viewer.js')) }}"></script>
 @endonce
 
 <div x-data="pdfViewerComponent(@js($url), {{ $initialScale }})"

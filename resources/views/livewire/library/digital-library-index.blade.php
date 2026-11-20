@@ -976,7 +976,7 @@
                     @else
                         <x-ui.pdf-viewer 
                             wire:key="pdf-viewer-library-{{ $previewDoc->id }}"
-                            :url="route('library.preview', $previewDoc->id, false)"
+                            :url="route('library.preview', $previewDoc->id)"
                             :watermark="$previewDoc->access_type === 'private'"
                             height="h-full"
                         />

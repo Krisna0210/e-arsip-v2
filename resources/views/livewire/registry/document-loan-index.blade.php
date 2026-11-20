@@ -1488,7 +1488,7 @@
                 <div class="flex-1 min-h-0 relative flex flex-col">
                     <x-ui.pdf-viewer 
                         wire:key="pdf-viewer-loan-{{ $previewVersion->id }}"
-                        :url="route('document.preview', $previewVersion->id, false)"
+                        :url="route('document.preview', $previewVersion->id)"
                         :watermark="true"
                         watermarkText1="DOKUMEN ARSIP DIGITAL PERUSAHAAN"
                         height="h-full"
