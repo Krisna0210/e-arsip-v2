@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
@@ -349,6 +349,15 @@
             </div>
         </template>
     </div>
+
+    <!-- Local Vendor Scripts for Offline PDF Rendering (Root-Relative to avoid port mismatch) -->
+    <script src="/vendor/pdfjs/pdf.min.js"></script>
+    <script>
+        if (window.pdfjsLib) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdfjs/pdf.worker.min.js";
+        }
+    </script>
+    <script src="/vendor/pdfjs/pdf-viewer.js?v={{ filemtime(public_path('vendor/pdfjs/pdf-viewer.js')) }}"></script>
 
     @livewireScripts
 </body>

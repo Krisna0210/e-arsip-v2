@@ -918,45 +918,9 @@
     <!-- ============================================================== -->
     <x-ui.modal name="modal-preview-digital-doc" width="max-w-7xl" padding="false" title="Pratinjau Berkas Pustaka Digital">
         @if($previewDoc)
-            <div x-data="{
-                    isBlurred: false,
-                    init() {
-                        const blockKey = (e) => {
-                            if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                return false;
-                            }
-                        };
-                        window.addEventListener('keydown', blockKey);
-                        window.addEventListener('blur', () => { this.isBlurred = true; });
-                        window.addEventListener('focus', () => { this.isBlurred = false; });
-                    }
-                 }"
-                 @contextmenu.prevent
-                 class="flex flex-col h-[85vh] bg-slate-900 select-none relative overflow-hidden">
-
-                <style>
-                    @media print {
-                        body, iframe, img, [role="dialog"] {
-                            display: none !important;
-                            visibility: hidden !important;
-                        }
-                        body::before {
-                            content: "DOKUMEN DILINDUNGI: Berkas Pustaka Digital bersifat rahasia dan dilarang dicetak sesuai kebijakan keamanan informasi perusahaan.";
-                            display: block !important;
-                            font-family: sans-serif;
-                            font-size: 16pt;
-                            font-weight: bold;
-                            text-align: center;
-                            color: #b91c1c;
-                            padding-top: 150px;
-                        }
-                    }
-                </style>
-
+            <div class="flex flex-col h-[85vh] bg-slate-900 select-none relative overflow-hidden">
                 <!-- Toolbar Header Pratinjau -->
-                <div class="bg-slate-800 px-5 py-3 border-b border-slate-700 flex items-center justify-between text-white flex-wrap gap-3 z-30 relative">
+                <div class="bg-slate-800 px-5 py-3 border-b border-slate-700 flex items-center justify-between text-white flex-wrap gap-3 z-30 relative shrink-0">
                     <div class="flex items-center gap-3">
                         <span class="font-mono font-bold text-xs bg-slate-900 px-2.5 py-1 rounded border border-slate-700 text-emerald-400">
                             {{ $previewDoc->document_number }}
@@ -979,55 +943,43 @@
                     </div>
                 </div>
 
-                <!-- Konten Pratinjau (Iframe PDF / Image Viewer) dengan Lapisan Pengamanan -->
-                <div class="flex-1 overflow-hidden relative bg-slate-950 flex items-center justify-center">
-
-                    <!-- Lapis 3: Anti-Capture Screen Shield (Aktif saat jendela kehilangan fokus / membuka snipping tool) -->
-                    <div x-show="isBlurred"
-                         x-transition.opacity
-                         class="absolute inset-0 z-40 bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-center text-center p-6"
-                         style="display: none;">
-                        <div class="p-3 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 mb-3">
-                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                            </svg>
-                        </div>
-                        <h3 class="text-sm font-bold text-slate-100">Tampilan Pratinjau Diamankan</h3>
-                        <p class="text-xs text-slate-400 mt-1 max-w-sm">Konten disamarkan secara otomatis saat jendela browser kehilangan fokus.</p>
-                    </div>
-
-                    <!-- Lapis 4: Forensic Dynamic Watermark Overlay (Khusus Berkas Privat) -->
-                    @if($previewDoc->access_type === 'private')
-                        <div class="absolute inset-0 z-30 pointer-events-none overflow-hidden select-none" style="opacity: 0.26;">
-                            <svg class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                                <defs>
-                                    <pattern id="forensic-watermark" width="340" height="200" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">
-                                        <text x="15" y="45" font-family="monospace" font-size="12" font-weight="bold" fill="#0f172a" stroke="#ffffff" stroke-width="0.25" letter-spacing="1">
-                                            DOKUMEN ARSIP PERUSAHAAN &bull; RAHASIA
-                                        </text>
-                                        <text x="15" y="65" font-family="monospace" font-size="10" font-weight="semibold" fill="#1e293b" stroke="#ffffff" stroke-width="0.2">
-                                            {{ Auth::user()->name }} &bull;{{ Auth::user()->unit?->name ?? 'Internal' }} &bull; {{ request()->ip() }}
-                                        </text>
-                                        <text x="15" y="85" font-family="monospace" font-size="9" fill="#334155" stroke="#ffffff" stroke-width="0.15">
-                                            {{ now()->format('d/m/Y H:i') }} WIB
-                                        </text>
-                                    </pattern>
-                                </defs>
-                                <rect width="100%" height="100%" fill="url(#forensic-watermark)" />
-                            </svg>
-                        </div>
-                    @endif
-
-                    <!-- Konten Berkas Fisik (PDF / Gambar) -->
+                <!-- Konten Pratinjau (PDF via Canvas / Gambar Langsung) -->
+                <div class="flex-1 min-h-0 relative flex flex-col">
                     @if(str_contains(strtolower($previewDoc->mime_type ?? ''), 'image') || in_array(strtolower(pathinfo($previewDoc->file_name, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp']))
-                        <div class="max-w-full max-h-full overflow-auto p-4 flex items-center justify-center">
+                        <div class="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-950 relative select-none"
+                             @contextmenu.prevent
+                        >
+                            @if($previewDoc->access_type === 'private')
+                                <div class="absolute inset-0 z-30 pointer-events-none overflow-hidden select-none" style="opacity: 0.26;">
+                                    <svg class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                                        <defs>
+                                            <pattern id="forensic-watermark" width="340" height="200" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">
+                                                <text x="15" y="45" font-family="monospace" font-size="12" font-weight="bold" fill="#0f172a" stroke="#ffffff" stroke-width="0.25" letter-spacing="1">
+                                                    DOKUMEN ARSIP PERUSAHAAN &bull; RAHASIA
+                                                </text>
+                                                <text x="15" y="65" font-family="monospace" font-size="10" font-weight="semibold" fill="#1e293b" stroke="#ffffff" stroke-width="0.2">
+                                                    {{ Auth::user()->name }} &bull; {{ Auth::user()->unit?->name ?? 'Internal' }} &bull; {{ request()->ip() }}
+                                                </text>
+                                                <text x="15" y="85" font-family="monospace" font-size="9" fill="#334155" stroke="#ffffff" stroke-width="0.15">
+                                                    {{ now()->format('d/m/Y H:i') }} WIB
+                                                </text>
+                                            </pattern>
+                                        </defs>
+                                        <rect width="100%" height="100%" fill="url(#forensic-watermark)" />
+                                    </svg>
+                                </div>
+                            @endif
                             <img src="{{ route('library.preview', $previewDoc->id) }}"
                                  alt="{{ $previewDoc->title }}"
-                                 class="max-w-full max-h-[75vh] object-contain rounded shadow-lg border border-slate-800 pointer-events-none">
+                                 class="max-w-full max-h-[75vh] object-contain rounded shadow-lg border border-slate-800 pointer-events-none select-none">
                         </div>
                     @else
-                        <iframe src="{{ route('library.preview', $previewDoc->id) }}#toolbar=0&navpanes=0"
-                                class="w-full h-full border-0"></iframe>
+                        <x-ui.pdf-viewer 
+                            wire:key="pdf-viewer-library-{{ $previewDoc->id }}"
+                            :url="route('library.preview', $previewDoc->id, false)"
+                            :watermark="$previewDoc->access_type === 'private'"
+                            height="h-full"
+                        />
                     @endif
                 </div>
             </div>

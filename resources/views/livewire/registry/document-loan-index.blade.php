@@ -1461,45 +1461,9 @@
     <!-- ============================================================== -->
     <x-ui.modal name="modal-preview-loan-doc" width="max-w-7xl" padding="false" title="Pratinjau Softcopy Dokumen">
         @if($previewDocument && $previewVersion)
-            <div x-data="{
-                    isBlurred: false,
-                    init() {
-                        const blockKey = (e) => {
-                            if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.key === 's' || e.key === 'S')) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                return false;
-                            }
-                        };
-                        window.addEventListener('keydown', blockKey);
-                        window.addEventListener('blur', () => { this.isBlurred = true; });
-                        window.addEventListener('focus', () => { this.isBlurred = false; });
-                    }
-                 }"
-                 @contextmenu.prevent
-                 class="flex flex-col h-[85vh] bg-slate-900 select-none relative overflow-hidden">
-
-                <style>
-                    @media print {
-                        body, iframe, [role='dialog'] {
-                            display: none !important;
-                            visibility: hidden !important;
-                        }
-                        body::before {
-                            content: 'DOKUMEN DILINDUNGI: Berkas digital pinjaman bersifat rahasia dan dilarang dicetak sesuai kebijakan keamanan informasi perusahaan.';
-                            display: block !important;
-                            font-family: sans-serif;
-                            font-size: 16pt;
-                            font-weight: bold;
-                            text-align: center;
-                            color: #b91c1c;
-                            padding-top: 150px;
-                        }
-                    }
-                </style>
-
+            <div class="flex flex-col h-[85vh] bg-slate-900 select-none relative overflow-hidden">
                 <!-- Toolbar Header Pratinjau -->
-                <div class="bg-slate-800 px-5 py-3 border-b border-slate-700 flex items-center justify-between text-white flex-wrap gap-3 z-30 relative">
+                <div class="bg-slate-800 px-5 py-3 border-b border-slate-700 flex items-center justify-between text-white flex-wrap gap-3 z-30 relative shrink-0">
                     <div class="flex items-center gap-3">
                         <span class="font-mono font-bold text-xs bg-slate-900 px-2.5 py-1 rounded border border-slate-700 text-emerald-400">
                             {{ $previewDocument->number }}
@@ -1520,44 +1484,15 @@
                     </div>
                 </div>
 
-                <!-- Konten Pratinjau -->
-                <div class="flex-1 overflow-hidden relative bg-slate-950 flex items-center justify-center">
-                    <!-- Anti-Capture Screen Shield -->
-                    <div x-show="isBlurred"
-                         x-transition.opacity
-                         class="absolute inset-0 z-40 bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-center text-center p-6"
-                         style="display: none;">
-                        <div class="p-3 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 mb-3">
-                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                            </svg>
-                        </div>
-                        <h3 class="text-sm font-bold text-slate-100">Tampilan Pratinjau Diamankan</h3>
-                        <p class="text-xs text-slate-400 mt-1 max-w-sm">Konten disamarkan secara otomatis saat jendela browser kehilangan fokus.</p>
-                    </div>
-
-                    <!-- Forensic Dynamic Watermark Overlay -->
-                    <div class="absolute inset-0 z-30 pointer-events-none overflow-hidden select-none" style="opacity: 0.22;">
-                        <svg class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                            <defs>
-                                <pattern id="loan-forensic-watermark" width="340" height="200" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)">
-                                    <text x="15" y="45" font-family="monospace" font-size="12" font-weight="bold"  stroke="#ffffff" stroke-width="0.25" letter-spacing="1">
-                                        DOKUMEN ARSIP DIGITAL PERUSAHAAN
-                                    </text>
-                                    <text x="15" y="65" font-family="monospace" font-size="10" font-weight="semibold" fill="#1e293b" stroke="#ffffff" stroke-width="0.2">
-                                       {{ Auth::user()->name }}&bull; {{ Auth::user()->unit?->name ?? 'Internal' }} &bull; {{ request()->ip() }}
-                                    </text>
-                                    <text x="15" y="85" font-family="monospace" font-size="9" fill="#334155" stroke="#ffffff" stroke-width="0.15">
-                                        {{ now()->format('d/m/Y H:i') }} WIB
-                                    </text>
-                                </pattern>
-                            </defs>
-                            <rect width="100%" height="100%" fill="url(#loan-forensic-watermark)" />
-                        </svg>
-                    </div>
-
-                    <iframe src="{{ route('document.preview', $previewVersion->id) }}#toolbar=0&navpanes=0"
-                            class="w-full h-full border-0"></iframe>
+                <!-- Konten Pratinjau (PDF via Canvas dengan Proteksi Penuh) -->
+                <div class="flex-1 min-h-0 relative flex flex-col">
+                    <x-ui.pdf-viewer 
+                        wire:key="pdf-viewer-loan-{{ $previewVersion->id }}"
+                        :url="route('document.preview', $previewVersion->id, false)"
+                        :watermark="true"
+                        watermarkText1="DOKUMEN ARSIP DIGITAL PERUSAHAAN"
+                        height="h-full"
+                    />
                 </div>
             </div>
         @endif
